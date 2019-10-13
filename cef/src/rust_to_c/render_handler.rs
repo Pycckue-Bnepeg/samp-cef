@@ -1,6 +1,6 @@
 use super::Wrapper;
 use crate::browser::Browser;
-use crate::handlers::render::{DirtyRects, RenderHandler};
+use crate::handlers::render::{DirtyRects, PaintElement, RenderHandler};
 
 use cef_sys::{
     cef_accessibility_handler_t, cef_browser_t, cef_cursor_info_t, cef_cursor_type_t,
@@ -70,8 +70,9 @@ unsafe extern "stdcall" fn on_popup_show<I: RenderHandler>(
 unsafe extern "stdcall" fn on_popup_size<I: RenderHandler>(
     this: *mut cef_render_handler_t, browser: *mut cef_browser_t, rect: *const cef_rect_t,
 ) {
-    //    let obj: &mut Wrapper<_, I> = Wrapper::unwrap(this);
-    // let _ = obj.interface.on_popup_size();
+    let obj: &mut Wrapper<_, I> = Wrapper::unwrap(this);
+    let browser = Browser::from_raw(browser);
+    obj.interface.on_popup_size(browser, &*rect);
 }
 
 unsafe extern "stdcall" fn on_paint<I: RenderHandler>(
@@ -85,14 +86,14 @@ unsafe extern "stdcall" fn on_paint<I: RenderHandler>(
 
     let rects = DirtyRects {
         count: dirtyRectsCount,
-        rects: std::slice::from_raw_parts(dirtyRects, dirtyRectsCount),
+        rects: dirtyRects,
     };
 
     let buffer = std::slice::from_raw_parts(buffer as *const u8, (width * height * 4) as usize);
 
     obj.interface.on_paint(
         browser,
-        type_,
+        PaintElement::from(type_),
         rects,
         buffer,
         width as usize,

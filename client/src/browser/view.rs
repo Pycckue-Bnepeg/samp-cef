@@ -4,9 +4,10 @@ use d3dx9::d3dx9core::{D3DXCreateSprite, ID3DXSprite, LPD3DXSPRITE};
 use d3dx9::d3dx9math::D3DXVECTOR3;
 
 use cef_sys::cef_rect_t;
+
 use winapi::shared::d3d9::*;
 use winapi::shared::d3d9types::*;
-use winapi::shared::windef::RECT;
+//use winapi::shared::windef::RECT;
 
 const D3D_OK: i32 = 0;
 const D3DXSPRITE_ALPHABLEND: u32 = 16;
@@ -103,7 +104,6 @@ impl View {
                     pBits: null_mut(),
                 };
 
-                let mut surface: *mut IDirect3DSurface9 = null_mut();
                 let mut surface_desc: D3DSURFACE_DESC = std::mem::zeroed();
 
                 texture.GetLevelDesc(0, &mut surface_desc);
@@ -161,7 +161,7 @@ impl View {
         None
     }
 
-    pub fn on_device_lost(&mut self) {
+    pub fn on_lost_device(&mut self) {
         unsafe {
             if let Some(sprite) = self.sprite.as_ref().map(|ptr| ptr.as_ref()) {
                 sprite.OnLostDevice();

@@ -607,6 +607,7 @@ pub struct _cef_point_t {
     pub y: ::std::os::raw::c_int,
 }
 pub type cef_point_t = _cef_point_t;
+#[derive(Clone)]
 #[repr(C)]
 pub struct _cef_rect_t {
     pub x: ::std::os::raw::c_int,
@@ -858,6 +859,7 @@ pub mod cef_key_event_type_t {
     pub const KEYEVENT_KEYUP: Type = 2;
     pub const KEYEVENT_CHAR: Type = 3;
 }
+#[derive(Clone)]
 #[repr(C)]
 pub struct _cef_key_event_t {
     pub type_: cef_key_event_type_t::Type,

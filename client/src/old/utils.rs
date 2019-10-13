@@ -1,14 +1,15 @@
 use winapi::shared::minwindef::{LPARAM, WPARAM};
+use winapi::shared::windef::{POINT, RECT};
 use winapi::um::winuser::*;
 
 use cef_sys::cef_event_flags_t::*;
-use winapi::shared::windef::RECT;
 
 pub fn is_key_pressed(key: i32) -> bool {
     let key_state = unsafe { GetKeyState(key) as u16 };
     key_state >> 15 == 1
 }
 
+// стыбзил с мта респект пендосам
 pub fn cef_keyboard_modifiers(wparam: WPARAM, lparam: LPARAM) -> u32 {
     let mut modifiers = 0;
 
@@ -112,4 +113,15 @@ pub fn client_rect() -> [usize; 2] {
     }
 
     size
+}
+
+pub fn screen_to_client(x: i32, y: i32) -> (i32, i32) {
+    let wnd = client_api::gta::hwnd();
+    let mut point = POINT { x, y };
+
+    unsafe {
+        ScreenToClient(wnd, &mut point);
+    }
+
+    (point.x, point.y)
 }
