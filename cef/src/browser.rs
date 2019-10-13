@@ -91,6 +91,13 @@ impl BrowserHost {
         }
     }
 
+    pub fn was_resized(&self) {
+        let was_resized = self.inner.was_resized.unwrap();
+        unsafe {
+            was_resized(self.inner.get_mut());
+        }
+    }
+
     pub fn send_mouse_move(&self, event: cef_mouse_event_t) {
         if let Some(smme) = self.inner.send_mouse_move_event {
             unsafe {

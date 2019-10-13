@@ -74,6 +74,7 @@ impl View {
                     .map(|texture_ptr| texture_ptr.as_mut())
                 {
                     let device = client_api::gta::d3d9::device();
+
                     if device.TestCooperativeLevel() == 0 {
                         sprite.Begin(D3DXSPRITE_ALPHABLEND);
 
@@ -92,7 +93,7 @@ impl View {
         }
     }
 
-    pub fn update_texture(&mut self, bytes: &[u8]) {
+    pub fn update_texture(&mut self, bytes: &[u8], rects: &[cef_rect_t]) {
         unsafe {
             if let Some(texture) = self
                 .texture
@@ -114,11 +115,16 @@ impl View {
                     let height = surface_desc.Height as usize;
                     let width = surface_desc.Width as usize;
 
-                    for y in 0..height {
-                        let ptr = bits.add(pitch * y);
-                        let pixels = bytes.as_ptr();
-                        let pixels = pixels.add((width * 4) * y);
-                        std::ptr::copy(pixels, ptr, width * 4);
+                    for cef_rect in rects {
+                        for y in
+                            cef_rect.y as usize..(cef_rect.y as usize + cef_rect.height as usize)
+                        {
+                            let index = pitch * y + cef_rect.x as usize * 4;
+                            let ptr = bits.add(index);
+                            let pixels = bytes.as_ptr();
+                            let pixels = pixels.add(index);
+                            std::ptr::copy(pixels, ptr, cef_rect.width as usize * 4);
+                        }
                     }
 
                     (*texture).UnlockRect(0);
@@ -159,6 +165,37 @@ impl View {
         }
 
         None
+    }
+
+    pub fn buffer(&self) -> Option<Vec<u8>> {
+        unsafe {
+            if let Some(texture) = self
+                .texture
+                .as_ref()
+                .map(|texture_ptr| texture_ptr.as_ref())
+            {
+                let mut rect = D3DLOCKED_RECT {
+                    Pitch: 0,
+                    pBits: null_mut(),
+                };
+
+                let mut surface_desc: D3DSURFACE_DESC = std::mem::zeroed();
+
+                texture.GetLevelDesc(0, &mut surface_desc);
+
+                if (*texture).LockRect(0, &mut rect, std::ptr::null(), 0) == D3D_OK {
+                    let size = surface_desc.Height as usize * surface_desc.Width as usize * 4;
+                    let buffer = std::slice::from_raw_parts(rect.pBits as *mut u8, size);
+                    let buffer = Vec::from(buffer);
+
+                    (*texture).UnlockRect(0);
+
+                    return Some(buffer);
+                }
+            }
+        }
+
+        return None;
     }
 
     pub fn on_lost_device(&mut self) {

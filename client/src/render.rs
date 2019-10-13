@@ -2,6 +2,7 @@ use std::sync::{Arc, Mutex};
 use winapi::shared::d3d9::IDirect3DDevice9;
 
 use crate::browser::manager::Manager;
+use winapi::shared::d3d9types::D3DVIEWPORT9;
 
 const RESET_FLAG_PRE: u8 = 0;
 const RESET_FLAG_POST: u8 = 1;
@@ -50,11 +51,15 @@ fn on_render(_: &mut IDirect3DDevice9) {
 
 fn on_reset(_: &mut IDirect3DDevice9, reset_flag: u8) {
     let render = Render::get();
-    let manager = render.manager.lock().unwrap();
+    let mut manager = render.manager.lock().unwrap();
 
     match reset_flag {
         RESET_FLAG_PRE => manager.on_lost_device(),
-        RESET_FLAG_POST => manager.on_reset_device(),
+        RESET_FLAG_POST => {
+            manager.on_reset_device();
+            let rect = crate::utils::client_rect();
+            manager.resize(rect[0], rect[1]);
+        }
         _ => (),
     }
 }

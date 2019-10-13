@@ -10,7 +10,7 @@ pub struct DirtyRects {
 
 impl DirtyRects {
     pub fn as_slice(&self) -> &[cef_rect_t] {
-        unsafe { std::slice::from_raw_parts(self.rects, count) }
+        unsafe { std::slice::from_raw_parts(self.rects, self.count) }
     }
 }
 

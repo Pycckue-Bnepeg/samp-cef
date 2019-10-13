@@ -51,6 +51,7 @@ pub struct WebClient {
     draw_data: Mutex<DrawData>,
     browser: Mutex<Option<Browser>>,
     rendered: (Mutex<bool>, Condvar),
+    last_texture: Mutex<Option<Vec<u8>>>,
 }
 
 impl LifespanHandler for WebClient {
@@ -156,14 +157,15 @@ impl RenderHandler for WebClient {
 
 impl WebClient {
     pub fn new() -> Arc<WebClient> {
-        let view = crate::utils::client_rect();
-        let view = View::new(client_api::gta::d3d9::device(), view[0], view[1]);
+        let rect = crate::utils::client_rect();
+        let view = View::new(client_api::gta::d3d9::device(), rect[0], rect[1]);
 
         let client = WebClient {
             view: Mutex::new(view),
             draw_data: Mutex::new(DrawData::new()),
             browser: Mutex::new(None),
             rendered: (Mutex::new(false), Condvar::new()),
+            last_texture: Mutex::new(None),
         };
 
         Arc::new(client)
@@ -183,15 +185,45 @@ impl WebClient {
 
     pub fn on_lost_device(&self) {
         let mut texture = self.view.lock().unwrap();
+        let mut buffer = self.last_texture.lock().unwrap();
+        *buffer = texture.buffer();
         texture.on_lost_device();
     }
 
     pub fn on_reset_device(&self) {
         let mut texture = self.view.lock().unwrap();
-        let view = crate::utils::client_rect();
-        texture.on_reset_device(client_api::gta::d3d9::device(), view[0], view[1]);
+        let mut buffer = self.last_texture.lock().unwrap();
+        let rect = crate::utils::client_rect();
+        texture.on_reset_device(client_api::gta::d3d9::device(), rect[0], rect[1]);
+
+        if let Some(buffer) = buffer.take() {
+            if rect[0] * rect[1] * 4 != buffer.len() {
+                return;
+            }
+
+            let rect = cef_rect_t {
+                x: 0,
+                y: 0,
+                width: rect[0] as i32,
+                height: rect[1] as i32,
+            };
+
+            texture.update_texture(&buffer, &[rect]);
+        }
     }
 
+    pub fn resize(&self, width: usize, height: usize) {
+        let resized_view = View::new(client_api::gta::d3d9::device(), width, height);
+        let mut view = self.view.lock().unwrap();
+        let browser = self.browser.lock().unwrap();
+        *view = resized_view;
+
+        if let Some(host) = browser.as_ref().map(|brw| brw.host()) {
+            host.was_resized();
+        }
+    }
+
+    // TODO: показывать всплывающие окна
     pub fn update_view(&self) {
         {
             let mut texture = self.view.lock().unwrap();
@@ -215,7 +247,8 @@ impl WebClient {
                 std::slice::from_raw_parts(draw_data.buffer, draw_data.width * draw_data.height * 4)
             };
 
-            texture.update_texture(&bytes);
+            texture.update_texture(&bytes, draw_data.rects.as_slice());
+
             draw_data.changed = false;
         }
 

@@ -22,6 +22,8 @@ struct Mouse {
 pub struct Manager {
     clients: Vec<Arc<WebClient>>,
     mouse: Mouse,
+    view_width: usize,
+    view_height: usize,
 }
 
 impl Manager {
@@ -39,6 +41,8 @@ impl Manager {
 
         Manager {
             clients: Vec::new(),
+            view_height: 0,
+            view_width: 0,
             mouse,
         }
     }
@@ -65,6 +69,19 @@ impl Manager {
     pub fn on_reset_device(&self) {
         for browser in &self.clients {
             browser.on_reset_device();
+        }
+    }
+
+    pub fn resize(&mut self, width: usize, height: usize) {
+        if width == self.view_width && height == self.view_height {
+            return;
+        }
+
+        self.view_width = width;
+        self.view_height = height;
+
+        for browser in &self.clients {
+            browser.resize(width, height);
         }
     }
 

@@ -87,7 +87,8 @@ fn mainloop() {
     if let Some(app) = App::get() {
         if !app.init {
             let mut manager = app.manager.lock().unwrap();
-            manager.create_browser("http://127.0.0.1:5000/index.html"); // "http://5.63.153.185"
+            //            manager.create_browser("http://127.0.0.1:5000/index.html"); // "http://5.63.153.185"
+            manager.create_browser("http://5.63.153.185/hud.html");
 
             app.init = true;
         }
