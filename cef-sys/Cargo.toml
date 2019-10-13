@@ -1,0 +1,9 @@
+[package]
+name = "cef-sys"
+version = "0.1.0"
+authors = ["ZOTTCE <zottce@gmail.com>"]
+edition = "2018"
+build = "build.rs"
+
+[dependencies]
+winapi = { version = "0.3.8", features = ["winuser", "windef"] }

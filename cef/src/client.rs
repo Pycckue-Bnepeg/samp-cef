@@ -1,0 +1,27 @@
+use crate::handlers::lifespan::LifespanHandler;
+use crate::handlers::render::RenderHandler;
+
+use crate::browser::{Browser, Frame};
+use crate::process_message::ProcessMessage;
+use crate::ProcessId;
+use std::sync::Arc;
+
+pub trait Client {
+    type LifespanHandler: LifespanHandler;
+    type RenderHandler: RenderHandler;
+
+    fn lifespan_handler(self: &Arc<Self>) -> Option<Arc<Self::LifespanHandler>> {
+        None
+    }
+
+    fn render_handler(self: &Arc<Self>) -> Option<Arc<Self::RenderHandler>> {
+        None
+    }
+
+    fn on_process_message(
+        self: &Arc<Self>, browser: Browser, frame: Frame, source: ProcessId,
+        message: ProcessMessage,
+    ) -> bool {
+        false
+    }
+}

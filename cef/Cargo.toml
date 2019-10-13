@@ -1,0 +1,11 @@
+[package]
+name = "cef"
+version = "0.1.0"
+authors = ["ZOTTCE <zottce@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+cef-sys = { path = "../cef-sys" }
+
+[dev-dependencies]
+testdrop = "0.1.2"

@@ -1,0 +1,15 @@
+[workspace]
+members = [
+    "cef-sys",
+    "cef",
+    "loader",
+    "client",
+    "renderer",
+    "cef-tests",
+]
+
+default-members = [
+    "loader",
+    "client",
+    "renderer",
+]
