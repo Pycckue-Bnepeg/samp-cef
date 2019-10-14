@@ -179,9 +179,24 @@ impl Network {
         };
 
         let packet = messages::try_into_packet(auth).unwrap();
-        let packet = Packet::reliable_ordered(address, packet, None);
+        let packet = Packet::unreliable_sequenced(address, packet, Some(1));
 
         handle_result(self.socket.send(packet));
+    }
+
+    fn net_emit_event(&mut self, event: String, args: String) {
+        if let ConnectionState::Connected(address) = self.connection_state {
+            let emit = packets::EmitEvent {
+                event_name: event.into(),
+                args: Some(args.into()),
+                arguments: Vec::new(),
+            };
+
+            let packet = messages::try_into_packet(emit).unwrap();
+            let packet = Packet::unreliable_sequenced(address, packet, Some(1));
+
+            handle_result(self.socket.send(packet));
+        }
     }
 
     fn process_network(&mut self) {
@@ -215,6 +230,7 @@ impl Network {
     fn process_event(&mut self, event: Event) {
         match event {
             Event::Connect(addr) => self.net_connect(addr),
+            Event::EmitEventOnServer(event, arguments) => self.net_emit_event(event, arguments),
             _ => (),
         }
     }
@@ -232,6 +248,8 @@ impl Network {
                     event => self.process_event(event),
                 }
             }
+
+            std::thread::sleep(Duration::from_millis(5));
         }
     }
 }

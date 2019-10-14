@@ -21,7 +21,8 @@ pub enum PacketId {
     JOIN_RESPONSE = 2,
     CREATE_BROWSER = 3,
     DESTROY_BROWSER = 4,
-    EMIT_EVENT = 5,
+    BLOCK_INPUT = 5,
+    EMIT_EVENT = 6,
 }
 
 impl Default for PacketId {
@@ -37,7 +38,8 @@ impl From<i32> for PacketId {
             2 => PacketId::JOIN_RESPONSE,
             3 => PacketId::CREATE_BROWSER,
             4 => PacketId::DESTROY_BROWSER,
-            5 => PacketId::EMIT_EVENT,
+            5 => PacketId::BLOCK_INPUT,
+            6 => PacketId::EMIT_EVENT,
             _ => Self::default(),
         }
     }
@@ -50,6 +52,7 @@ impl<'a> From<&'a str> for PacketId {
             "JOIN_RESPONSE" => PacketId::JOIN_RESPONSE,
             "CREATE_BROWSER" => PacketId::CREATE_BROWSER,
             "DESTROY_BROWSER" => PacketId::DESTROY_BROWSER,
+            "BLOCK_INPUT" => PacketId::BLOCK_INPUT,
             "EMIT_EVENT" => PacketId::EMIT_EVENT,
             _ => Self::default(),
         }
@@ -224,8 +227,40 @@ impl MessageWrite for DestroyBrowser {
 }
 
 #[derive(Debug, Default, PartialEq, Clone)]
+pub struct BlockInput {
+    pub block: bool,
+}
+
+impl<'a> MessageRead<'a> for BlockInput {
+    fn from_reader(r: &mut BytesReader, bytes: &'a [u8]) -> Result<Self> {
+        let mut msg = Self::default();
+        while !r.is_eof() {
+            match r.next_tag(bytes) {
+                Ok(8) => msg.block = r.read_bool(bytes)?,
+                Ok(t) => { r.read_unknown(bytes, t)?; }
+                Err(e) => return Err(e),
+            }
+        }
+        Ok(msg)
+    }
+}
+
+impl MessageWrite for BlockInput {
+    fn get_size(&self) -> usize {
+        0
+        + 1 + sizeof_varint(*(&self.block) as u64)
+    }
+
+    fn write_message<W: Write>(&self, w: &mut Writer<W>) -> Result<()> {
+        w.write_with_tag(8, |w| w.write_bool(*&self.block))?;
+        Ok(())
+    }
+}
+
+#[derive(Debug, Default, PartialEq, Clone)]
 pub struct EmitEvent<'a> {
     pub event_name: Cow<'a, str>,
+    pub args: Option<Cow<'a, str>>,
     pub arguments: Vec<EventValue<'a>>,
 }
 
@@ -235,7 +270,8 @@ impl<'a> MessageRead<'a> for EmitEvent<'a> {
         while !r.is_eof() {
             match r.next_tag(bytes) {
                 Ok(10) => msg.event_name = r.read_string(bytes).map(Cow::Borrowed)?,
-                Ok(18) => msg.arguments.push(r.read_message::<EventValue>(bytes)?),
+                Ok(18) => msg.args = Some(r.read_string(bytes).map(Cow::Borrowed)?),
+                Ok(26) => msg.arguments.push(r.read_message::<EventValue>(bytes)?),
                 Ok(t) => { r.read_unknown(bytes, t)?; }
                 Err(e) => return Err(e),
             }
@@ -248,12 +284,14 @@ impl<'a> MessageWrite for EmitEvent<'a> {
     fn get_size(&self) -> usize {
         0
         + 1 + sizeof_len((&self.event_name).len())
+        + self.args.as_ref().map_or(0, |m| 1 + sizeof_len((m).len()))
         + self.arguments.iter().map(|s| 1 + sizeof_len((s).get_size())).sum::<usize>()
     }
 
     fn write_message<W: Write>(&self, w: &mut Writer<W>) -> Result<()> {
         w.write_with_tag(10, |w| w.write_string(&**&self.event_name))?;
-        for s in &self.arguments { w.write_with_tag(18, |w| w.write_message(s))?; }
+        if let Some(ref s) = self.args { w.write_with_tag(18, |w| w.write_string(&**s))?; }
+        for s in &self.arguments { w.write_with_tag(26, |w| w.write_message(s))?; }
         Ok(())
     }
 }

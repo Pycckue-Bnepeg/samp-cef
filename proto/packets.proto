@@ -41,7 +41,8 @@ message BlockInput {
 
 message EmitEvent {
     required string event_name = 1;
-    repeated EventValue arguments = 2;
+    optional string args = 2;
+    repeated EventValue arguments = 3;
 }
 
 message EventValue {

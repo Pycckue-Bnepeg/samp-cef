@@ -108,6 +108,8 @@ impl RenderProcessHandler for Application {
 
         let global = context.global();
 
+        let cef_obj = V8Value::new_object();
+
         let version = V8Value::new_string("0.1.0");
         let func_cur = V8Value::new_function("block_input", Some(handler.clone()));
         let func_on = V8Value::new_function("on", Some(handler.clone()));
@@ -118,10 +120,14 @@ impl RenderProcessHandler for Application {
         let key_on = CefString::new("on");
         let key_emit = CefString::new("emit");
 
-        global.set_value_by_key(&key_str, &version);
-        global.set_value_by_key(&key_func, &func_cur);
-        global.set_value_by_key(&key_on, &func_on);
-        global.set_value_by_key(&key_emit, &func_emit);
+        cef_obj.set_value_by_key(&key_str, &version);
+        cef_obj.set_value_by_key(&key_func, &func_cur);
+        cef_obj.set_value_by_key(&key_on, &func_on);
+        cef_obj.set_value_by_key(&key_emit, &func_emit);
+
+        let key_cef = CefString::new("cef");
+
+        global.set_value_by_key(&key_cef, &cef_obj);
     }
 
     fn on_webkit_initialized(self: &Arc<Self>) {}
@@ -200,6 +206,12 @@ fn convert_to_list(v8: &[V8Value], pm: &List) {
         if value.is_integer() {
             let value = value.integer();
             pm.set_integer(idx, value);
+            continue;
+        }
+
+        if value.is_double() {
+            let value = value.double();
+            pm.set_double(idx, value);
             continue;
         }
     }

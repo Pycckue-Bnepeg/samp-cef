@@ -90,6 +90,14 @@ impl V8Value {
         V8Value::from_raw(raw)
     }
 
+    pub fn new_object() -> V8Value {
+        let raw = unsafe {
+            cef_sys::cef_v8value_create_object(std::ptr::null_mut(), std::ptr::null_mut())
+        };
+
+        V8Value::from_raw(raw)
+    }
+
     pub fn is_string(&self) -> bool {
         self.inner
             .is_string

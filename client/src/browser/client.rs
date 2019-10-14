@@ -98,12 +98,37 @@ impl Client for WebClient {
                     _ => false,
                 };
 
-                self.event_tx.send(Event::BlockInput(block));
+                client_api::utils::handle_result(self.event_tx.send(Event::BlockInput(block)));
 
                 return true;
             }
 
-            "emit_event" => {}
+            "emit_event" => {
+                let args = msg.argument_list();
+
+                if args.get_type(0) != ValueType::String {
+                    return true;
+                }
+
+                let event_name = args.string(0).to_string();
+                let mut arguments = String::new();
+
+                for idx in 1..args.len() {
+                    let arg = match args.get_type(idx) {
+                        ValueType::String => args.string(idx).to_string(),
+                        ValueType::Bool => (if args.bool(idx) { 1 } else { 0 }).to_string(),
+                        ValueType::Double => args.double(idx).to_string(),
+                        ValueType::Integer => args.integer(idx).to_string(),
+                        _ => continue,
+                    };
+
+                    arguments.push_str(&arg);
+                    arguments.push(' ');
+                }
+
+                let event = Event::EmitEventOnServer(event_name, arguments);
+                client_api::utils::handle_result(self.event_tx.send(event));
+            }
 
             _ => (),
         }

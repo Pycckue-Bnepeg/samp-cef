@@ -1,10 +1,13 @@
+use std::collections::HashMap;
 use std::net::{IpAddr, SocketAddr};
 use std::sync::{Arc, Mutex};
 
 use log::info;
+
+use samp::amx::AmxIdent;
 use samp::args::Args;
 use samp::prelude::*;
-use samp::{initialize_plugin, native};
+use samp::{exec_public, initialize_plugin, native};
 
 mod client;
 mod server;
@@ -15,8 +18,17 @@ use messages::packets::EventValue;
 use crate::server::Server;
 use crate::utils::{handle_result, IdPool};
 
+use crossbeam_channel::Receiver;
+
+pub enum Event {
+    EmitEvent(i32, String, String),
+    Connected(i32),
+}
+
 struct CefPlugin {
     server: Arc<Mutex<Server>>,
+    events: HashMap<String, (AmxIdent, String)>,
+    event_rx: Receiver<Event>,
 }
 
 impl CefPlugin {
@@ -43,7 +55,16 @@ impl CefPlugin {
 
         let server = Server::new(SocketAddr::from((ip, 7779)));
 
-        CefPlugin { server }
+        let event_rx = {
+            let s = server.lock().unwrap();
+            s.receiver()
+        };
+
+        CefPlugin {
+            server,
+            event_rx,
+            events: HashMap::new(),
+        }
     }
 
     #[native(name = "cef_on_player_connect")]
@@ -152,6 +173,19 @@ impl CefPlugin {
         Ok(true)
     }
 
+    #[native(name = "cef_subscribe")]
+    fn subscribe(
+        &mut self, amx: &Amx, event_name: AmxString, callback: AmxString,
+    ) -> AmxResult<bool> {
+        let ident = amx.ident();
+        let event_name = event_name.to_string();
+        let callback = callback.to_string();
+
+        self.events.insert(event_name, (ident, callback));
+
+        Ok(true)
+    }
+
     #[native(name = "cef_player_has_plugin")]
     fn is_player_has_plugin(&mut self, _: &Amx, player_id: i32) -> AmxResult<bool> {
         let server = self.server.lock().unwrap();
@@ -162,10 +196,23 @@ impl CefPlugin {
 
 impl SampPlugin for CefPlugin {
     fn on_load(&mut self) {
-        info!("Voice chat plugin is successful loaded.");
+        info!("CEF plugin is successful loaded.");
     }
 
-    fn process_tick(&mut self) {}
+    fn process_tick(&mut self) {
+        while let Ok(event) = self.event_rx.try_recv() {
+            match event {
+                Event::EmitEvent(player, event, args) => {
+                    if let Some((ident, cb)) = self.events.get(&event) {
+                        samp::amx::get(*ident)
+                            .map(|amx| exec_public!(amx, &cb, player, &args => string));
+                    }
+                }
+
+                _ => (),
+            }
+        }
+    }
 }
 
 initialize_plugin!(
@@ -175,6 +222,7 @@ initialize_plugin!(
         CefPlugin::create_browser,
         CefPlugin::destroy_browser,
         CefPlugin::emit_event,
+        CefPlugin::subscribe,
         CefPlugin::is_player_has_plugin,
     ],
     {

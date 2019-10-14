@@ -17,6 +17,7 @@ use client_api::wndproc;
 use crossbeam_channel::{Receiver, Sender};
 
 use cef::types::list::List;
+use client_api::utils::handle_result;
 
 const CEF_SERVER_PORT: u16 = 7779;
 pub const CEF_PLUGIN_VERSION: i32 = 0x00_01_00;
@@ -32,6 +33,7 @@ pub enum Event {
     CreateBrowser { id: u32, url: String },
     DestroyBrowser(u32),
     EmitEvent(String, List),
+    EmitEventOnServer(String, String),
 
     BlockInput(bool),
     Terminate,
@@ -143,8 +145,15 @@ fn mainloop() {
                 }
 
                 Event::EmitEvent(event, list) => {
-                    let mut manager = app.manager.lock().unwrap();
+                    let manager = app.manager.lock().unwrap();
                     manager.trigger_event(&event, list);
+                }
+
+                Event::EmitEventOnServer(event, arguments) => {
+                    if let Some(network) = app.network.as_mut() {
+                        let event = Event::EmitEventOnServer(event, arguments);
+                        network.send(event);
+                    }
                 }
 
                 _ => (),

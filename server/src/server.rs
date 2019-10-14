@@ -1,4 +1,4 @@
-use crossbeam_channel::Sender;
+use crossbeam_channel::{Receiver, Sender};
 use laminar::{Config, Packet, Socket, SocketEvent};
 use log::info;
 use messages::{packets, try_into_packet};
@@ -10,8 +10,11 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use crate::client::Client;
+use crate::Event;
 
 pub struct Server {
+    event_tx: Sender<Event>,
+    event_rx: Receiver<Event>,
     sender: Sender<Packet>,
     allowed: HashMap<IpAddr, i32>,
     clients: HashMap<SocketAddr, Client>,
@@ -28,7 +31,11 @@ impl Server {
 
         let sender = socket.get_packet_sender();
 
+        let (event_tx, event_rx) = crossbeam_channel::unbounded();
+
         let server = Server {
+            event_tx,
+            event_rx,
             sender,
             allowed: HashMap::new(),
             clients: HashMap::new(),
@@ -88,7 +95,8 @@ impl Server {
             }
 
             PacketId::EMIT_EVENT => {
-                deserialize_from_slice(&packet.bytes).map(|packet| self.handle_auth(addr, packet));
+                deserialize_from_slice(&packet.bytes)
+                    .map(|packet| self.handle_emit_event(addr, packet));
             }
 
             _ => (),
@@ -107,9 +115,22 @@ impl Server {
         client.set_state(crate::client::State::Connected);
 
         try_into_packet(response).map(|bytes| {
-            let packet = Packet::reliable_ordered(addr, bytes, None);
+            let packet = Packet::unreliable_sequenced(addr, bytes, Some(1));
             self.sender.send(packet);
         });
+    }
+
+    fn handle_emit_event(&mut self, addr: SocketAddr, packet: packets::EmitEvent) {
+        let client = self.clients.get_mut(&addr).unwrap(); // safe
+        let player_id = client.id();
+
+        if let Some(args) = &packet.args {
+            let event_name = packet.event_name.to_string();
+            let args = args.to_string();
+            let event = Event::EmitEvent(player_id, event_name, args);
+
+            self.event_tx.send(event);
+        }
     }
 
     /// выпинываем игрока из списка клиентов
@@ -128,7 +149,7 @@ impl Server {
             let request = packets::RequestJoin { plugin_version: 0 }; // kind of shit
 
             try_into_packet(request).map(|bytes| {
-                let packet = Packet::reliable_ordered(addr, bytes, None);
+                let packet = Packet::unreliable_sequenced(addr, bytes, Some(1));
                 self.sender.send(packet);
             });
         }
@@ -164,7 +185,7 @@ impl Server {
                 };
 
                 let bytes = try_into_packet(packet).unwrap();
-                let packet = Packet::reliable_ordered(client.addr(), bytes.clone(), None);
+                let packet = Packet::unreliable_sequenced(client.addr(), bytes.clone(), Some(1));
                 sender.send(packet);
             });
         }
@@ -184,7 +205,7 @@ impl Server {
                 };
 
                 let bytes = try_into_packet(packet).unwrap();
-                let packet = Packet::reliable_ordered(client.addr(), bytes.clone(), None);
+                let packet = Packet::unreliable_sequenced(client.addr(), bytes.clone(), Some(1));
                 sender.send(packet);
             });
         }
@@ -201,11 +222,12 @@ impl Server {
             clients.get_mut(&addr).map(|client| {
                 let packet = packets::EmitEvent {
                     event_name: event.into(),
+                    args: None,
                     arguments,
                 };
 
                 let bytes = try_into_packet(packet).unwrap();
-                let packet = Packet::reliable_ordered(client.addr(), bytes.clone(), None);
+                let packet = Packet::unreliable_sequenced(client.addr(), bytes.clone(), Some(1));
                 sender.send(packet);
             });
         }
@@ -217,6 +239,10 @@ impl Server {
         self.addr_by_id(player_id)
             .map(|addr| self.clients.contains_key(&addr))
             .unwrap_or(false)
+    }
+
+    pub fn receiver(&self) -> Receiver<Event> {
+        self.event_rx.clone()
     }
 
     // utils
