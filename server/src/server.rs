@@ -170,6 +170,47 @@ impl Server {
         }
     }
 
+    pub fn destroy_browser(&mut self, player_id: i32, browser_id: i32) {
+        if let Some(addr) = self.addr_by_id(player_id) {
+            let Server {
+                ref mut clients,
+                ref mut sender,
+                ..
+            } = self;
+
+            clients.get_mut(&addr).map(|client| {
+                let packet = packets::DestroyBrowser {
+                    browser_id: browser_id as u32,
+                };
+
+                let bytes = try_into_packet(packet).unwrap();
+                let packet = Packet::reliable_ordered(client.addr(), bytes.clone(), None);
+                sender.send(packet);
+            });
+        }
+    }
+
+    pub fn emit_event(&mut self, player_id: i32, event: &str, arguments: Vec<packets::EventValue>) {
+        if let Some(addr) = self.addr_by_id(player_id) {
+            let Server {
+                ref mut clients,
+                ref mut sender,
+                ..
+            } = self;
+
+            clients.get_mut(&addr).map(|client| {
+                let packet = packets::EmitEvent {
+                    event_name: event.into(),
+                    arguments,
+                };
+
+                let bytes = try_into_packet(packet).unwrap();
+                let packet = Packet::reliable_ordered(client.addr(), bytes.clone(), None);
+                sender.send(packet);
+            });
+        }
+    }
+
     pub fn block_input(&mut self, player_id: i32, block: bool) {}
 
     pub fn has_plugin(&self, player_id: i32) -> bool {

@@ -13,6 +13,12 @@ impl List {
         }
     }
 
+    pub fn new() -> List {
+        let raw = unsafe { cef_sys::cef_list_value_create() };
+
+        List::from_raw(raw)
+    }
+
     pub fn len(&self) -> usize {
         let len = self.inner.get_size.unwrap();
         unsafe { len(self.inner.get_mut()) }

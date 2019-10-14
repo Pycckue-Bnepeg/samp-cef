@@ -147,7 +147,29 @@ impl Network {
         handle_result(self.event_tx.send(Event::DestroyBrowser(packet.browser_id)));
     }
 
-    fn handle_emit_event(&mut self, packet: packets::EmitEvent) {}
+    fn handle_emit_event(&mut self, packet: packets::EmitEvent) {
+        let list = cef::types::list::List::new();
+
+        for (idx, arg) in packet.arguments.iter().enumerate() {
+            if let Some(f) = arg.float_value {
+                list.set_double(idx, f as f64);
+            }
+
+            if let Some(i) = arg.integer_value {
+                list.set_integer(idx, i);
+            }
+
+            if let Some(s) = &arg.string_value {
+                let cef_str = cef::types::string::CefString::new(&s);
+                list.set_string(idx, &cef_str);
+            }
+        }
+
+        handle_result(
+            self.event_tx
+                .send(Event::EmitEvent(packet.event_name.to_string(), list)),
+        );
+    }
 
     fn net_connect(&mut self, address: SocketAddr) {
         self.connection_state = ConnectionState::Auth(address);

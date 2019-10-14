@@ -87,19 +87,25 @@ impl Client for WebClient {
     ) -> bool {
         let name = msg.name().to_string();
 
-        if name == "block_input" {
-            let args = msg.argument_list();
-            let value_type = args.get_type(0);
+        match name.as_str() {
+            "block_input" => {
+                let args = msg.argument_list();
+                let value_type = args.get_type(0);
 
-            let block = match value_type {
-                ValueType::Integer => args.integer(0) == 1,
-                ValueType::Bool => args.bool(0),
-                _ => false,
-            };
+                let block = match value_type {
+                    ValueType::Integer => args.integer(0) == 1,
+                    ValueType::Bool => args.bool(0),
+                    _ => false,
+                };
 
-            self.event_tx.send(Event::BlockInput(block));
+                self.event_tx.send(Event::BlockInput(block));
 
-            return true;
+                return true;
+            }
+
+            "emit_event" => {}
+
+            _ => (),
         }
 
         false

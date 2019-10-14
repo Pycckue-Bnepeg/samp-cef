@@ -1,6 +1,7 @@
 use crate::app::Event;
 use crate::browser::client::WebClient;
 
+use cef::types::list::{List, ValueType};
 use cef::types::string::CefString;
 use cef_sys::{cef_event_flags_t, cef_key_event_t, cef_mouse_button_type_t, cef_mouse_event_t};
 
@@ -24,7 +25,7 @@ struct Mouse {
 }
 
 pub struct Manager {
-    clients: Vec<Arc<WebClient>>,
+    clients: HashMap<u32, Arc<WebClient>>,
     event_tx: Sender<Event>,
     mouse: Mouse,
     view_width: usize,
@@ -45,7 +46,7 @@ impl Manager {
         let mouse = Mouse { x: 0, y: 0, keys };
 
         Manager {
-            clients: Vec::new(),
+            clients: HashMap::new(),
             view_height: 0,
             view_width: 0,
             mouse,
@@ -53,27 +54,33 @@ impl Manager {
         }
     }
 
-    pub fn create_browser(&mut self, url: &str) {
+    pub fn create_browser(&mut self, id: u32, url: &str) {
         let client = WebClient::new(self.event_tx.clone());
         crate::browser::cef::create_browser(client.clone(), url);
-        self.clients.push(client);
+
+        if let Some(client) = self.clients.insert(id, client) {
+            client
+                .browser()
+                .map(|br| br.host())
+                .map(|host| host.close_browser(true));
+        }
     }
 
     pub fn draw(&self) {
-        for browser in &self.clients {
+        for (_, browser) in &self.clients {
             browser.update_view();
             browser.draw();
         }
     }
 
     pub fn on_lost_device(&self) {
-        for browser in &self.clients {
+        for (_, browser) in &self.clients {
             browser.on_lost_device();
         }
     }
 
     pub fn on_reset_device(&self) {
-        for browser in &self.clients {
+        for (_, browser) in &self.clients {
             browser.on_reset_device();
         }
     }
@@ -86,13 +93,13 @@ impl Manager {
         self.view_width = width;
         self.view_height = height;
 
-        for browser in &self.clients {
+        for (_, browser) in &self.clients {
             browser.resize(width, height);
         }
     }
 
     pub fn send_mouse_move_event(&mut self, x: i32, y: i32) {
-        for client in &self.clients {
+        for (_, client) in &self.clients {
             if let Some(host) = client.browser().map(|browser| browser.host()) {
                 self.mouse.x = x;
                 self.mouse.y = y;
@@ -119,7 +126,7 @@ impl Manager {
     }
 
     pub fn send_mouse_click_event(&mut self, button: MouseKey, is_down: bool) {
-        for client in &self.clients {
+        for (_, client) in &self.clients {
             if let Some(host) = client.browser().map(|browser| browser.host()) {
                 self.mouse.keys.insert(button, is_down);
 
@@ -141,7 +148,7 @@ impl Manager {
     }
 
     pub fn send_mouse_wheel(&self, delta: i32) {
-        for client in &self.clients {
+        for (_, client) in &self.clients {
             if let Some(host) = client.browser().map(|browser| browser.host()) {
                 host.send_mouse_wheel(self.mouse.x, self.mouse.y, delta);
             }
@@ -149,15 +156,15 @@ impl Manager {
     }
 
     pub fn send_keyboard_event(&self, event: cef_key_event_t) {
-        for client in &self.clients {
+        for (_, client) in &self.clients {
             if let Some(host) = client.browser().map(|browser| browser.host()) {
                 host.send_keyboard_event(event.clone());
             }
         }
     }
 
-    pub fn trigger_event(&self, event_name: &str) {
-        for client in &self.clients {
+    pub fn trigger_event(&self, event_name: &str, list: List) {
+        for (_, client) in &self.clients {
             if let Some(frame) = client.browser().map(|browser| browser.main_frame()) {
                 let name = CefString::new(event_name);
                 let msg = cef::process_message::ProcessMessage::create("trigger_event");
@@ -165,8 +172,27 @@ impl Manager {
                 let args = msg.argument_list();
                 args.set_string(0, &name);
 
+                for idx in 0..list.len() {
+                    match list.get_type(idx) {
+                        ValueType::String => args.set_string(idx + 1, &list.string(idx)),
+                        ValueType::Integer => args.set_integer(idx + 1, list.integer(idx)),
+                        ValueType::Double => args.set_double(idx + 1, list.double(idx)),
+                        ValueType::Bool => args.set_bool(idx + 1, list.bool(idx)),
+                        _ => (),
+                    }
+                }
+
                 frame.send_process_message(cef::ProcessId::Renderer, msg);
             }
+        }
+    }
+
+    pub fn close_browser(&mut self, id: u32, force_close: bool) {
+        if let Some(client) = self.clients.remove(&id) {
+            client
+                .browser()
+                .map(|br| br.host())
+                .map(|host| host.close_browser(force_close));
         }
     }
 }

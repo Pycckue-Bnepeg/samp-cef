@@ -91,6 +91,20 @@ impl BrowserHost {
         }
     }
 
+    pub fn close_browser(&self, force_close: bool) {
+        let close = self.inner.close_browser.unwrap();
+        unsafe {
+            close(self.inner.get_mut(), if force_close { 1 } else { 0 });
+        }
+    }
+
+    pub fn was_hidden(&self, hidden: bool) {
+        let hide = self.inner.was_hidden.unwrap();
+        unsafe {
+            hide(self.inner.get_mut(), if hidden { 1 } else { 0 });
+        }
+    }
+
     pub fn was_resized(&self) {
         let was_resized = self.inner.was_resized.unwrap();
         unsafe {

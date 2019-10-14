@@ -2,12 +2,15 @@ use std::net::{IpAddr, SocketAddr};
 use std::sync::{Arc, Mutex};
 
 use log::info;
+use samp::args::Args;
 use samp::prelude::*;
 use samp::{initialize_plugin, native};
 
 mod client;
 mod server;
 mod utils;
+
+use messages::packets::EventValue;
 
 use crate::server::Server;
 use crate::utils::{handle_result, IdPool};
@@ -78,13 +81,65 @@ impl CefPlugin {
     #[native(name = "cef_destroy_browser")]
     fn destroy_browser(&mut self, _: &Amx, player_id: i32, browser_id: i32) -> AmxResult<bool> {
         let mut server = self.server.lock().unwrap();
+        server.destroy_browser(player_id, browser_id);
 
         Ok(true)
     }
 
     #[native(name = "cef_emit_event", raw)]
-    fn emit_event(&mut self, _: &Amx, args: samp::args::Args) -> AmxResult<bool> {
+    fn emit_event(&mut self, _: &Amx, mut args: Args) -> AmxResult<bool> {
+        if args.count() < 2 || (args.count() - 2) % 2 != 0 {
+            info!("cef_emit_event invalid count of arguments");
+            return Ok(false);
+        }
+
+        let mut arguments = Vec::with_capacity((args.count() - 2) / 2);
+
+        let player_id = args.get::<i32>(0).unwrap();
+        let event_name = args.get::<AmxString>(1).unwrap().to_string();
+
+        let mut idx = 2;
+
+        loop {
+            if idx >= args.count() {
+                break;
+            }
+
+            if let Some(ty) = args.get::<Ref<i32>>(idx) {
+                idx += 1;
+
+                let arg = match *ty {
+                    0 => EventValue {
+                        string_value: Some(args.get::<AmxString>(idx).unwrap().to_string().into()),
+                        float_value: None,
+                        integer_value: None,
+                    },
+
+                    1 => EventValue {
+                        string_value: None,
+                        float_value: None,
+                        integer_value: Some(*args.get::<Ref<i32>>(idx).unwrap()),
+                    },
+
+                    2 => EventValue {
+                        string_value: None,
+                        float_value: Some(*args.get::<Ref<f32>>(idx).unwrap()),
+                        integer_value: None,
+                    },
+
+                    _ => break,
+                };
+
+                arguments.push(arg);
+
+                idx += 1;
+            } else {
+                break;
+            }
+        }
+
         let mut server = self.server.lock().unwrap();
+        server.emit_event(player_id, &event_name, arguments);
 
         Ok(true)
     }

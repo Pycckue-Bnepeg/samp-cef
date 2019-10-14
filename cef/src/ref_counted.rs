@@ -107,6 +107,8 @@ impl RefCounted for cef_base_ref_counted_t {
     }
 }
 
+unsafe impl<T: RefCounted> Send for RefGuard<T> {}
+
 macro_rules! impl_rc {
     ($name:ident) => {
         impl RefCounted for cef_sys::$name {

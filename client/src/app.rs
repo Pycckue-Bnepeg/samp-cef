@@ -13,7 +13,10 @@ use crate::network::NetworkClient;
 use client_api::samp::netgame::NetGame;
 use client_api::samp::Gamestate;
 use client_api::wndproc;
+
 use crossbeam_channel::{Receiver, Sender};
+
+use cef::types::list::List;
 
 const CEF_SERVER_PORT: u16 = 7779;
 pub const CEF_PLUGIN_VERSION: i32 = 0x00_01_00;
@@ -28,6 +31,7 @@ pub enum Event {
 
     CreateBrowser { id: u32, url: String },
     DestroyBrowser(u32),
+    EmitEvent(String, List),
 
     BlockInput(bool),
     Terminate,
@@ -110,7 +114,6 @@ pub fn uninitialize() {
 fn mainloop() {
     if let Some(app) = App::get() {
         if !app.connected && client_api::samp::gamestate() == Gamestate::Connected {
-            //            let mut manager = app.manager.lock().unwrap();
             //            manager.create_browser("http://127.0.0.1:5000/index.html");
             //            manager.create_browser("http://5.63.153.185/hud.html");
 
@@ -128,9 +131,20 @@ fn mainloop() {
         while let Ok(event) = app.event_rx.try_recv() {
             match event {
                 Event::BlockInput(block) => client_api::samp::inputs::show_cursor(block),
-                Event::CreateBrowser { url, .. } => {
+
+                Event::CreateBrowser { id, url } => {
                     let mut manager = app.manager.lock().unwrap();
-                    manager.create_browser(&url);
+                    manager.create_browser(id, &url);
+                }
+
+                Event::DestroyBrowser(id) => {
+                    let mut manager = app.manager.lock().unwrap();
+                    manager.close_browser(id, true);
+                }
+
+                Event::EmitEvent(event, list) => {
+                    let mut manager = app.manager.lock().unwrap();
+                    manager.trigger_event(&event, list);
                 }
 
                 _ => (),
