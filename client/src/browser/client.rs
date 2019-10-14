@@ -1,5 +1,7 @@
 use std::sync::{Arc, Condvar, Mutex};
 
+use crossbeam_channel::Sender;
+
 use cef::browser::{Browser, Frame};
 use cef::client::Client;
 use cef::handlers::lifespan::LifespanHandler;
@@ -10,6 +12,7 @@ use cef::ProcessId;
 
 use cef_sys::cef_rect_t;
 
+use crate::app::Event;
 use crate::browser::view::View;
 
 struct DrawData {
@@ -52,6 +55,7 @@ pub struct WebClient {
     browser: Mutex<Option<Browser>>,
     rendered: (Mutex<bool>, Condvar),
     last_texture: Mutex<Option<Vec<u8>>>,
+    event_tx: Sender<Event>,
 }
 
 impl LifespanHandler for WebClient {
@@ -83,17 +87,17 @@ impl Client for WebClient {
     ) -> bool {
         let name = msg.name().to_string();
 
-        if name == "show_cursor" {
+        if name == "block_input" {
             let args = msg.argument_list();
             let value_type = args.get_type(0);
 
-            let show = match value_type {
+            let block = match value_type {
                 ValueType::Integer => args.integer(0) == 1,
                 ValueType::Bool => args.bool(0),
                 _ => false,
             };
 
-            //            self.event_tx.send(Event::ShowCursor(show));
+            self.event_tx.send(Event::BlockInput(block));
 
             return true;
         }
@@ -156,7 +160,7 @@ impl RenderHandler for WebClient {
 }
 
 impl WebClient {
-    pub fn new() -> Arc<WebClient> {
+    pub fn new(event_tx: Sender<Event>) -> Arc<WebClient> {
         let rect = crate::utils::client_rect();
         let view = View::new(client_api::gta::d3d9::device(), rect[0], rect[1]);
 
@@ -166,17 +170,11 @@ impl WebClient {
             browser: Mutex::new(None),
             rendered: (Mutex::new(false), Condvar::new()),
             last_texture: Mutex::new(None),
+            event_tx,
         };
 
         Arc::new(client)
     }
-
-    //    pub fn create_view(&self) {
-    //        let view = crate::utils::client_rect();
-    //        let new = View::new(client_api::gta::d3d9::device(), view[0], view[1]);
-    //        let mut texture = self.view.lock().unwrap();
-    //        *texture = Some(new);
-    //    }
 
     pub fn draw(&self) {
         let mut texture = self.view.lock().unwrap();

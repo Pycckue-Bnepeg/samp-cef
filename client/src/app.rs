@@ -1,3 +1,4 @@
+use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -7,28 +8,51 @@ use winapi::shared::minwindef::{LPARAM, UINT, WPARAM};
 use winapi::um::winuser::*;
 
 use crate::browser::manager::{Manager, MouseKey};
-use crate::network::Network;
+use crate::network::NetworkClient;
 
+use client_api::samp::netgame::NetGame;
+use client_api::samp::Gamestate;
 use client_api::wndproc;
+use crossbeam_channel::{Receiver, Sender};
+
+const CEF_SERVER_PORT: u16 = 7779;
+pub const CEF_PLUGIN_VERSION: i32 = 0x00_01_00;
 
 static mut APP: Option<App> = None;
 
+pub enum Event {
+    Connect(SocketAddr),
+    Timeout,
+    NetworkError,
+    BadVersion,
+
+    CreateBrowser { id: u32, url: String },
+    DestroyBrowser(u32),
+
+    BlockInput(bool),
+    Terminate,
+}
+
 pub struct App {
-    init: bool,
+    connected: bool,
     manager: Arc<Mutex<Manager>>,
-    network: Network,
-    //    event_rx
+    network: Option<NetworkClient>,
+
+    event_tx: Sender<Event>,
+    event_rx: Receiver<Event>,
 }
 
 impl App {
     pub fn new() -> App {
-        let manager = Arc::new(Mutex::new(Manager::new()));
-        let network = Network::new();
+        let (event_tx, event_rx) = crossbeam_channel::unbounded();
+        let manager = Arc::new(Mutex::new(Manager::new(event_tx.clone())));
 
         App {
-            init: false,
+            connected: false,
+            network: None,
             manager,
-            network,
+            event_tx,
+            event_rx,
         }
     }
 
@@ -85,12 +109,32 @@ pub fn uninitialize() {
 // inside GTA thread
 fn mainloop() {
     if let Some(app) = App::get() {
-        if !app.init {
-            let mut manager = app.manager.lock().unwrap();
-            //            manager.create_browser("http://127.0.0.1:5000/index.html"); // "http://5.63.153.185"
-            manager.create_browser("http://5.63.153.185/hud.html");
+        if !app.connected && client_api::samp::gamestate() == Gamestate::Connected {
+            //            let mut manager = app.manager.lock().unwrap();
+            //            manager.create_browser("http://127.0.0.1:5000/index.html");
+            //            manager.create_browser("http://5.63.153.185/hud.html");
 
-            app.init = true;
+            if let Some(mut addr) = NetGame::get().addr() {
+                addr.set_port(CEF_SERVER_PORT);
+
+                let network = NetworkClient::new(app.event_tx.clone());
+                network.send(Event::Connect(addr));
+
+                app.network = Some(network);
+                app.connected = true;
+            }
+        }
+
+        while let Ok(event) = app.event_rx.try_recv() {
+            match event {
+                Event::BlockInput(block) => client_api::samp::inputs::show_cursor(block),
+                Event::CreateBrowser { url, .. } => {
+                    let mut manager = app.manager.lock().unwrap();
+                    manager.create_browser(&url);
+                }
+
+                _ => (),
+            }
         }
     }
 }

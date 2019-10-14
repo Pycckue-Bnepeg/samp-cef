@@ -29,8 +29,8 @@ impl V8Handler for Handler {
         let name = name.to_string();
 
         match name.as_str() {
-            "show_cursor" => {
-                let msg = ProcessMessage::create("show_cursor");
+            "block_input" => {
+                let msg = ProcessMessage::create("block_input");
                 let list = msg.argument_list();
 
                 if args.len() != 1 {
@@ -109,12 +109,12 @@ impl RenderProcessHandler for Application {
         let global = context.global();
 
         let version = V8Value::new_string("0.1.0");
-        let func_cur = V8Value::new_function("show_cursor", Some(handler.clone()));
+        let func_cur = V8Value::new_function("block_input", Some(handler.clone()));
         let func_on = V8Value::new_function("on", Some(handler.clone()));
         let func_emit = V8Value::new_function("emit", Some(handler));
 
         let key_str = CefString::new("version");
-        let key_func = CefString::new("show_cursor");
+        let key_func = CefString::new("block_input");
         let key_on = CefString::new("on");
         let key_emit = CefString::new("emit");
 

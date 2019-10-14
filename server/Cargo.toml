@@ -1,0 +1,16 @@
+[package]
+name = "server"
+version = "0.1.0"
+authors = ["ZOTTCE <zottce@gmail.com>"]
+edition = "2018"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+samp = { git = "https://github.com/zottce/samp-rs.git" }
+laminar = "0.3.2"
+log = "0.4.6"
+crossbeam-channel = "0.3.8"
+messages = { path = "../messages" }
+quick-protobuf = "0.6.3"

@@ -7,7 +7,6 @@ use cef_sys::cef_rect_t;
 
 use winapi::shared::d3d9::*;
 use winapi::shared::d3d9types::*;
-//use winapi::shared::windef::RECT;
 
 const D3D_OK: i32 = 0;
 const D3DXSPRITE_ALPHABLEND: u32 = 16;
@@ -112,8 +111,6 @@ impl View {
                 if (*texture).LockRect(0, &mut rect, std::ptr::null(), 0) == D3D_OK {
                     let bits = rect.pBits as *mut u8;
                     let pitch = rect.Pitch as usize;
-                    let height = surface_desc.Height as usize;
-                    let width = surface_desc.Width as usize;
 
                     for cef_rect in rects {
                         for y in

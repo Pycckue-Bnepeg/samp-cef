@@ -5,6 +5,8 @@ members = [
     "loader",
     "client",
     "renderer",
+    "messages",
+    "server",
     "cef-tests",
 ]
 
@@ -12,4 +14,5 @@ default-members = [
     "loader",
     "client",
     "renderer",
+    "server",
 ]

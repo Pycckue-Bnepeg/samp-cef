@@ -1,0 +1,51 @@
+enum PacketId {
+    // client side
+    REQUEST_JOIN = 1;
+
+    // server side
+    JOIN_RESPONSE = 2;
+    CREATE_BROWSER = 3;
+    DESTROY_BROWSER = 4;
+    BLOCK_INPUT = 5;
+
+    // client/server side
+    EMIT_EVENT = 6;
+}
+
+message Packet {
+    required PacketId packet_id = 1;
+    required bytes bytes = 2;
+}
+
+message RequestJoin {
+    required int32 plugin_version = 1;
+}
+
+message JoinResponse {
+    required bool success = 1;
+    optional int32 current_version = 2;
+}
+
+message CreateBrowser {
+    required uint32 browser_id = 1;
+    required string url = 2;
+}
+
+message DestroyBrowser {
+    required uint32 browser_id = 1;
+}
+
+message BlockInput {
+    required bool block = 1;
+}
+
+message EmitEvent {
+    required string event_name = 1;
+    repeated EventValue arguments = 2;
+}
+
+message EventValue {
+    optional string string_value = 1;
+    optional float float_value = 2;
+    optional int32 integer_value = 3;
+}

@@ -2,7 +2,6 @@ use std::sync::{Arc, Mutex};
 use winapi::shared::d3d9::IDirect3DDevice9;
 
 use crate::browser::manager::Manager;
-use winapi::shared::d3d9types::D3DVIEWPORT9;
 
 const RESET_FLAG_PRE: u8 = 0;
 const RESET_FLAG_POST: u8 = 1;

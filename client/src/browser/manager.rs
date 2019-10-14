@@ -1,9 +1,13 @@
+use crate::app::Event;
 use crate::browser::client::WebClient;
 
 use cef::types::string::CefString;
 use cef_sys::{cef_event_flags_t, cef_key_event_t, cef_mouse_button_type_t, cef_mouse_event_t};
+
 use std::collections::HashMap;
 use std::sync::Arc;
+
+use crossbeam_channel::Sender;
 
 #[derive(Debug, Clone, Copy, Hash, Ord, PartialOrd, Eq, PartialEq)]
 pub enum MouseKey {
@@ -21,13 +25,14 @@ struct Mouse {
 
 pub struct Manager {
     clients: Vec<Arc<WebClient>>,
+    event_tx: Sender<Event>,
     mouse: Mouse,
     view_width: usize,
     view_height: usize,
 }
 
 impl Manager {
-    pub fn new() -> Manager {
+    pub fn new(event_tx: Sender<Event>) -> Manager {
         // init cef
         crate::browser::cef::initialize();
 
@@ -44,11 +49,12 @@ impl Manager {
             view_height: 0,
             view_width: 0,
             mouse,
+            event_tx,
         }
     }
 
     pub fn create_browser(&mut self, url: &str) {
-        let client = WebClient::new();
+        let client = WebClient::new(self.event_tx.clone());
         crate::browser::cef::create_browser(client.clone(), url);
         self.clients.push(client);
     }
