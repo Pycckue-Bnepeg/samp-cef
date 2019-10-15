@@ -27,6 +27,8 @@ unsafe extern "stdcall" fn get_root_screen_rect<I: RenderHandler>(
         ()
     }
 
+    (*browser).base.release.unwrap()(&mut (*browser).base);
+
     // let _ = obj.interface.root_screen_rect();
     return 0 as _;
 }
@@ -47,6 +49,7 @@ unsafe extern "stdcall" fn get_screen_point<I: RenderHandler>(
     screenY: *mut ::std::os::raw::c_int,
 ) -> ::std::os::raw::c_int {
     //    let obj: &mut Wrapper<_, I> = Wrapper::unwrap(this);
+    (*browser).base.release.unwrap()(&mut (*browser).base);
     // let _ = obj.interface.screen_point();
     return 0 as _;
 }
@@ -56,6 +59,7 @@ unsafe extern "stdcall" fn get_screen_info<I: RenderHandler>(
     screen_info: *mut cef_screen_info_t,
 ) -> ::std::os::raw::c_int {
     //    let obj: &mut Wrapper<_, I> = Wrapper::unwrap(this);
+    (*browser).base.release.unwrap()(&mut (*browser).base);
     // let _ = obj.interface.screen_info();
     return 0 as _;
 }
@@ -64,6 +68,7 @@ unsafe extern "stdcall" fn on_popup_show<I: RenderHandler>(
     this: *mut cef_render_handler_t, browser: *mut cef_browser_t, show: ::std::os::raw::c_int,
 ) {
     //    let obj: &mut Wrapper<_, I> = Wrapper::unwrap(this);
+    (*browser).base.release.unwrap()(&mut (*browser).base);
     // let _ = obj.interface.on_popup_show();
 }
 
@@ -107,6 +112,7 @@ unsafe extern "stdcall" fn on_accelerated_paint<I: RenderHandler>(
     shared_handle: *mut ::std::os::raw::c_void,
 ) {
     //    let obj: &mut Wrapper<_, I> = Wrapper::unwrap(this);
+    (*browser).base.release.unwrap()(&mut (*browser).base);
     println!("accelerated");
     // let _ = obj.interface.on_accelerated_paint();
 }
@@ -115,6 +121,7 @@ unsafe extern "stdcall" fn on_cursor_change<I: RenderHandler>(
     this: *mut cef_render_handler_t, browser: *mut cef_browser_t, cursor: HCURSOR,
     type_: cef_cursor_type_t::Type, custom_cursor_info: *const cef_cursor_info_t,
 ) {
+    (*browser).base.release.unwrap()(&mut (*browser).base);
     //    let obj: &mut Wrapper<_, I> = Wrapper::unwrap(this);
     // let _ = obj.interface.on_cursor_change();
 }
@@ -124,6 +131,8 @@ unsafe extern "stdcall" fn start_dragging<I: RenderHandler>(
     allowed_ops: cef_drag_operations_mask_t::Type, x: ::std::os::raw::c_int,
     y: ::std::os::raw::c_int,
 ) -> ::std::os::raw::c_int {
+    (*browser).base.release.unwrap()(&mut (*browser).base);
+    (*drag_data).base.release.unwrap()(&mut (*drag_data).base);
     //    let obj: &mut Wrapper<_, I> = Wrapper::unwrap(this);
     // let _ = obj.interface.start_dragging();
     return 0 as _;
@@ -134,6 +143,7 @@ unsafe extern "stdcall" fn update_drag_cursor<I: RenderHandler>(
     operation: cef_drag_operations_mask_t::Type,
 ) {
     let obj: &mut Wrapper<_, I> = Wrapper::unwrap(this);
+    (*browser).base.release.unwrap()(&mut (*browser).base);
     let _a = operation * 4;
     // let _ = obj.interface.update_drag_cursor();
 }
@@ -141,6 +151,7 @@ unsafe extern "stdcall" fn update_drag_cursor<I: RenderHandler>(
 unsafe extern "stdcall" fn on_scroll_offset_changed<I: RenderHandler>(
     this: *mut cef_render_handler_t, browser: *mut cef_browser_t, x: f64, y: f64,
 ) {
+    (*browser).base.release.unwrap()(&mut (*browser).base);
     //    let obj: &mut Wrapper<_, I> = Wrapper::unwrap(this);
     // let _ = obj.interface.on_scroll_offset_changed();
 }
@@ -151,6 +162,7 @@ unsafe extern "stdcall" fn oicrc<I: RenderHandler>(
     character_bounds: *const cef_rect_t,
 ) {
     let obj: &mut Wrapper<_, I> = Wrapper::unwrap(this);
+    (*browser).base.release.unwrap()(&mut (*browser).base);
     // let _ = obj.interface.on_ime_composition_range_changed();
 }
 
@@ -158,6 +170,7 @@ unsafe extern "stdcall" fn on_text_selection_changed<I: RenderHandler>(
     this: *mut cef_render_handler_t, browser: *mut cef_browser_t,
     selected_text: *const cef_string_t, selected_range: *const cef_range_t,
 ) {
+    (*browser).base.release.unwrap()(&mut (*browser).base);
     //    let obj: &mut Wrapper<_, I> = Wrapper::unwrap(this);
     // let _ = obj.interface.on_text_selection_changed();
 }

@@ -197,8 +197,8 @@ impl View {
 
     pub fn on_lost_device(&mut self) {
         unsafe {
-            if let Some(sprite) = self.sprite.as_ref().map(|ptr| ptr.as_ref()) {
-                sprite.OnLostDevice();
+            if let Some(mut sprite) = self.sprite.take() {
+                sprite.as_mut().Release();
             }
 
             if let Some(mut texture) = self.texture.take() {
@@ -209,10 +209,7 @@ impl View {
 
     pub fn on_reset_device(&mut self, device: &mut IDirect3DDevice9, width: usize, height: usize) {
         unsafe {
-            if let Some(sprite) = self.sprite.as_ref().map(|ptr| ptr.as_ref()) {
-                sprite.OnResetDevice();
-            }
-
+            self.sprite = NonNull::new(Self::create_sprite(device));
             self.texture = NonNull::new(Self::create_texture(device, width, height));
         }
     }

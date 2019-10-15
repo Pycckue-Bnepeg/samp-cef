@@ -41,6 +41,8 @@ pub enum Event {
 
 pub struct App {
     connected: bool,
+    input_blocked: bool,
+
     manager: Arc<Mutex<Manager>>,
     network: Option<NetworkClient>,
 
@@ -55,6 +57,7 @@ impl App {
 
         App {
             connected: false,
+            input_blocked: false,
             network: None,
             manager,
             event_tx,
@@ -116,9 +119,6 @@ pub fn uninitialize() {
 fn mainloop() {
     if let Some(app) = App::get() {
         if !app.connected && client_api::samp::gamestate() == Gamestate::Connected {
-            //            manager.create_browser("http://127.0.0.1:5000/index.html");
-            //            manager.create_browser("http://5.63.153.185/hud.html");
-
             if let Some(mut addr) = NetGame::get().addr() {
                 addr.set_port(CEF_SERVER_PORT);
 
@@ -132,7 +132,10 @@ fn mainloop() {
 
         while let Ok(event) = app.event_rx.try_recv() {
             match event {
-                Event::BlockInput(block) => client_api::samp::inputs::show_cursor(block),
+                Event::BlockInput(block) => {
+                    app.input_blocked = block;
+                    client_api::samp::inputs::show_cursor(block);
+                }
 
                 Event::CreateBrowser { id, url } => {
                     let mut manager = app.manager.lock().unwrap();
@@ -213,8 +216,11 @@ fn win_event(msg: UINT, wparam: WPARAM, lparam: LPARAM) -> bool {
 
                 manager.send_keyboard_event(event);
             }
-            _ => (),
+
+            _ => return false,
         }
+
+        return app.input_blocked;
     }
 
     return false;

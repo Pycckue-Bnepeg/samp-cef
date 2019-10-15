@@ -17,7 +17,7 @@ pub(crate) struct Wrapper<T, I> {
     cef_object: T,
     interface: Arc<I>,
     ref_count: AtomicUsize,
-    marker: PhantomData<T>,
+    marker: PhantomData<I>,
 }
 
 impl<T, I> Wrapper<T, I> {

@@ -8,7 +8,7 @@ edition = "2018"
 crate-type = ["cdylib"]
 
 [dependencies]
-samp = { git = "https://github.com/zottce/samp-rs.git" }
+samp = { git = "https://github.com/zottce/samp-rs.git", features = ["encoding"] }
 laminar = "0.3.2"
 log = "0.4.6"
 crossbeam-channel = "0.3.9"
