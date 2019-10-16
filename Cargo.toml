@@ -16,3 +16,6 @@ default-members = [
     "renderer",
     "server",
 ]
+
+[profile.release]
+lto = true

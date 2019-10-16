@@ -7,9 +7,11 @@ enum PacketId {
     CREATE_BROWSER = 3;
     DESTROY_BROWSER = 4;
     BLOCK_INPUT = 5;
+    HIDE_BROWSER = 6;
+    BROWSER_LISTEN_EVENTS = 7;
 
     // client/server side
-    EMIT_EVENT = 6;
+    EMIT_EVENT = 8;
 }
 
 message Packet {
@@ -29,6 +31,7 @@ message JoinResponse {
 message CreateBrowser {
     required uint32 browser_id = 1;
     required string url = 2;
+    required bool listen_to_events = 3;
 }
 
 message DestroyBrowser {
@@ -43,6 +46,16 @@ message EmitEvent {
     required string event_name = 1;
     optional string args = 2;
     repeated EventValue arguments = 3;
+}
+
+message HideBrowser {
+    required uint32 browser_id = 1;
+    required bool hide = 2;
+}
+
+message BrowserListenEvents {
+    required uint32 browser_id = 1;
+    required bool listen = 2;
 }
 
 message EventValue {

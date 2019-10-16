@@ -2,6 +2,7 @@ use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+use cef::types::list::List;
 use cef_sys::{cef_key_event_t, cef_key_event_type_t};
 
 use winapi::shared::minwindef::{LPARAM, UINT, WPARAM};
@@ -16,8 +17,8 @@ use client_api::wndproc;
 
 use crossbeam_channel::{Receiver, Sender};
 
-use cef::types::list::List;
-use client_api::utils::handle_result;
+// TODO: nice shutdown
+//use detour::GenericDetour;
 
 const CEF_SERVER_PORT: u16 = 7779;
 pub const CEF_PLUGIN_VERSION: i32 = 0x00_01_00;
@@ -30,8 +31,15 @@ pub enum Event {
     NetworkError,
     BadVersion,
 
-    CreateBrowser { id: u32, url: String },
+    CreateBrowser {
+        id: u32,
+        url: String,
+        listen_events: bool,
+    },
+
     DestroyBrowser(u32),
+    HideBrowser(u32, bool),
+    BrowserListenEvents(u32, bool),
     EmitEvent(String, List),
     EmitEventOnServer(String, String),
 
@@ -137,14 +145,28 @@ fn mainloop() {
                     client_api::samp::inputs::show_cursor(block);
                 }
 
-                Event::CreateBrowser { id, url } => {
+                Event::CreateBrowser {
+                    id,
+                    url,
+                    listen_events,
+                } => {
                     let mut manager = app.manager.lock().unwrap();
-                    manager.create_browser(id, &url);
+                    manager.create_browser(id, &url, listen_events);
                 }
 
                 Event::DestroyBrowser(id) => {
                     let mut manager = app.manager.lock().unwrap();
                     manager.close_browser(id, true);
+                }
+
+                Event::HideBrowser(id, hide) => {
+                    let manager = app.manager.lock().unwrap();
+                    manager.hide_browser(id, hide);
+                }
+
+                Event::BrowserListenEvents(id, listen) => {
+                    let manager = app.manager.lock().unwrap();
+                    manager.browser_listen_events(id, listen);
                 }
 
                 Event::EmitEvent(event, list) => {

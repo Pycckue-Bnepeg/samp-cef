@@ -91,10 +91,10 @@ impl CefPlugin {
 
     #[native(name = "cef_create_browser")]
     fn create_browser(
-        &mut self, _: &Amx, player_id: i32, browser_id: i32, url: AmxString,
+        &mut self, _: &Amx, player_id: i32, browser_id: i32, url: AmxString, listen_events: bool,
     ) -> AmxResult<bool> {
         let mut server = self.server.lock().unwrap();
-        server.create_browser(player_id, browser_id, url.to_string());
+        server.create_browser(player_id, browser_id, url.to_string(), listen_events);
 
         Ok(true)
     }
@@ -103,6 +103,26 @@ impl CefPlugin {
     fn destroy_browser(&mut self, _: &Amx, player_id: i32, browser_id: i32) -> AmxResult<bool> {
         let mut server = self.server.lock().unwrap();
         server.destroy_browser(player_id, browser_id);
+
+        Ok(true)
+    }
+
+    #[native(name = "cef_hide_browser")]
+    fn hide_browser(
+        &mut self, _: &Amx, player_id: i32, browser_id: i32, hide: bool,
+    ) -> AmxResult<bool> {
+        let mut server = self.server.lock().unwrap();
+        server.hide_browser(player_id, browser_id, hide);
+
+        Ok(true)
+    }
+
+    #[native(name = "cef_listen_client_events")]
+    fn browser_listen_events(
+        &mut self, _: &Amx, player_id: i32, browser_id: i32, listen: bool,
+    ) -> AmxResult<bool> {
+        let mut server = self.server.lock().unwrap();
+        server.browser_listen_events(player_id, browser_id, listen);
 
         Ok(true)
     }
@@ -223,6 +243,9 @@ initialize_plugin!(
         CefPlugin::destroy_browser,
         CefPlugin::emit_event,
         CefPlugin::subscribe,
+        CefPlugin::block_input,
+        CefPlugin::hide_browser,
+        CefPlugin::browser_listen_events,
         CefPlugin::is_player_has_plugin,
     ],
     {

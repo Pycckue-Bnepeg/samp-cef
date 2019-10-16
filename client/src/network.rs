@@ -16,7 +16,6 @@ pub struct NetworkClient {
 impl NetworkClient {
     pub fn new(net_tx: Sender<Event>) -> NetworkClient {
         let (client_tx, client_rx) = crossbeam_channel::unbounded();
-        //        let (net_tx, net_rx) = crossbeam_channel::unbounded();
 
         std::thread::spawn(move || {
             if let Some(network) = Network::new(net_tx.clone(), client_rx) {
@@ -113,6 +112,24 @@ impl Network {
                     .ok();
             }
 
+            HIDE_BROWSER => {
+                deserialize_from_slice(&packet.bytes)
+                    .map(|packet| self.handle_hide_browser(packet))
+                    .ok();
+            }
+
+            BLOCK_INPUT => {
+                deserialize_from_slice(&packet.bytes)
+                    .map(|packet| self.handle_block_input(packet))
+                    .ok();
+            }
+
+            BROWSER_LISTEN_EVENTS => {
+                deserialize_from_slice(&packet.bytes)
+                    .map(|packet| self.handle_listen_events(packet))
+                    .ok();
+            }
+
             EMIT_EVENT => {
                 deserialize_from_slice(&packet.bytes)
                     .map(|packet| self.handle_emit_event(packet))
@@ -138,6 +155,7 @@ impl Network {
         let event = Event::CreateBrowser {
             id: packet.browser_id,
             url: packet.url.to_string(),
+            listen_events: packet.listen_to_events,
         };
 
         handle_result(self.event_tx.send(event));
@@ -169,6 +187,21 @@ impl Network {
             self.event_tx
                 .send(Event::EmitEvent(packet.event_name.to_string(), list)),
         );
+    }
+
+    fn handle_hide_browser(&mut self, packet: packets::HideBrowser) {
+        let event = Event::HideBrowser(packet.browser_id, packet.hide);
+        handle_result(self.event_tx.send(event));
+    }
+
+    fn handle_block_input(&mut self, packet: packets::BlockInput) {
+        let event = Event::BlockInput(packet.block);
+        handle_result(self.event_tx.send(event));
+    }
+
+    fn handle_listen_events(&mut self, packet: packets::BrowserListenEvents) {
+        let event = Event::BrowserListenEvents(packet.browser_id, packet.listen);
+        handle_result(self.event_tx.send(event));
     }
 
     fn net_connect(&mut self, address: SocketAddr) {

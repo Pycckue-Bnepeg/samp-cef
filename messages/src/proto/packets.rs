@@ -22,7 +22,9 @@ pub enum PacketId {
     CREATE_BROWSER = 3,
     DESTROY_BROWSER = 4,
     BLOCK_INPUT = 5,
-    EMIT_EVENT = 6,
+    HIDE_BROWSER = 6,
+    BROWSER_LISTEN_EVENTS = 7,
+    EMIT_EVENT = 8,
 }
 
 impl Default for PacketId {
@@ -39,7 +41,9 @@ impl From<i32> for PacketId {
             3 => PacketId::CREATE_BROWSER,
             4 => PacketId::DESTROY_BROWSER,
             5 => PacketId::BLOCK_INPUT,
-            6 => PacketId::EMIT_EVENT,
+            6 => PacketId::HIDE_BROWSER,
+            7 => PacketId::BROWSER_LISTEN_EVENTS,
+            8 => PacketId::EMIT_EVENT,
             _ => Self::default(),
         }
     }
@@ -53,6 +57,8 @@ impl<'a> From<&'a str> for PacketId {
             "CREATE_BROWSER" => PacketId::CREATE_BROWSER,
             "DESTROY_BROWSER" => PacketId::DESTROY_BROWSER,
             "BLOCK_INPUT" => PacketId::BLOCK_INPUT,
+            "HIDE_BROWSER" => PacketId::HIDE_BROWSER,
+            "BROWSER_LISTEN_EVENTS" => PacketId::BROWSER_LISTEN_EVENTS,
             "EMIT_EVENT" => PacketId::EMIT_EVENT,
             _ => Self::default(),
         }
@@ -164,6 +170,7 @@ impl MessageWrite for JoinResponse {
 pub struct CreateBrowser<'a> {
     pub browser_id: u32,
     pub url: Cow<'a, str>,
+    pub listen_to_events: bool,
 }
 
 impl<'a> MessageRead<'a> for CreateBrowser<'a> {
@@ -173,6 +180,7 @@ impl<'a> MessageRead<'a> for CreateBrowser<'a> {
             match r.next_tag(bytes) {
                 Ok(8) => msg.browser_id = r.read_uint32(bytes)?,
                 Ok(18) => msg.url = r.read_string(bytes).map(Cow::Borrowed)?,
+                Ok(24) => msg.listen_to_events = r.read_bool(bytes)?,
                 Ok(t) => { r.read_unknown(bytes, t)?; }
                 Err(e) => return Err(e),
             }
@@ -186,11 +194,13 @@ impl<'a> MessageWrite for CreateBrowser<'a> {
         0
         + 1 + sizeof_varint(*(&self.browser_id) as u64)
         + 1 + sizeof_len((&self.url).len())
+        + 1 + sizeof_varint(*(&self.listen_to_events) as u64)
     }
 
     fn write_message<W: Write>(&self, w: &mut Writer<W>) -> Result<()> {
         w.write_with_tag(8, |w| w.write_uint32(*&self.browser_id))?;
         w.write_with_tag(18, |w| w.write_string(&**&self.url))?;
+        w.write_with_tag(24, |w| w.write_bool(*&self.listen_to_events))?;
         Ok(())
     }
 }
@@ -292,6 +302,76 @@ impl<'a> MessageWrite for EmitEvent<'a> {
         w.write_with_tag(10, |w| w.write_string(&**&self.event_name))?;
         if let Some(ref s) = self.args { w.write_with_tag(18, |w| w.write_string(&**s))?; }
         for s in &self.arguments { w.write_with_tag(26, |w| w.write_message(s))?; }
+        Ok(())
+    }
+}
+
+#[derive(Debug, Default, PartialEq, Clone)]
+pub struct HideBrowser {
+    pub browser_id: u32,
+    pub hide: bool,
+}
+
+impl<'a> MessageRead<'a> for HideBrowser {
+    fn from_reader(r: &mut BytesReader, bytes: &'a [u8]) -> Result<Self> {
+        let mut msg = Self::default();
+        while !r.is_eof() {
+            match r.next_tag(bytes) {
+                Ok(8) => msg.browser_id = r.read_uint32(bytes)?,
+                Ok(16) => msg.hide = r.read_bool(bytes)?,
+                Ok(t) => { r.read_unknown(bytes, t)?; }
+                Err(e) => return Err(e),
+            }
+        }
+        Ok(msg)
+    }
+}
+
+impl MessageWrite for HideBrowser {
+    fn get_size(&self) -> usize {
+        0
+        + 1 + sizeof_varint(*(&self.browser_id) as u64)
+        + 1 + sizeof_varint(*(&self.hide) as u64)
+    }
+
+    fn write_message<W: Write>(&self, w: &mut Writer<W>) -> Result<()> {
+        w.write_with_tag(8, |w| w.write_uint32(*&self.browser_id))?;
+        w.write_with_tag(16, |w| w.write_bool(*&self.hide))?;
+        Ok(())
+    }
+}
+
+#[derive(Debug, Default, PartialEq, Clone)]
+pub struct BrowserListenEvents {
+    pub browser_id: u32,
+    pub listen: bool,
+}
+
+impl<'a> MessageRead<'a> for BrowserListenEvents {
+    fn from_reader(r: &mut BytesReader, bytes: &'a [u8]) -> Result<Self> {
+        let mut msg = Self::default();
+        while !r.is_eof() {
+            match r.next_tag(bytes) {
+                Ok(8) => msg.browser_id = r.read_uint32(bytes)?,
+                Ok(16) => msg.listen = r.read_bool(bytes)?,
+                Ok(t) => { r.read_unknown(bytes, t)?; }
+                Err(e) => return Err(e),
+            }
+        }
+        Ok(msg)
+    }
+}
+
+impl MessageWrite for BrowserListenEvents {
+    fn get_size(&self) -> usize {
+        0
+        + 1 + sizeof_varint(*(&self.browser_id) as u64)
+        + 1 + sizeof_varint(*(&self.listen) as u64)
+    }
+
+    fn write_message<W: Write>(&self, w: &mut Writer<W>) -> Result<()> {
+        w.write_with_tag(8, |w| w.write_uint32(*&self.browser_id))?;
+        w.write_with_tag(16, |w| w.write_bool(*&self.listen))?;
         Ok(())
     }
 }

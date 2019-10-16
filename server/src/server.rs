@@ -170,7 +170,9 @@ impl Server {
         }
     }
 
-    pub fn create_browser(&mut self, player_id: i32, browser_id: i32, url: String) {
+    pub fn create_browser(
+        &mut self, player_id: i32, browser_id: i32, url: String, listen_to_events: bool,
+    ) {
         if let Some(addr) = self.addr_by_id(player_id) {
             let Server {
                 ref mut clients,
@@ -182,6 +184,7 @@ impl Server {
                 let packet = packets::CreateBrowser {
                     browser_id: browser_id as u32,
                     url: url.into(),
+                    listen_to_events,
                 };
 
                 let bytes = try_into_packet(packet).unwrap();
@@ -202,6 +205,48 @@ impl Server {
             clients.get_mut(&addr).map(|client| {
                 let packet = packets::DestroyBrowser {
                     browser_id: browser_id as u32,
+                };
+
+                let bytes = try_into_packet(packet).unwrap();
+                let packet = Packet::unreliable_sequenced(client.addr(), bytes.clone(), Some(1));
+                sender.send(packet);
+            });
+        }
+    }
+
+    pub fn hide_browser(&mut self, player_id: i32, browser_id: i32, hide: bool) {
+        if let Some(addr) = self.addr_by_id(player_id) {
+            let Server {
+                ref mut clients,
+                ref mut sender,
+                ..
+            } = self;
+
+            clients.get_mut(&addr).map(|client| {
+                let packet = packets::HideBrowser {
+                    browser_id: browser_id as u32,
+                    hide,
+                };
+
+                let bytes = try_into_packet(packet).unwrap();
+                let packet = Packet::unreliable_sequenced(client.addr(), bytes.clone(), Some(1));
+                sender.send(packet);
+            });
+        }
+    }
+
+    pub fn browser_listen_events(&mut self, player_id: i32, browser_id: i32, listen: bool) {
+        if let Some(addr) = self.addr_by_id(player_id) {
+            let Server {
+                ref mut clients,
+                ref mut sender,
+                ..
+            } = self;
+
+            clients.get_mut(&addr).map(|client| {
+                let packet = packets::BrowserListenEvents {
+                    browser_id: browser_id as u32,
+                    listen,
                 };
 
                 let bytes = try_into_packet(packet).unwrap();
@@ -233,7 +278,23 @@ impl Server {
         }
     }
 
-    pub fn block_input(&mut self, player_id: i32, block: bool) {}
+    pub fn block_input(&mut self, player_id: i32, block: bool) {
+        if let Some(addr) = self.addr_by_id(player_id) {
+            let Server {
+                ref mut clients,
+                ref mut sender,
+                ..
+            } = self;
+
+            clients.get_mut(&addr).map(|client| {
+                let packet = packets::BlockInput { block };
+
+                let bytes = try_into_packet(packet).unwrap();
+                let packet = Packet::unreliable_sequenced(client.addr(), bytes.clone(), Some(1));
+                sender.send(packet);
+            });
+        }
+    }
 
     pub fn has_plugin(&self, player_id: i32) -> bool {
         self.addr_by_id(player_id)

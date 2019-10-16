@@ -6,6 +6,7 @@ use std::sync::Arc;
 
 pub mod app;
 pub mod client;
+pub mod context_menu_handler;
 pub mod lifespan_handler;
 pub mod render_handler;
 pub mod render_process_handler;
@@ -17,7 +18,7 @@ pub(crate) struct Wrapper<T, I> {
     cef_object: T,
     interface: Arc<I>,
     ref_count: AtomicUsize,
-    marker: PhantomData<I>,
+    marker: PhantomData<T>,
 }
 
 impl<T, I> Wrapper<T, I> {
@@ -26,10 +27,10 @@ impl<T, I> Wrapper<T, I> {
 
         base.size = std::mem::size_of::<T>();
 
-        base.add_ref = Some(Self::add_ref);
-        base.has_one_ref = Some(Self::has_one_ref);
-        base.has_at_least_one_ref = Some(Self::has_at_least_one_ref);
-        base.release = Some(Self::release);
+        base.add_ref = Some(add_ref::<T, I>);
+        base.has_one_ref = Some(has_one_ref::<T, I>);
+        base.has_at_least_one_ref = Some(has_at_least_one_ref::<T, I>);
+        base.release = Some(release::<T, I>);
 
         Wrapper {
             cef_object,
@@ -42,41 +43,84 @@ impl<T, I> Wrapper<T, I> {
     pub fn unwrap<'a>(ptr: *mut T) -> &'a mut Wrapper<T, I> {
         unsafe { &mut *(ptr as *mut Wrapper<T, I>) }
     }
+}
 
-    extern "stdcall" fn add_ref(this: *mut cef_base_ref_counted_t) {
-        let obj = Self::unwrap(this as *mut T);
-        obj.ref_count.fetch_add(1, Ordering::Relaxed);
+#[inline(never)]
+extern "stdcall" fn add_ref<T, I>(this: *mut cef_base_ref_counted_t) {
+    let obj: &mut Wrapper<T, I> = Wrapper::unwrap(this as *mut T);
+    //
+    //    // FUCK YOU RUST REALLY FUCK YOU
+    //    if unsafe { std::intrinsics::unlikely(this.is_null()) } {
+    //        println!(
+    //            "{} {}",
+    //            std::any::type_name::<T>(),
+    //            std::any::type_name::<I>()
+    //        );
+    //    }
+
+    obj.ref_count.fetch_add(1, Ordering::Relaxed);
+}
+
+#[inline(never)]
+extern "stdcall" fn has_one_ref<T, I>(this: *mut cef_base_ref_counted_t) -> i32 {
+    let obj: &mut Wrapper<T, I> = Wrapper::unwrap(this as *mut T);
+
+    //    // FUCK YOU RUST REALLY FUCK YOU
+    //    if unsafe { std::intrinsics::unlikely(this.is_null()) } {
+    //        println!(
+    //            "{} {}",
+    //            std::any::type_name::<T>(),
+    //            std::any::type_name::<I>()
+    //        );
+    //    }
+
+    if obj.ref_count.load(Ordering::Relaxed) == 1 {
+        1
+    } else {
+        0
     }
+}
 
-    extern "stdcall" fn has_one_ref(this: *mut cef_base_ref_counted_t) -> i32 {
-        let obj = Self::unwrap(this as *mut T);
-        if obj.ref_count.load(Ordering::Relaxed) == 1 {
-            1
-        } else {
-            0
-        }
+#[inline(never)]
+extern "stdcall" fn has_at_least_one_ref<T, I>(this: *mut cef_base_ref_counted_t) -> i32 {
+    let obj: &mut Wrapper<T, I> = Wrapper::unwrap(this as *mut T);
+
+    //    // FUCK YOU RUST REALLY FUCK YOU
+    //    if unsafe { std::intrinsics::unlikely(this.is_null()) } {
+    //        println!(
+    //            "{} {}",
+    //            std::any::type_name::<T>(),
+    //            std::any::type_name::<I>()
+    //        );
+    //    }
+
+    if obj.ref_count.load(Ordering::Relaxed) >= 1 {
+        1
+    } else {
+        0
     }
+}
 
-    extern "stdcall" fn has_at_least_one_ref(this: *mut cef_base_ref_counted_t) -> i32 {
-        let obj = Self::unwrap(this as *mut T);
-        if obj.ref_count.load(Ordering::Relaxed) >= 1 {
-            1
-        } else {
-            0
-        }
-    }
+#[inline(never)]
+pub extern "stdcall" fn release<T, I>(this: *mut cef_base_ref_counted_t) -> i32 {
+    let obj: &mut Wrapper<T, I> = Wrapper::unwrap(this as *mut T);
 
-    extern "stdcall" fn release(this: *mut cef_base_ref_counted_t) -> i32 {
-        let obj = Self::unwrap(this as *mut T);
+    //    // FUCK YOU RUST REALLY FUCK YOU
+    //    if unsafe { std::intrinsics::unlikely(this.is_null()) } {
+    //        println!(
+    //            "{} {}",
+    //            std::any::type_name::<T>(),
+    //            std::any::type_name::<I>()
+    //        );
+    //    }
 
-        if obj.ref_count.fetch_sub(1, Ordering::Release) != 1 {
-            0
-        } else {
-            atomic::fence(Ordering::Acquire);
+    if obj.ref_count.fetch_sub(1, Ordering::Release) != 1 {
+        0
+    } else {
+        atomic::fence(Ordering::Acquire);
 
-            let _ = unsafe { Box::from_raw(this as *mut Self) };
+        let _ = unsafe { Box::from_raw(this as *mut Wrapper<T, I>) };
 
-            1
-        }
+        1
     }
 }

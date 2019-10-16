@@ -1,9 +1,13 @@
-use std::sync::{Arc, Condvar, Mutex};
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc, Condvar, Mutex,
+};
 
 use crossbeam_channel::Sender;
 
-use cef::browser::{Browser, Frame};
+use cef::browser::{Browser, ContextMenuParams, Frame, MenuModel};
 use cef::client::Client;
+use cef::handlers::context_menu::ContextMenuHandler;
 use cef::handlers::lifespan::LifespanHandler;
 use cef::handlers::render::{DirtyRects, PaintElement, RenderHandler};
 use cef::process_message::ProcessMessage;
@@ -50,6 +54,7 @@ impl DrawData {
 }
 
 pub struct WebClient {
+    should_listen_events: AtomicBool,
     view: Mutex<View>,
     draw_data: Mutex<DrawData>,
     browser: Mutex<Option<Browser>>,
@@ -73,12 +78,17 @@ impl LifespanHandler for WebClient {
 impl Client for WebClient {
     type LifespanHandler = Self;
     type RenderHandler = Self;
+    type ContextMenuHandler = Self;
 
     fn lifespan_handler(self: &Arc<Self>) -> Option<Arc<Self>> {
         Some(self.clone())
     }
 
     fn render_handler(self: &Arc<Self>) -> Option<Arc<Self>> {
+        Some(self.clone())
+    }
+
+    fn context_menu_handler(self: &Arc<Self>) -> Option<Arc<Self>> {
         Some(self.clone())
     }
 
@@ -98,6 +108,7 @@ impl Client for WebClient {
                     _ => false,
                 };
 
+                self.lisen_to_events(block);
                 client_api::utils::handle_result(self.event_tx.send(Event::BlockInput(block)));
 
                 return true;
@@ -134,6 +145,14 @@ impl Client for WebClient {
         }
 
         false
+    }
+}
+
+impl ContextMenuHandler for WebClient {
+    fn on_before_context_menu(
+        self: &Arc<Self>, _: Browser, _: Frame, _: ContextMenuParams, model: MenuModel,
+    ) {
+        model.clear(); // remove context menu
     }
 }
 
@@ -196,6 +215,7 @@ impl WebClient {
         let view = View::new(client_api::gta::d3d9::device(), rect[0], rect[1]);
 
         let client = WebClient {
+            should_listen_events: AtomicBool::new(false),
             view: Mutex::new(view),
             draw_data: Mutex::new(DrawData::new()),
             browser: Mutex::new(None),
@@ -205,6 +225,14 @@ impl WebClient {
         };
 
         Arc::new(client)
+    }
+
+    pub fn should_listen_events(&self) -> bool {
+        self.should_listen_events.load(Ordering::SeqCst)
+    }
+
+    pub fn lisen_to_events(&self, listen: bool) {
+        self.should_listen_events.store(listen, Ordering::SeqCst);
     }
 
     pub fn draw(&self) {
@@ -295,5 +323,14 @@ impl WebClient {
         let browser = self.browser.lock().unwrap();
 
         browser.as_ref().map(|browser| browser.clone())
+    }
+
+    pub fn hide(&self, hide: bool) {
+        self.browser()
+            .map(|browser| browser.host())
+            .map(|host| host.was_hidden(hide));
+
+        let mut view = self.view.lock().unwrap();
+        view.clear_texture();
     }
 }

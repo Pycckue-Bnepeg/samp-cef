@@ -207,11 +207,35 @@ impl View {
         }
     }
 
-    pub fn on_reset_device(&mut self, device: &mut IDirect3DDevice9, width: usize, height: usize) {
+    pub fn clear_texture(&mut self) {
         unsafe {
-            self.sprite = NonNull::new(Self::create_sprite(device));
-            self.texture = NonNull::new(Self::create_texture(device, width, height));
+            if let Some(texture) = self
+                .texture
+                .as_ref()
+                .map(|texture_ptr| texture_ptr.as_ref())
+            {
+                let mut rect = D3DLOCKED_RECT {
+                    Pitch: 0,
+                    pBits: null_mut(),
+                };
+
+                let mut surface_desc: D3DSURFACE_DESC = std::mem::zeroed();
+
+                texture.GetLevelDesc(0, &mut surface_desc);
+
+                if (*texture).LockRect(0, &mut rect, std::ptr::null(), 0) == D3D_OK {
+                    let size = surface_desc.Height as usize * surface_desc.Width as usize * 4;
+                    std::ptr::write_bytes(rect.pBits as *mut u8, 0x00, size);
+
+                    (*texture).UnlockRect(0);
+                }
+            }
         }
+    }
+
+    pub fn on_reset_device(&mut self, device: &mut IDirect3DDevice9, width: usize, height: usize) {
+        self.sprite = NonNull::new(Self::create_sprite(device));
+        self.texture = NonNull::new(Self::create_texture(device, width, height));
     }
 
     fn create_sprite(device: &mut IDirect3DDevice9) -> LPD3DXSPRITE {

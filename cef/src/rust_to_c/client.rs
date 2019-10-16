@@ -24,11 +24,17 @@ extern "stdcall" fn audio<I: Client>(this: *mut cef_client_t) -> *mut cef_audio_
 
 // context menu
 
+#[inline(never)]
 extern "stdcall" fn context_menu<I: Client>(
     this: *mut cef_client_t,
 ) -> *mut cef_context_menu_handler_t {
-    println!("context_menu");
-    null_mut()
+    let obj: &mut Wrapper<_, I> = Wrapper::unwrap(this);
+
+    if let Some(handler) = obj.interface.context_menu_handler() {
+        super::context_menu_handler::wrap(handler)
+    } else {
+        null_mut()
+    }
 }
 
 // dialog
@@ -143,7 +149,7 @@ extern "stdcall" fn lifespan<I: Client>(this: *mut cef_client_t) -> *mut cef_lif
     let obj: &mut Wrapper<_, I> = Wrapper::unwrap(this);
 
     if let Some(handler) = obj.interface.lifespan_handler() {
-        super::lifespan_handler::wrap(handler)
+        super::lifespan_handler::wrap::<I::LifespanHandler>(handler)
     } else {
         null_mut()
     }
@@ -151,6 +157,7 @@ extern "stdcall" fn lifespan<I: Client>(this: *mut cef_client_t) -> *mut cef_lif
 
 pub fn wrap<T: Client>(client: Arc<T>) -> *mut cef_client_t {
     let mut object: cef_client_t = unsafe { std::mem::zeroed() };
+
     object.get_life_span_handler = Some(lifespan::<T>);
     object.on_process_message_received = Some(on_process_message::<T>);
     object.get_request_handler = Some(request::<T>);

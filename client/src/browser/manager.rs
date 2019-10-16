@@ -54,10 +54,11 @@ impl Manager {
         }
     }
 
-    pub fn create_browser(&mut self, id: u32, url: &str) {
+    pub fn create_browser(&mut self, id: u32, url: &str, listen_events: bool) {
         let client = WebClient::new(self.event_tx.clone());
         crate::browser::cef::create_browser(client.clone(), url);
 
+        client.lisen_to_events(listen_events);
         if let Some(client) = self.clients.insert(id, client) {
             client
                 .browser()
@@ -99,7 +100,11 @@ impl Manager {
     }
 
     pub fn send_mouse_move_event(&mut self, x: i32, y: i32) {
-        for (_, client) in &self.clients {
+        for client in self
+            .clients
+            .values()
+            .filter(|client| client.should_listen_events())
+        {
             if let Some(host) = client.browser().map(|browser| browser.host()) {
                 self.mouse.x = x;
                 self.mouse.y = y;
@@ -126,7 +131,11 @@ impl Manager {
     }
 
     pub fn send_mouse_click_event(&mut self, button: MouseKey, is_down: bool) {
-        for (_, client) in &self.clients {
+        for client in self
+            .clients
+            .values()
+            .filter(|client| client.should_listen_events())
+        {
             if let Some(host) = client.browser().map(|browser| browser.host()) {
                 self.mouse.keys.insert(button, is_down);
 
@@ -148,7 +157,11 @@ impl Manager {
     }
 
     pub fn send_mouse_wheel(&self, delta: i32) {
-        for (_, client) in &self.clients {
+        for client in self
+            .clients
+            .values()
+            .filter(|client| client.should_listen_events())
+        {
             if let Some(host) = client.browser().map(|browser| browser.host()) {
                 host.send_mouse_wheel(self.mouse.x, self.mouse.y, delta);
             }
@@ -156,7 +169,11 @@ impl Manager {
     }
 
     pub fn send_keyboard_event(&self, event: cef_key_event_t) {
-        for (_, client) in &self.clients {
+        for client in self
+            .clients
+            .values()
+            .filter(|client| client.should_listen_events())
+        {
             if let Some(host) = client.browser().map(|browser| browser.host()) {
                 host.send_keyboard_event(event.clone());
             }
@@ -164,7 +181,11 @@ impl Manager {
     }
 
     pub fn trigger_event(&self, event_name: &str, list: List) {
-        for (_, client) in &self.clients {
+        for client in self
+            .clients
+            .values()
+            .filter(|client| client.should_listen_events())
+        {
             if let Some(frame) = client.browser().map(|browser| browser.main_frame()) {
                 let name = CefString::new(event_name);
                 let msg = cef::process_message::ProcessMessage::create("trigger_event");
@@ -193,6 +214,18 @@ impl Manager {
                 .browser()
                 .map(|br| br.host())
                 .map(|host| host.close_browser(force_close));
+        }
+    }
+
+    pub fn hide_browser(&self, id: u32, hide: bool) {
+        if let Some(browser) = self.clients.get(&id) {
+            browser.hide(hide);
+        }
+    }
+
+    pub fn browser_listen_events(&self, id: u32, listen: bool) {
+        if let Some(browser) = self.clients.get(&id) {
+            browser.lisen_to_events(listen);
         }
     }
 }

@@ -1,4 +1,5 @@
 #![feature(arbitrary_self_types, box_into_raw_non_null)]
+#![feature(core_intrinsics)]
 
 use cef_sys::{cef_main_args_t, cef_settings_t};
 use std::sync::Arc;

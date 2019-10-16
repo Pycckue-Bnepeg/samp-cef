@@ -1,6 +1,6 @@
 use cef_sys::{
-    cef_browser_host_t, cef_browser_settings_t, cef_browser_t, cef_frame_t, cef_key_event_t,
-    cef_mouse_event_t, cef_window_info_t,
+    cef_browser_host_t, cef_browser_settings_t, cef_browser_t, cef_context_menu_params_t,
+    cef_frame_t, cef_key_event_t, cef_menu_model_t, cef_mouse_event_t, cef_window_info_t,
 };
 
 use crate::client::Client;
@@ -187,6 +187,39 @@ impl Frame {
 
         unsafe {
             send(self.inner.get_mut(), pid, message.into_cef());
+        }
+    }
+}
+
+#[derive(Clone)]
+pub struct ContextMenuParams {
+    inner: RefGuard<cef_context_menu_params_t>,
+}
+
+impl ContextMenuParams {
+    pub(crate) fn from_raw(raw: *mut cef_context_menu_params_t) -> ContextMenuParams {
+        ContextMenuParams {
+            inner: RefGuard::from_raw(raw),
+        }
+    }
+}
+
+#[derive(Clone)]
+pub struct MenuModel {
+    inner: RefGuard<cef_menu_model_t>,
+}
+
+impl MenuModel {
+    pub(crate) fn from_raw(raw: *mut cef_menu_model_t) -> MenuModel {
+        MenuModel {
+            inner: RefGuard::from_raw(raw),
+        }
+    }
+
+    pub fn clear(&self) {
+        let clear = self.inner.clear.unwrap();
+        unsafe {
+            clear(self.inner.get_mut());
         }
     }
 }

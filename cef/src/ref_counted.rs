@@ -144,3 +144,5 @@ impl_rc!(cef_process_message_t);
 impl_rc!(cef_list_value_t);
 impl_rc!(cef_task_t);
 impl_rc!(cef_task_runner_t);
+impl_rc!(cef_context_menu_params_t);
+impl_rc!(cef_menu_model_t);
