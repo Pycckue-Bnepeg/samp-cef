@@ -7,7 +7,8 @@ members = [
     "renderer",
     "messages",
     "server",
-    "cef-tests",
+    "cef-api",
+    "cef-interface",
 ]
 
 default-members = [
@@ -15,6 +16,7 @@ default-members = [
     "client",
     "renderer",
     "server",
+    "cef-interface",
 ]
 
 [profile.release]

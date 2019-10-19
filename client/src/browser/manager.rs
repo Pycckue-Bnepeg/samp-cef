@@ -1,11 +1,12 @@
 use crate::app::Event;
 use crate::browser::client::WebClient;
+use crate::external::CallbackList;
 
 use cef::types::list::{List, ValueType};
 use cef::types::string::CefString;
 use cef_sys::{cef_event_flags_t, cef_key_event_t, cef_mouse_button_type_t, cef_mouse_event_t};
 
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
 
 use crossbeam_channel::Sender;
@@ -26,6 +27,10 @@ struct Mouse {
 
 pub struct Manager {
     clients: HashMap<u32, Arc<WebClient>>,
+    focused: Option<u32>,
+    focused_queue: VecDeque<u32>,
+    input_corrupted: bool,
+    do_not_draw: bool,
     event_tx: Sender<Event>,
     mouse: Mouse,
     view_width: usize,
@@ -49,16 +54,19 @@ impl Manager {
             clients: HashMap::new(),
             view_height: 0,
             view_width: 0,
+            input_corrupted: false,
+            do_not_draw: false,
+            focused: None,
+            focused_queue: VecDeque::new(),
             mouse,
             event_tx,
         }
     }
 
-    pub fn create_browser(&mut self, id: u32, url: &str, listen_events: bool) {
-        let client = WebClient::new(self.event_tx.clone());
+    pub fn create_browser(&mut self, id: u32, cbs: CallbackList, url: &str) {
+        let client = WebClient::new(id, cbs, self.event_tx.clone());
         crate::browser::cef::create_browser(client.clone(), url);
 
-        client.lisen_to_events(listen_events);
         if let Some(client) = self.clients.insert(id, client) {
             client
                 .browser()
@@ -68,9 +76,25 @@ impl Manager {
     }
 
     pub fn draw(&self) {
-        for (_, browser) in &self.clients {
-            browser.update_view();
-            browser.draw();
+        if self.do_not_draw {
+            return;
+        }
+
+        if let Some(&focus) = self.focused.as_ref() {
+            for client in self.clients.values().filter(|client| client.id() != focus) {
+                client.update_view();
+                client.draw();
+            }
+
+            if let Some(focused) = self.clients.get(&focus) {
+                focused.update_view();
+                focused.draw();
+            }
+        } else {
+            for client in self.clients.values() {
+                client.update_view();
+                client.draw();
+            }
         }
     }
 
@@ -100,11 +124,11 @@ impl Manager {
     }
 
     pub fn send_mouse_move_event(&mut self, x: i32, y: i32) {
-        for client in self
-            .clients
-            .values()
-            .filter(|client| client.should_listen_events())
-        {
+        if self.input_corrupted {
+            return;
+        }
+
+        if let Some(client) = self.focused.as_ref().and_then(|id| self.clients.get(id)) {
             if let Some(host) = client.browser().map(|browser| browser.host()) {
                 self.mouse.x = x;
                 self.mouse.y = y;
@@ -131,11 +155,11 @@ impl Manager {
     }
 
     pub fn send_mouse_click_event(&mut self, button: MouseKey, is_down: bool) {
-        for client in self
-            .clients
-            .values()
-            .filter(|client| client.should_listen_events())
-        {
+        if self.input_corrupted {
+            return;
+        }
+
+        if let Some(client) = self.focused.as_ref().and_then(|id| self.clients.get(id)) {
             if let Some(host) = client.browser().map(|browser| browser.host()) {
                 self.mouse.keys.insert(button, is_down);
 
@@ -157,11 +181,11 @@ impl Manager {
     }
 
     pub fn send_mouse_wheel(&self, delta: i32) {
-        for client in self
-            .clients
-            .values()
-            .filter(|client| client.should_listen_events())
-        {
+        if self.input_corrupted {
+            return;
+        }
+
+        if let Some(client) = self.focused.as_ref().and_then(|id| self.clients.get(id)) {
             if let Some(host) = client.browser().map(|browser| browser.host()) {
                 host.send_mouse_wheel(self.mouse.x, self.mouse.y, delta);
             }
@@ -169,11 +193,11 @@ impl Manager {
     }
 
     pub fn send_keyboard_event(&self, event: cef_key_event_t) {
-        for client in self
-            .clients
-            .values()
-            .filter(|client| client.should_listen_events())
-        {
+        if self.input_corrupted {
+            return;
+        }
+
+        if let Some(client) = self.focused.as_ref().and_then(|id| self.clients.get(id)) {
             if let Some(host) = client.browser().map(|browser| browser.host()) {
                 host.send_keyboard_event(event.clone());
             }
@@ -181,27 +205,14 @@ impl Manager {
     }
 
     pub fn trigger_event(&self, event_name: &str, list: List) {
-        for client in self
-            .clients
-            .values()
-            .filter(|client| client.should_listen_events())
-        {
+        for client in self.clients.values() {
             if let Some(frame) = client.browser().map(|browser| browser.main_frame()) {
                 let name = CefString::new(event_name);
                 let msg = cef::process_message::ProcessMessage::create("trigger_event");
 
                 let args = msg.argument_list();
                 args.set_string(0, &name);
-
-                for idx in 0..list.len() {
-                    match list.get_type(idx) {
-                        ValueType::String => args.set_string(idx + 1, &list.string(idx)),
-                        ValueType::Integer => args.set_integer(idx + 1, list.integer(idx)),
-                        ValueType::Double => args.set_double(idx + 1, list.double(idx)),
-                        ValueType::Bool => args.set_bool(idx + 1, list.bool(idx)),
-                        _ => (),
-                    }
-                }
+                args.set_list(1, list.clone());
 
                 frame.send_process_message(cef::ProcessId::Renderer, msg);
             }
@@ -223,9 +234,63 @@ impl Manager {
         }
     }
 
-    pub fn browser_listen_events(&self, id: u32, listen: bool) {
-        if let Some(browser) = self.clients.get(&id) {
-            browser.lisen_to_events(listen);
+    pub fn browser_focus(&mut self, id: u32, focus: bool) {
+        if self.clients.contains_key(&id) {
+            if focus {
+                if let Some(&cur_id) = self.focused.as_ref() {
+                    if cur_id != id {
+                        self.focused_queue.push_back(id);
+                    }
+                } else {
+                    self.focused = Some(id);
+                }
+            } else {
+                if let Some(_) = self.focused.as_ref().filter(|focused| **focused == id) {
+                    self.focused = self.focused_queue.pop_front();
+                } else {
+                    self.focused_queue
+                        .iter()
+                        .position(|&queue| queue == id)
+                        .map(|idx| self.focused_queue.remove(idx));
+                }
+            }
+        }
+    }
+
+    pub fn is_input_blocked(&self) -> bool {
+        self.focused.is_some()
+    }
+
+    pub fn is_input_available(&self, browser: u32) -> bool {
+        if self.input_corrupted {
+            return false;
+        }
+
+        if self.is_input_blocked() {
+            self.focused.as_ref().filter(|&&id| id == browser).is_some()
+        } else {
+            true
+        }
+    }
+
+    pub fn set_corrupted(&mut self, corrupted: bool) {
+        self.input_corrupted = corrupted;
+    }
+
+    pub fn do_not_draw(&mut self, donot: bool) {
+        if self.do_not_draw != donot {
+            self.do_not_draw = donot;
+            self.temporary_hide(donot);
+        }
+    }
+
+    fn temporary_hide(&self, hide: bool) {
+        for client in self.clients.values() {
+            if hide {
+                client.internal_hide(true, false);
+            } else {
+                client.restore_hide_status();
+            }
         }
     }
 }

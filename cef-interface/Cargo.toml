@@ -1,0 +1,13 @@
+[package]
+name = "cef-interface"
+version = "0.1.0"
+authors = ["ZOTTCE <zottce@gmail.com>"]
+edition = "2018"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+cef = { path = "../cef" }
+cef-api = { path = "../cef-api" }
+client-api = { path = "../../client-api" }

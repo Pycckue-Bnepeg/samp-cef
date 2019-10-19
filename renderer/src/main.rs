@@ -29,8 +29,8 @@ impl V8Handler for Handler {
         let name = name.to_string();
 
         match name.as_str() {
-            "block_input" => {
-                let msg = ProcessMessage::create("block_input");
+            "set_focus" => {
+                let msg = ProcessMessage::create("set_focus");
                 let list = msg.argument_list();
 
                 if args.len() != 1 {
@@ -111,12 +111,12 @@ impl RenderProcessHandler for Application {
         let cef_obj = V8Value::new_object();
 
         let version = V8Value::new_string("0.1.0");
-        let func_cur = V8Value::new_function("block_input", Some(handler.clone()));
+        let func_cur = V8Value::new_function("set_focus", Some(handler.clone()));
         let func_on = V8Value::new_function("on", Some(handler.clone()));
         let func_emit = V8Value::new_function("emit", Some(handler));
 
         let key_str = CefString::new("version");
-        let key_func = CefString::new("block_input");
+        let key_func = CefString::new("set_focus");
         let key_on = CefString::new("on");
         let key_emit = CefString::new("emit");
 
@@ -140,17 +140,18 @@ impl RenderProcessHandler for Application {
         if name == "trigger_event" {
             let args = msg.argument_list();
             let event = args.string(0).to_string();
+            if let Some(list) = args.list(1) {
+                let mut params = Vec::with_capacity(list.len());
+                convert_to_v8(&list, 0, &mut params);
 
-            let mut params = Vec::with_capacity(args.len() - 1);
-            convert_to_v8(&args, 1, &mut params);
+                let events = self.subs.lock().unwrap();
 
-            let events = self.subs.lock().unwrap();
+                let ctx = frame.context();
 
-            let ctx = frame.context();
-
-            if let Some(subs) = events.get(&event) {
-                for func in subs {
-                    func.execute_function_with_context(None, &ctx, &params);
+                if let Some(subs) = events.get(&event) {
+                    for func in subs {
+                        func.execute_function_with_context(None, &ctx, &params);
+                    }
                 }
             }
 
@@ -214,6 +215,16 @@ fn convert_to_list(v8: &[V8Value], pm: &List) {
             pm.set_double(idx, value);
             continue;
         }
+
+        if value.is_array() {
+            let values: Vec<V8Value> = (0..value.len())
+                .map(|idx| value.value_by_index(idx))
+                .collect();
+
+            let list = List::new();
+            convert_to_list(&values, &list);
+            pm.set_list(idx, list);
+        }
     }
 }
 
@@ -224,6 +235,20 @@ fn convert_to_v8(pm: &List, offset: usize, v8: &mut Vec<V8Value>) {
             ValueType::Integer => v8.push(V8Value::new_integer(pm.integer(idx))),
             ValueType::Double => v8.push(V8Value::new_double(pm.double(idx))),
             ValueType::String => v8.push(V8Value::new_cefstring(&pm.string(idx))),
+            ValueType::List => {
+                pm.list(idx).map(|list| {
+                    let array = V8Value::new_array(list.len());
+                    let mut v8_args = Vec::with_capacity(list.len());
+
+                    convert_to_v8(&list, 0, &mut v8_args);
+
+                    v8_args
+                        .into_iter()
+                        .enumerate()
+                        .for_each(|(idx, value)| array.set_value_by_index(idx, &value));
+                });
+            }
+
             _ => (),
         }
     }

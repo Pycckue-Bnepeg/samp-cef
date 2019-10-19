@@ -164,37 +164,6 @@ impl View {
         None
     }
 
-    pub fn buffer(&self) -> Option<Vec<u8>> {
-        unsafe {
-            if let Some(texture) = self
-                .texture
-                .as_ref()
-                .map(|texture_ptr| texture_ptr.as_ref())
-            {
-                let mut rect = D3DLOCKED_RECT {
-                    Pitch: 0,
-                    pBits: null_mut(),
-                };
-
-                let mut surface_desc: D3DSURFACE_DESC = std::mem::zeroed();
-
-                texture.GetLevelDesc(0, &mut surface_desc);
-
-                if (*texture).LockRect(0, &mut rect, std::ptr::null(), 0) == D3D_OK {
-                    let size = surface_desc.Height as usize * surface_desc.Width as usize * 4;
-                    let buffer = std::slice::from_raw_parts(rect.pBits as *mut u8, size);
-                    let buffer = Vec::from(buffer);
-
-                    (*texture).UnlockRect(0);
-
-                    return Some(buffer);
-                }
-            }
-        }
-
-        return None;
-    }
-
     pub fn on_lost_device(&mut self) {
         unsafe {
             if let Some(mut sprite) = self.sprite.take() {

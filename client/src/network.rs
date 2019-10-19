@@ -135,8 +135,6 @@ impl Network {
                     .map(|packet| self.handle_emit_event(packet))
                     .ok();
             }
-
-            _ => (),
         }
     }
 
@@ -200,7 +198,7 @@ impl Network {
     }
 
     fn handle_listen_events(&mut self, packet: packets::BrowserListenEvents) {
-        let event = Event::BrowserListenEvents(packet.browser_id, packet.listen);
+        let event = Event::FocusBrowser(packet.browser_id, packet.listen);
         handle_result(self.event_tx.send(event));
     }
 

@@ -16,8 +16,12 @@ use cef::ProcessId;
 
 use cef_sys::cef_rect_t;
 
+use client_api::utils::handle_result;
+
 use crate::app::Event;
 use crate::browser::view::View;
+use crate::external::{CallbackList, EXTERNAL_BREAK};
+use std::ffi::CString;
 
 struct DrawData {
     buffer: *const u8,
@@ -54,13 +58,14 @@ impl DrawData {
 }
 
 pub struct WebClient {
-    should_listen_events: AtomicBool,
+    id: u32, // static
+    hidden: AtomicBool,
     view: Mutex<View>,
     draw_data: Mutex<DrawData>,
     browser: Mutex<Option<Browser>>,
     rendered: (Mutex<bool>, Condvar),
-    last_texture: Mutex<Option<Vec<u8>>>,
     event_tx: Sender<Event>,
+    callbacks: CallbackList,
 }
 
 impl LifespanHandler for WebClient {
@@ -98,18 +103,17 @@ impl Client for WebClient {
         let name = msg.name().to_string();
 
         match name.as_str() {
-            "block_input" => {
+            "set_focus" => {
                 let args = msg.argument_list();
                 let value_type = args.get_type(0);
 
-                let block = match value_type {
+                let focus = match value_type {
                     ValueType::Integer => args.integer(0) == 1,
                     ValueType::Bool => args.bool(0),
                     _ => false,
                 };
 
-                self.lisen_to_events(block);
-                client_api::utils::handle_result(self.event_tx.send(Event::BlockInput(block)));
+                handle_result(self.event_tx.send(Event::FocusBrowser(self.id, focus)));
 
                 return true;
             }
@@ -122,6 +126,18 @@ impl Client for WebClient {
                 }
 
                 let event_name = args.string(0).to_string();
+                let callbacks = self.callbacks.lock().unwrap();
+
+                if let Some(cb) = callbacks.get(&event_name) {
+                    let name = CString::new(event_name.clone()).unwrap(); // 100% valid string
+                    let result = cb(name.as_ptr(), args.clone().into_cef());
+
+                    // событие обработано плагином, нет смысла отправлять дальше серверу
+                    if result == EXTERNAL_BREAK {
+                        return true;
+                    }
+                }
+
                 let mut arguments = String::new();
 
                 for idx in 1..args.len() {
@@ -138,7 +154,7 @@ impl Client for WebClient {
                 }
 
                 let event = Event::EmitEventOnServer(event_name, arguments);
-                client_api::utils::handle_result(self.event_tx.send(event));
+                handle_result(self.event_tx.send(event));
             }
 
             _ => (),
@@ -210,29 +226,22 @@ impl RenderHandler for WebClient {
 }
 
 impl WebClient {
-    pub fn new(event_tx: Sender<Event>) -> Arc<WebClient> {
+    pub fn new(id: u32, cbs: CallbackList, event_tx: Sender<Event>) -> Arc<WebClient> {
         let rect = crate::utils::client_rect();
         let view = View::new(client_api::gta::d3d9::device(), rect[0], rect[1]);
 
         let client = WebClient {
-            should_listen_events: AtomicBool::new(false),
+            hidden: AtomicBool::new(false),
             view: Mutex::new(view),
             draw_data: Mutex::new(DrawData::new()),
             browser: Mutex::new(None),
             rendered: (Mutex::new(false), Condvar::new()),
-            last_texture: Mutex::new(None),
+            callbacks: cbs,
             event_tx,
+            id,
         };
 
         Arc::new(client)
-    }
-
-    pub fn should_listen_events(&self) -> bool {
-        self.should_listen_events.load(Ordering::SeqCst)
-    }
-
-    pub fn lisen_to_events(&self, listen: bool) {
-        self.should_listen_events.store(listen, Ordering::SeqCst);
     }
 
     pub fn draw(&self) {
@@ -241,32 +250,20 @@ impl WebClient {
     }
 
     pub fn on_lost_device(&self) {
+        self.internal_hide(true, false); // hide browser but do not save value
+
         let mut texture = self.view.lock().unwrap();
-        let mut buffer = self.last_texture.lock().unwrap();
-        *buffer = texture.buffer();
         texture.on_lost_device();
     }
 
     pub fn on_reset_device(&self) {
-        let mut texture = self.view.lock().unwrap();
-        let mut buffer = self.last_texture.lock().unwrap();
-        let rect = crate::utils::client_rect();
-        texture.on_reset_device(client_api::gta::d3d9::device(), rect[0], rect[1]);
-
-        if let Some(buffer) = buffer.take() {
-            if rect[0] * rect[1] * 4 != buffer.len() {
-                return;
-            }
-
-            let rect = cef_rect_t {
-                x: 0,
-                y: 0,
-                width: rect[0] as i32,
-                height: rect[1] as i32,
-            };
-
-            texture.update_texture(&buffer, &[rect]);
+        {
+            let mut texture = self.view.lock().unwrap();
+            let rect = crate::utils::client_rect();
+            texture.on_reset_device(client_api::gta::d3d9::device(), rect[0], rect[1]);
         }
+
+        self.restore_hide_status();
     }
 
     pub fn resize(&self, width: usize, height: usize) {
@@ -326,11 +323,29 @@ impl WebClient {
     }
 
     pub fn hide(&self, hide: bool) {
+        self.internal_hide(hide, true);
+    }
+
+    pub fn internal_hide(&self, hide: bool, store_value: bool) {
         self.browser()
             .map(|browser| browser.host())
             .map(|host| host.was_hidden(hide));
 
-        let mut view = self.view.lock().unwrap();
-        view.clear_texture();
+        if hide {
+            let mut view = self.view.lock().unwrap();
+            view.clear_texture();
+        }
+
+        if store_value {
+            self.hidden.store(hide, Ordering::SeqCst);
+        }
+    }
+
+    pub fn restore_hide_status(&self) {
+        self.internal_hide(self.hidden.load(Ordering::SeqCst), false);
+    }
+
+    pub fn id(&self) -> u32 {
+        self.id
     }
 }

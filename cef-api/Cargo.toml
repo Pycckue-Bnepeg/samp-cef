@@ -1,5 +1,5 @@
 [package]
-name = "cef-tests"
+name = "cef-api"
 version = "0.1.0"
 authors = ["ZOTTCE <zottce@gmail.com>"]
 edition = "2018"
@@ -7,4 +7,4 @@ edition = "2018"
 [dependencies]
 cef = { path = "../cef" }
 cef-sys = { path = "../cef-sys" }
-winapi = { version = "0.3.8", features = ["libloaderapi", "winuser"] }
+libloading = "0.5.2"

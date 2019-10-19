@@ -8,6 +8,7 @@ use winapi::um::winnt::{DLL_PROCESS_ATTACH, DLL_PROCESS_DETACH};
 
 pub mod app;
 pub mod browser;
+pub mod external;
 pub mod network;
 pub mod render;
 pub mod utils;

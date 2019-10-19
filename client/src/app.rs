@@ -9,8 +9,11 @@ use winapi::shared::minwindef::{LPARAM, UINT, WPARAM};
 use winapi::um::winuser::*;
 
 use crate::browser::manager::{Manager, MouseKey};
+use crate::external::CallbackList;
 use crate::network::NetworkClient;
 
+use client_api::gta::menu_manager::CMenuManager;
+use client_api::samp::inputs;
 use client_api::samp::netgame::NetGame;
 use client_api::samp::Gamestate;
 use client_api::wndproc;
@@ -18,7 +21,7 @@ use client_api::wndproc;
 use crossbeam_channel::{Receiver, Sender};
 
 // TODO: nice shutdown
-//use detour::GenericDetour;
+use detour::GenericDetour;
 
 const CEF_SERVER_PORT: u16 = 7779;
 pub const CEF_PLUGIN_VERSION: i32 = 0x00_01_00;
@@ -39,7 +42,7 @@ pub enum Event {
 
     DestroyBrowser(u32),
     HideBrowser(u32, bool),
-    BrowserListenEvents(u32, bool),
+    FocusBrowser(u32, bool),
     EmitEvent(String, List),
     EmitEventOnServer(String, String),
 
@@ -49,10 +52,12 @@ pub enum Event {
 
 pub struct App {
     connected: bool,
-    input_blocked: bool,
+    window_focused: bool,
 
     manager: Arc<Mutex<Manager>>,
     network: Option<NetworkClient>,
+    callbacks: CallbackList,
+    keystate_hook: GenericDetour<extern "stdcall" fn(i32) -> u16>,
 
     event_tx: Sender<Event>,
     event_rx: Receiver<Event>,
@@ -63,13 +68,28 @@ impl App {
         let (event_tx, event_rx) = crossbeam_channel::unbounded();
         let manager = Arc::new(Mutex::new(Manager::new(event_tx.clone())));
 
+        let callbacks = crate::external::initialize(event_tx.clone(), manager.clone());
+
+        let keystate_hook = client_api::utils::find_function::<extern "stdcall" fn(i32) -> u16>(
+            "user32.dll",
+            "GetAsyncKeyState",
+        )
+        .map(|func| unsafe {
+            let hook = GenericDetour::new(func, async_key_state).unwrap();
+            hook.enable().unwrap();
+            hook
+        })
+        .unwrap();
+
         App {
             connected: false,
-            input_blocked: false,
+            window_focused: true,
             network: None,
             manager,
+            keystate_hook,
             event_tx,
             event_rx,
+            callbacks,
         }
     }
 
@@ -85,6 +105,8 @@ impl App {
 pub fn initialize() {
     let app = App::new();
     let manager = app.manager();
+
+    crate::render::initialize(manager);
 
     unsafe {
         winapi::um::consoleapi::AllocConsole();
@@ -104,8 +126,6 @@ pub fn initialize() {
             client_api::samp::version::version()
         );
     }
-
-    crate::render::initialize(manager);
 
     // apply hook to WndProc
     while !wndproc::initialize(&wndproc::WndProcSettings {
@@ -138,20 +158,26 @@ fn mainloop() {
             }
         }
 
+        if app.connected && client_api::samp::gamestate() != Gamestate::Connected {
+            // disconnected
+        }
+
+        {
+            let input_active = inputs::Input::is_active()
+                || inputs::Dialog::is_input_focused()
+                || CMenuManager::is_menu_active();
+
+            let mut manager = app.manager.lock().unwrap();
+            manager.set_corrupted(input_active || !app.window_focused);
+        }
+
         while let Ok(event) = app.event_rx.try_recv() {
             match event {
-                Event::BlockInput(block) => {
-                    app.input_blocked = block;
-                    client_api::samp::inputs::show_cursor(block);
-                }
+                Event::BlockInput(_) => {}
 
-                Event::CreateBrowser {
-                    id,
-                    url,
-                    listen_events,
-                } => {
+                Event::CreateBrowser { id, url, .. } => {
                     let mut manager = app.manager.lock().unwrap();
-                    manager.create_browser(id, &url, listen_events);
+                    manager.create_browser(id, app.callbacks.clone(), &url);
                 }
 
                 Event::DestroyBrowser(id) => {
@@ -164,9 +190,16 @@ fn mainloop() {
                     manager.hide_browser(id, hide);
                 }
 
-                Event::BrowserListenEvents(id, listen) => {
-                    let manager = app.manager.lock().unwrap();
-                    manager.browser_listen_events(id, listen);
+                Event::FocusBrowser(id, focus) => {
+                    let mut manager = app.manager.lock().unwrap();
+                    manager.browser_focus(id, focus);
+                    let show_cursor = manager.is_input_blocked();
+                    client_api::samp::inputs::show_cursor(show_cursor);
+
+                    println!(
+                        "FocusBrowser({}, {}). need cursor? {}",
+                        id, focus, show_cursor
+                    );
                 }
 
                 Event::EmitEvent(event, list) => {
@@ -239,11 +272,36 @@ fn win_event(msg: UINT, wparam: WPARAM, lparam: LPARAM) -> bool {
                 manager.send_keyboard_event(event);
             }
 
+            WM_ACTIVATE => {
+                let status = (wparam & 0xFFFF) as u16;
+                let active = status != WA_INACTIVE;
+
+                app.window_focused = active;
+                manager.set_corrupted(!active);
+
+                return false;
+            }
+
             _ => return false,
         }
 
-        return app.input_blocked;
+        return manager.is_input_blocked();
     }
 
     return false;
+}
+
+extern "stdcall" fn async_key_state(key: i32) -> u16 {
+    if let Some(app) = App::get() {
+        let manager = app.manager.lock().unwrap();
+
+        if manager.is_input_blocked() {
+            return 0;
+        } else {
+            app.keystate_hook.call(key);
+            return app.keystate_hook.call(key);
+        }
+    }
+
+    return 0;
 }

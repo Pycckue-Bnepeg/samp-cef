@@ -3,6 +3,8 @@ use winapi::shared::d3d9::IDirect3DDevice9;
 
 use crate::browser::manager::Manager;
 
+use client_api::gta::menu_manager::CMenuManager;
+
 const RESET_FLAG_PRE: u8 = 0;
 const RESET_FLAG_POST: u8 = 1;
 
@@ -23,9 +25,7 @@ impl Render {
 }
 
 pub fn initialize(manager: Arc<Mutex<Manager>>) {
-    while !client_api::gta::d3d9::set_proxy(Some(on_render), Some(on_reset)) {
-        std::thread::sleep(std::time::Duration::from_millis(10));
-    }
+    client_api::gta::d9_proxy::set_proxy(on_create, on_render, on_reset);
 
     let render = Render { manager };
 
@@ -35,16 +35,19 @@ pub fn initialize(manager: Arc<Mutex<Manager>>) {
 }
 
 pub fn uninitialize() {
-    client_api::gta::d3d9::unset_proxy();
-
     unsafe {
         RENDER.take();
     }
 }
 
+fn on_create() {
+    println!("device created!");
+}
+
 fn on_render(_: &mut IDirect3DDevice9) {
     let render = Render::get();
-    let manager = render.manager.lock().unwrap();
+    let mut manager = render.manager.lock().unwrap();
+    manager.do_not_draw(CMenuManager::is_menu_active());
     manager.draw();
 }
 

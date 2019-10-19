@@ -47,6 +47,11 @@ impl V8Value {
         }
     }
 
+    pub fn new_undefined() -> V8Value {
+        let raw = unsafe { cef_sys::cef_v8value_create_undefined() };
+        V8Value::from_raw(raw)
+    }
+
     pub fn new_function<T: V8Handler>(name: &str, handler: Option<Arc<T>>) -> V8Value {
         let name = CefString::new(name);
         let handler = handler
@@ -98,6 +103,12 @@ impl V8Value {
         V8Value::from_raw(raw)
     }
 
+    pub fn new_array(length: usize) -> V8Value {
+        let raw = unsafe { cef_sys::cef_v8value_create_array(length as _) };
+
+        V8Value::from_raw(raw)
+    }
+
     pub fn is_string(&self) -> bool {
         self.inner
             .is_string
@@ -120,6 +131,30 @@ impl V8Value {
             .map(|is| unsafe { is(self.inner.get_mut()) })
             .map(|int| int == 1)
             .unwrap_or(false)
+    }
+
+    pub fn is_array(&self) -> bool {
+        self.inner
+            .is_array
+            .map(|is| unsafe { is(self.inner.get_mut()) })
+            .map(|int| int == 1)
+            .unwrap_or(false)
+    }
+
+    pub fn is_undefined(&self) -> bool {
+        self.inner
+            .is_undefined
+            .map(|is| unsafe { is(self.inner.get_mut()) })
+            .map(|int| int == 1)
+            .unwrap_or(false)
+    }
+
+    pub fn len(&self) -> usize {
+        self.inner
+            .get_array_length
+            .map(|get| unsafe { get(self.inner.get_mut()) })
+            .map(|int| int as usize)
+            .unwrap_or(0)
     }
 
     pub fn bool(&self) -> bool {
@@ -215,6 +250,24 @@ impl V8Value {
                 cef_sys::cef_v8_propertyattribute_t::V8_PROPERTY_ATTRIBUTE_NONE,
             );
         });
+    }
+
+    pub fn set_value_by_index(&self, index: usize, value: &V8Value) {
+        self.inner.set_value_byindex.map(|set_val| unsafe {
+            set_val(
+                self.inner.get_mut(),
+                index as _,
+                value.clone().inner.into_cef(),
+            );
+        });
+    }
+
+    pub fn value_by_index(&self, index: usize) -> V8Value {
+        self.inner
+            .get_value_byindex
+            .map(|get_val| unsafe { get_val(self.inner.get_mut(), index as _) })
+            .map(|raw| V8Value::from_raw(raw))
+            .unwrap_or_else(|| V8Value::new_undefined())
     }
 }
 

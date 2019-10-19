@@ -19,6 +19,14 @@ impl List {
         List::from_raw(raw)
     }
 
+    pub fn try_from_raw(raw: *mut cef_list_value_t) -> Option<List> {
+        if raw.is_null() {
+            return None;
+        }
+
+        Some(List::from_raw(raw))
+    }
+
     pub fn len(&self) -> usize {
         let len = self.inner.get_size.unwrap();
         unsafe { len(self.inner.get_mut()) }
@@ -83,6 +91,31 @@ impl List {
         self.inner
             .set_double
             .map(|set| unsafe { set(self.inner.get_mut(), index, value) });
+    }
+
+    pub fn list(&self, index: usize) -> Option<List> {
+        self.inner
+            .get_list
+            .map(|get| unsafe { get(self.inner.get_mut(), index) })
+            .and_then(|list_raw| List::try_from_raw(list_raw))
+    }
+
+    pub fn set_list(&self, index: usize, list: List) {
+        self.inner
+            .set_list
+            .map(|set| unsafe { set(self.inner.get_mut(), index, list.into_cef()) });
+    }
+
+    pub fn into_cef(self) -> *mut cef_list_value_t {
+        self.inner.into_cef()
+    }
+}
+
+impl Clone for List {
+    fn clone(&self) -> List {
+        let copy = self.inner.copy.unwrap();
+        let raw = unsafe { copy(self.inner.get_mut()) };
+        List::from_raw(raw)
     }
 }
 
