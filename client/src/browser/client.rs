@@ -70,8 +70,42 @@ pub struct WebClient {
 
 impl LifespanHandler for WebClient {
     fn on_after_created(self: &Arc<Self>, browser: Browser) {
-        let mut br = self.browser.lock().unwrap();
-        *br = Some(browser);
+        use winapi::um::winuser::*; // debug
+
+        {
+            let mut br = self.browser.lock().unwrap();
+
+            // debug
+            let window_name = cef::types::string::CefString::new("dev tools");
+
+            let mut window_info = unsafe { std::mem::zeroed::<cef_sys::cef_window_info_t>() };
+
+            window_info.style =
+                WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN | WS_CLIPSIBLINGS | WS_VISIBLE;
+            window_info.parent_window = std::ptr::null_mut();
+            window_info.x = CW_USEDEFAULT;
+            window_info.y = CW_USEDEFAULT;
+            window_info.width = CW_USEDEFAULT;
+            window_info.height = CW_USEDEFAULT;
+            window_info.window_name = window_name.to_cef_string();
+            window_info.windowless_rendering_enabled = 0;
+
+            let mut settings = unsafe { std::mem::zeroed::<cef_sys::cef_browser_settings_t>() };
+
+            settings.size = std::mem::size_of::<cef_sys::cef_browser_settings_t>();
+
+            // todo: enable in debug mode
+            //            browser.host().open_dev_tools(&window_info, &settings);
+
+            *br = Some(browser);
+        }
+
+        if self.hidden.load(Ordering::SeqCst) {
+            self.hide(true);
+        }
+
+        let event = Event::BrowserCreated(self.id);
+        handle_result(self.event_tx.send(event));
     }
 
     fn on_before_close(self: &Arc<Self>, _: Browser) {
@@ -114,6 +148,21 @@ impl Client for WebClient {
                 };
 
                 handle_result(self.event_tx.send(Event::FocusBrowser(self.id, focus)));
+
+                return true;
+            }
+
+            "hide" => {
+                let args = msg.argument_list();
+                let value_type = args.get_type(0);
+
+                let hide = match value_type {
+                    ValueType::Integer => args.integer(0) == 1,
+                    ValueType::Bool => args.bool(0),
+                    _ => false,
+                };
+
+                handle_result(self.event_tx.send(Event::HideBrowser(self.id, hide)));
 
                 return true;
             }

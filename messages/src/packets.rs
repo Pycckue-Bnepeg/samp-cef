@@ -9,3 +9,6 @@ impl_into_packet!(EmitEvent<'a>, PacketId::EMIT_EVENT);
 impl_into_packet!(HideBrowser, PacketId::HIDE_BROWSER);
 impl_into_packet!(BrowserListenEvents, PacketId::BROWSER_LISTEN_EVENTS);
 impl_into_packet!(BlockInput, PacketId::BLOCK_INPUT);
+impl_into_packet!(BrowserCreated, PacketId::BROWSER_CREATED);
+impl_into_packet!(Got, PacketId::GOT);
+impl_into_packet!(OpenConnection, PacketId::OPEN_CONNECTION);

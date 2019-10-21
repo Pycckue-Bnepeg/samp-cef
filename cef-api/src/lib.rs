@@ -17,7 +17,8 @@ pub struct CefApi {
 }
 
 pub struct Symbols {
-    create_browser: Symbol<'static, extern "C" fn(id: u32, url: *const c_char)>,
+    create_browser:
+        Symbol<'static, extern "C" fn(id: u32, url: *const c_char, hidden: bool, focused: bool)>,
     destroy_browser: Symbol<'static, extern "C" fn(id: u32)>,
     hide_browser: Symbol<'static, extern "C" fn(id: u32, hide: bool)>,
     focus_browser: Symbol<'static, extern "C" fn(id: u32, focus: bool)>,
@@ -76,9 +77,9 @@ impl CefApi {
         cef_api
     }
 
-    pub fn create_browser(&self, id: u32, url: &str) {
+    pub fn create_browser(&self, id: u32, url: &str, hidden: bool, focused: bool) {
         let url_cstr = CString::new(url).unwrap();
-        (self.funcs.create_browser)(id, url_cstr.as_ptr());
+        (self.funcs.create_browser)(id, url_cstr.as_ptr(), hidden, focused);
     }
 
     pub fn destroy_browser(&self, id: u32) {

@@ -46,10 +46,10 @@ pub fn create_browser<T: Client>(client: Arc<T>, url: &str) {
 
     settings.size = std::mem::size_of::<cef_sys::cef_browser_settings_t>();
     settings.windowless_frame_rate = 60;
-    settings.javascript_access_clipboard = cef_sys::cef_state_t::STATE_DISABLED;
-    settings.javascript_dom_paste = cef_sys::cef_state_t::STATE_DISABLED;
+    settings.javascript_access_clipboard = cef_sys::cef_state_t::STATE_ENABLED;
+    settings.javascript_dom_paste = cef_sys::cef_state_t::STATE_ENABLED;
+    settings.remote_fonts = cef_sys::cef_state_t::STATE_ENABLED;
     settings.webgl = cef_sys::cef_state_t::STATE_ENABLED;
-    settings.plugins = cef_sys::cef_state_t::STATE_DISABLED;
     settings.javascript = cef_sys::cef_state_t::STATE_ENABLED;
 
     cef::browser::BrowserHost::create_browser(&window_info, Some(client), &url, &settings);

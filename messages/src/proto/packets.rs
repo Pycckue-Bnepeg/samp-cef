@@ -17,6 +17,7 @@ use super::*;
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum PacketId {
+    OPEN_CONNECTION = 0,
     REQUEST_JOIN = 1,
     JOIN_RESPONSE = 2,
     CREATE_BROWSER = 3,
@@ -25,17 +26,20 @@ pub enum PacketId {
     HIDE_BROWSER = 6,
     BROWSER_LISTEN_EVENTS = 7,
     EMIT_EVENT = 8,
+    BROWSER_CREATED = 9,
+    GOT = 10,
 }
 
 impl Default for PacketId {
     fn default() -> Self {
-        PacketId::REQUEST_JOIN
+        PacketId::OPEN_CONNECTION
     }
 }
 
 impl From<i32> for PacketId {
     fn from(i: i32) -> Self {
         match i {
+            0 => PacketId::OPEN_CONNECTION,
             1 => PacketId::REQUEST_JOIN,
             2 => PacketId::JOIN_RESPONSE,
             3 => PacketId::CREATE_BROWSER,
@@ -44,6 +48,8 @@ impl From<i32> for PacketId {
             6 => PacketId::HIDE_BROWSER,
             7 => PacketId::BROWSER_LISTEN_EVENTS,
             8 => PacketId::EMIT_EVENT,
+            9 => PacketId::BROWSER_CREATED,
+            10 => PacketId::GOT,
             _ => Self::default(),
         }
     }
@@ -52,6 +58,7 @@ impl From<i32> for PacketId {
 impl<'a> From<&'a str> for PacketId {
     fn from(s: &'a str) -> Self {
         match s {
+            "OPEN_CONNECTION" => PacketId::OPEN_CONNECTION,
             "REQUEST_JOIN" => PacketId::REQUEST_JOIN,
             "JOIN_RESPONSE" => PacketId::JOIN_RESPONSE,
             "CREATE_BROWSER" => PacketId::CREATE_BROWSER,
@@ -60,6 +67,8 @@ impl<'a> From<&'a str> for PacketId {
             "HIDE_BROWSER" => PacketId::HIDE_BROWSER,
             "BROWSER_LISTEN_EVENTS" => PacketId::BROWSER_LISTEN_EVENTS,
             "EMIT_EVENT" => PacketId::EMIT_EVENT,
+            "BROWSER_CREATED" => PacketId::BROWSER_CREATED,
+            "GOT" => PacketId::GOT,
             _ => Self::default(),
         }
     }
@@ -170,7 +179,8 @@ impl MessageWrite for JoinResponse {
 pub struct CreateBrowser<'a> {
     pub browser_id: u32,
     pub url: Cow<'a, str>,
-    pub listen_to_events: bool,
+    pub hidden: bool,
+    pub focused: bool,
 }
 
 impl<'a> MessageRead<'a> for CreateBrowser<'a> {
@@ -180,7 +190,8 @@ impl<'a> MessageRead<'a> for CreateBrowser<'a> {
             match r.next_tag(bytes) {
                 Ok(8) => msg.browser_id = r.read_uint32(bytes)?,
                 Ok(18) => msg.url = r.read_string(bytes).map(Cow::Borrowed)?,
-                Ok(24) => msg.listen_to_events = r.read_bool(bytes)?,
+                Ok(24) => msg.hidden = r.read_bool(bytes)?,
+                Ok(32) => msg.focused = r.read_bool(bytes)?,
                 Ok(t) => { r.read_unknown(bytes, t)?; }
                 Err(e) => return Err(e),
             }
@@ -194,13 +205,15 @@ impl<'a> MessageWrite for CreateBrowser<'a> {
         0
         + 1 + sizeof_varint(*(&self.browser_id) as u64)
         + 1 + sizeof_len((&self.url).len())
-        + 1 + sizeof_varint(*(&self.listen_to_events) as u64)
+        + 1 + sizeof_varint(*(&self.hidden) as u64)
+        + 1 + sizeof_varint(*(&self.focused) as u64)
     }
 
     fn write_message<W: Write>(&self, w: &mut Writer<W>) -> Result<()> {
         w.write_with_tag(8, |w| w.write_uint32(*&self.browser_id))?;
         w.write_with_tag(18, |w| w.write_string(&**&self.url))?;
-        w.write_with_tag(24, |w| w.write_bool(*&self.listen_to_events))?;
+        w.write_with_tag(24, |w| w.write_bool(*&self.hidden))?;
+        w.write_with_tag(32, |w| w.write_bool(*&self.focused))?;
         Ok(())
     }
 }
@@ -414,4 +427,59 @@ impl<'a> MessageWrite for EventValue<'a> {
         Ok(())
     }
 }
+
+#[derive(Debug, Default, PartialEq, Clone)]
+pub struct BrowserCreated {
+    pub browser_id: u32,
+}
+
+impl<'a> MessageRead<'a> for BrowserCreated {
+    fn from_reader(r: &mut BytesReader, bytes: &'a [u8]) -> Result<Self> {
+        let mut msg = Self::default();
+        while !r.is_eof() {
+            match r.next_tag(bytes) {
+                Ok(8) => msg.browser_id = r.read_uint32(bytes)?,
+                Ok(t) => { r.read_unknown(bytes, t)?; }
+                Err(e) => return Err(e),
+            }
+        }
+        Ok(msg)
+    }
+}
+
+impl MessageWrite for BrowserCreated {
+    fn get_size(&self) -> usize {
+        0
+        + 1 + sizeof_varint(*(&self.browser_id) as u64)
+    }
+
+    fn write_message<W: Write>(&self, w: &mut Writer<W>) -> Result<()> {
+        w.write_with_tag(8, |w| w.write_uint32(*&self.browser_id))?;
+        Ok(())
+    }
+}
+
+#[derive(Debug, Default, PartialEq, Clone)]
+pub struct Got { }
+
+impl<'a> MessageRead<'a> for Got {
+    fn from_reader(r: &mut BytesReader, _: &[u8]) -> Result<Self> {
+        r.read_to_end();
+        Ok(Self::default())
+    }
+}
+
+impl MessageWrite for Got { }
+
+#[derive(Debug, Default, PartialEq, Clone)]
+pub struct OpenConnection { }
+
+impl<'a> MessageRead<'a> for OpenConnection {
+    fn from_reader(r: &mut BytesReader, _: &[u8]) -> Result<Self> {
+        r.read_to_end();
+        Ok(Self::default())
+    }
+}
+
+impl MessageWrite for OpenConnection { }
 

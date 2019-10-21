@@ -37,7 +37,8 @@ pub enum Event {
     CreateBrowser {
         id: u32,
         url: String,
-        listen_events: bool,
+        hidden: bool,
+        focused: bool,
     },
 
     DestroyBrowser(u32),
@@ -45,6 +46,7 @@ pub enum Event {
     FocusBrowser(u32, bool),
     EmitEvent(String, List),
     EmitEventOnServer(String, String),
+    BrowserCreated(u32),
 
     BlockInput(bool),
     Terminate,
@@ -175,9 +177,19 @@ fn mainloop() {
             match event {
                 Event::BlockInput(_) => {}
 
-                Event::CreateBrowser { id, url, .. } => {
+                Event::CreateBrowser {
+                    id,
+                    url,
+                    hidden,
+                    focused,
+                } => {
                     let mut manager = app.manager.lock().unwrap();
                     manager.create_browser(id, app.callbacks.clone(), &url);
+                    manager.hide_browser(id, hidden);
+
+                    manager.browser_focus(id, focused);
+                    let show_cursor = manager.is_input_blocked();
+                    client_api::samp::inputs::show_cursor(show_cursor);
                 }
 
                 Event::DestroyBrowser(id) => {
@@ -188,6 +200,8 @@ fn mainloop() {
                 Event::HideBrowser(id, hide) => {
                     let manager = app.manager.lock().unwrap();
                     manager.hide_browser(id, hide);
+
+                    println!("HideBrowser({}, {})", id, hide,);
                 }
 
                 Event::FocusBrowser(id, focus) => {
@@ -210,6 +224,13 @@ fn mainloop() {
                 Event::EmitEventOnServer(event, arguments) => {
                     if let Some(network) = app.network.as_mut() {
                         let event = Event::EmitEventOnServer(event, arguments);
+                        network.send(event);
+                    }
+                }
+
+                Event::BrowserCreated(id) => {
+                    if let Some(network) = app.network.as_mut() {
+                        let event = Event::BrowserCreated(id);
                         network.send(event);
                     }
                 }

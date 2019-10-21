@@ -49,7 +49,9 @@ pub fn initialize(event_tx: Sender<Event>, manager: Arc<Mutex<Manager>>) -> Call
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn cef_create_browser(id: u32, url: *const c_char) {
+pub unsafe extern "C" fn cef_create_browser(
+    id: u32, url: *const c_char, hidden: bool, focused: bool,
+) {
     if url.is_null() {
         return;
     }
@@ -60,8 +62,9 @@ pub unsafe extern "C" fn cef_create_browser(id: u32, url: *const c_char) {
 
         let event = Event::CreateBrowser {
             id,
+            hidden,
+            focused,
             url: url_rust.to_string(),
-            listen_events: false,
         };
 
         external.event_tx.send(event);

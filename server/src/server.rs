@@ -99,6 +99,11 @@ impl Server {
                     .map(|packet| self.handle_emit_event(addr, packet));
             }
 
+            PacketId::BROWSER_CREATED => {
+                deserialize_from_slice(&packet.bytes)
+                    .map(|packet| self.handle_browser_created(addr, packet));
+            }
+
             _ => (),
         }
     }
@@ -113,6 +118,8 @@ impl Server {
         };
 
         client.set_state(crate::client::State::Connected);
+
+        self.event_tx.send(Event::Connected(client.id()));
 
         try_into_packet(response).map(|bytes| {
             let packet = Packet::unreliable_sequenced(addr, bytes, Some(1));
@@ -133,6 +140,14 @@ impl Server {
         }
     }
 
+    fn handle_browser_created(&mut self, addr: SocketAddr, packet: packets::BrowserCreated) {
+        let client = self.clients.get_mut(&addr).unwrap(); // safe
+        let player_id = client.id();
+
+        let event = Event::BrowserCreated(player_id, packet.browser_id);
+        self.event_tx.send(event);
+    }
+
     /// выпинываем игрока из списка клиентов
     fn handle_timeout(&mut self, addr: SocketAddr) {
         self.clients.remove(&addr);
@@ -146,7 +161,7 @@ impl Server {
 
             self.clients.insert(addr, client);
 
-            let request = packets::RequestJoin { plugin_version: 0 }; // kind of shit
+            let request = packets::OpenConnection {};
 
             try_into_packet(request).map(|bytes| {
                 let packet = Packet::unreliable_sequenced(addr, bytes, Some(1));
@@ -171,7 +186,7 @@ impl Server {
     }
 
     pub fn create_browser(
-        &mut self, player_id: i32, browser_id: i32, url: String, listen_to_events: bool,
+        &mut self, player_id: i32, browser_id: i32, url: String, hidden: bool, focused: bool,
     ) {
         if let Some(addr) = self.addr_by_id(player_id) {
             let Server {
@@ -184,7 +199,8 @@ impl Server {
                 let packet = packets::CreateBrowser {
                     browser_id: browser_id as u32,
                     url: url.into(),
-                    listen_to_events,
+                    hidden,
+                    focused,
                 };
 
                 let bytes = try_into_packet(packet).unwrap();

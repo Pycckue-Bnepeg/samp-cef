@@ -29,6 +29,26 @@ impl V8Context {
 
         V8Value::from_raw(ptr)
     }
+
+    pub fn enter(&self) {
+        let enter = self.inner.enter.unwrap();
+        unsafe {
+            enter(self.inner.get_mut());
+        }
+    }
+
+    pub fn exit(&self) {
+        let exit = self.inner.exit.unwrap();
+        unsafe {
+            exit(self.inner.get_mut());
+        }
+    }
+
+    pub fn current_context() -> V8Context {
+        let ptr = unsafe { cef_sys::cef_v8context_get_current_context() };
+
+        V8Context::from_raw(ptr)
+    }
 }
 
 #[derive(Clone)]
@@ -203,23 +223,31 @@ impl V8Value {
             .unwrap_or(false)
     }
 
-    pub fn execute_function(&self, this: Option<V8Value>, arguments: Vec<V8Value>) {
+    pub fn execute_function(
+        &self, this: Option<V8Value>, arguments: &[V8Value],
+    ) -> Option<V8Value> {
         let exec = self.inner.execute_function.unwrap();
         let this = this
             .map(|this| this.inner.into_cef())
             .unwrap_or(std::ptr::null_mut());
 
-        let args: Vec<*mut cef_v8value_t> =
-            arguments.into_iter().map(|v| v.inner.into_cef()).collect();
+        let args: Vec<*mut cef_v8value_t> = arguments
+            .iter()
+            .map(|v| v.clone().inner.into_cef())
+            .collect();
 
-        unsafe {
-            exec(self.inner.get_mut(), this, args.len(), args.as_ptr());
+        let retval = unsafe { exec(self.inner.get_mut(), this, args.len(), args.as_ptr()) };
+
+        if !retval.is_null() {
+            Some(V8Value::from_raw(retval))
+        } else {
+            None
         }
     }
 
     pub fn execute_function_with_context(
         &self, this: Option<V8Value>, context: &V8Context, arguments: &[V8Value],
-    ) {
+    ) -> Option<V8Value> {
         let exec = self.inner.execute_function_with_context.unwrap();
         let this = this
             .map(|this| this.inner.into_cef())
@@ -230,14 +258,20 @@ impl V8Value {
             .map(|v| v.clone().inner.into_cef())
             .collect();
 
-        unsafe {
+        let retval = unsafe {
             exec(
                 self.inner.get_mut(),
                 context.clone().inner.into_cef(),
                 this,
                 args.len(),
                 args.as_ptr(),
-            );
+            )
+        };
+
+        if !retval.is_null() {
+            Some(V8Value::from_raw(retval))
+        } else {
+            None
         }
     }
 

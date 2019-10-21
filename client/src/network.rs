@@ -88,7 +88,7 @@ impl Network {
         use packets::PacketId::*;
 
         match packet.packet_id {
-            REQUEST_JOIN => {
+            OPEN_CONNECTION => {
                 if let ConnectionState::Auth(addr) = self.connection_state {
                     self.net_connect(addr);
                 }
@@ -135,6 +135,8 @@ impl Network {
                     .map(|packet| self.handle_emit_event(packet))
                     .ok();
             }
+
+            _ => (),
         }
     }
 
@@ -153,7 +155,8 @@ impl Network {
         let event = Event::CreateBrowser {
             id: packet.browser_id,
             url: packet.url.to_string(),
-            listen_events: packet.listen_to_events,
+            hidden: packet.hidden,
+            focused: packet.focused,
         };
 
         handle_result(self.event_tx.send(event));
@@ -202,9 +205,18 @@ impl Network {
         handle_result(self.event_tx.send(event));
     }
 
-    fn net_connect(&mut self, address: SocketAddr) {
+    fn net_open_connection(&mut self, address: SocketAddr) {
         self.connection_state = ConnectionState::Auth(address);
 
+        let auth = packets::OpenConnection {};
+
+        let packet = messages::try_into_packet(auth).unwrap();
+        let packet = Packet::unreliable_sequenced(address, packet, Some(1));
+
+        handle_result(self.socket.send(packet));
+    }
+
+    fn net_connect(&mut self, address: SocketAddr) {
         let auth = packets::RequestJoin {
             plugin_version: crate::app::CEF_PLUGIN_VERSION,
         };
@@ -224,6 +236,17 @@ impl Network {
             };
 
             let packet = messages::try_into_packet(emit).unwrap();
+            let packet = Packet::unreliable_sequenced(address, packet, Some(1));
+
+            handle_result(self.socket.send(packet));
+        }
+    }
+
+    fn net_browser_created(&mut self, browser_id: u32) {
+        if let ConnectionState::Connected(address) = self.connection_state {
+            let created = packets::BrowserCreated { browser_id };
+
+            let packet = messages::try_into_packet(created).unwrap();
             let packet = Packet::unreliable_sequenced(address, packet, Some(1));
 
             handle_result(self.socket.send(packet));
@@ -260,8 +283,9 @@ impl Network {
 
     fn process_event(&mut self, event: Event) {
         match event {
-            Event::Connect(addr) => self.net_connect(addr),
+            Event::Connect(addr) => self.net_open_connection(addr),
             Event::EmitEventOnServer(event, arguments) => self.net_emit_event(event, arguments),
+            Event::BrowserCreated(id) => self.net_browser_created(id),
             _ => (),
         }
     }

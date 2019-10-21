@@ -25,7 +25,7 @@ fn initialize() {
     let cef = CefApi::wait_loading().unwrap();
     let mut phone_open = false;
 
-    cef.create_browser(0xFF00, "http://5.63.153.185/telephone.html");
+    cef.create_browser(0xFF00, "http://5.63.153.185/telephone.html", true, false);
 
     loop {
         if client_api::utils::is_key_pressed(0x72) {

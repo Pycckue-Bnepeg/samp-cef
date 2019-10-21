@@ -1,6 +1,7 @@
 use cef_sys::{
     cef_browser_host_t, cef_browser_settings_t, cef_browser_t, cef_context_menu_params_t,
-    cef_frame_t, cef_key_event_t, cef_menu_model_t, cef_mouse_event_t, cef_window_info_t,
+    cef_frame_t, cef_key_event_t, cef_menu_model_t, cef_mouse_event_t, cef_point_t,
+    cef_window_info_t,
 };
 
 use crate::client::Client;
@@ -109,6 +110,20 @@ impl BrowserHost {
         let was_resized = self.inner.was_resized.unwrap();
         unsafe {
             was_resized(self.inner.get_mut());
+        }
+    }
+
+    pub fn open_dev_tools(&self, window: &cef_window_info_t, settings: &cef_browser_settings_t) {
+        let dev_tools = self.inner.show_dev_tools.unwrap();
+
+        unsafe {
+            dev_tools(
+                self.inner.get_mut(),
+                window,
+                std::ptr::null_mut(),
+                settings,
+                &cef_point_t { x: 0, y: 0 },
+            );
         }
     }
 

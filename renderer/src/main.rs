@@ -17,7 +17,7 @@ use cef::ProcessId;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
-type Callbacks = HashMap<String, Vec<V8Value>>;
+type Callbacks = HashMap<String, Vec<(V8Value, V8Context)>>;
 
 pub struct Handler {
     frame: Frame,
@@ -47,6 +47,24 @@ impl V8Handler for Handler {
                 return true;
             }
 
+            "hide" => {
+                let msg = ProcessMessage::create("hide");
+                let list = msg.argument_list();
+
+                if args.len() != 1 {
+                    return true;
+                }
+
+                convert_to_list(&args, &list);
+
+                self.frame
+                    .browser()
+                    .main_frame()
+                    .send_process_message(ProcessId::Browser, msg);
+
+                return true;
+            }
+
             "on" => {
                 if args.len() != 2 {
                     return true;
@@ -56,10 +74,10 @@ impl V8Handler for Handler {
                 let func = args[1].clone();
 
                 let mut events = self.subs.lock().unwrap();
-
                 let subs = events.entry(name).or_insert_with(|| Vec::new());
 
-                subs.push(func);
+                let ctx = V8Context::current_context();
+                subs.push((func, ctx));
 
                 return true;
             }
@@ -111,17 +129,20 @@ impl RenderProcessHandler for Application {
         let cef_obj = V8Value::new_object();
 
         let version = V8Value::new_string("0.1.0");
-        let func_cur = V8Value::new_function("set_focus", Some(handler.clone()));
+        let func_focus = V8Value::new_function("set_focus", Some(handler.clone()));
         let func_on = V8Value::new_function("on", Some(handler.clone()));
+        let func_hide = V8Value::new_function("hide", Some(handler.clone()));
         let func_emit = V8Value::new_function("emit", Some(handler));
 
         let key_str = CefString::new("version");
-        let key_func = CefString::new("set_focus");
+        let key_focus = CefString::new("set_focus");
         let key_on = CefString::new("on");
         let key_emit = CefString::new("emit");
+        let key_hide = CefString::new("hide");
 
         cef_obj.set_value_by_key(&key_str, &version);
-        cef_obj.set_value_by_key(&key_func, &func_cur);
+        cef_obj.set_value_by_key(&key_focus, &func_focus);
+        cef_obj.set_value_by_key(&key_hide, &func_hide);
         cef_obj.set_value_by_key(&key_on, &func_on);
         cef_obj.set_value_by_key(&key_emit, &func_emit);
 
@@ -133,7 +154,7 @@ impl RenderProcessHandler for Application {
     fn on_webkit_initialized(self: &Arc<Self>) {}
 
     fn on_process_message(
-        self: &Arc<Self>, _browser: Browser, frame: Frame, _source: ProcessId, msg: ProcessMessage,
+        self: &Arc<Self>, _browser: Browser, _frame: Frame, _source: ProcessId, msg: ProcessMessage,
     ) -> bool {
         let name = msg.name().to_string();
 
@@ -141,16 +162,21 @@ impl RenderProcessHandler for Application {
             let args = msg.argument_list();
             let event = args.string(0).to_string();
             if let Some(list) = args.list(1) {
-                let mut params = Vec::with_capacity(list.len());
-                convert_to_v8(&list, 0, &mut params);
-
                 let events = self.subs.lock().unwrap();
 
-                let ctx = frame.context();
-
                 if let Some(subs) = events.get(&event) {
-                    for func in subs {
-                        func.execute_function_with_context(None, &ctx, &params);
+                    let subs_clone = subs.clone();
+
+                    drop(events); // drop lock
+
+                    for (func, ctx) in subs_clone {
+                        ctx.enter();
+
+                        let mut params = Vec::with_capacity(list.len());
+                        convert_to_v8(&list, 0, &mut params);
+                        func.execute_function(None, &params);
+
+                        ctx.exit();
                     }
                 }
             }

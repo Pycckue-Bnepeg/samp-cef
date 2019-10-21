@@ -1,5 +1,6 @@
 enum PacketId {
     // client side
+    OPEN_CONNECTION = 0;
     REQUEST_JOIN = 1;
 
     // server side
@@ -12,6 +13,8 @@ enum PacketId {
 
     // client/server side
     EMIT_EVENT = 8;
+    BROWSER_CREATED = 9;
+    GOT = 10;
 }
 
 message Packet {
@@ -31,7 +34,8 @@ message JoinResponse {
 message CreateBrowser {
     required uint32 browser_id = 1;
     required string url = 2;
-    required bool listen_to_events = 3;
+    required bool hidden = 3;
+    required bool focused = 4;
 }
 
 message DestroyBrowser {
@@ -63,3 +67,13 @@ message EventValue {
     optional float float_value = 2;
     optional int32 integer_value = 3;
 }
+
+message BrowserCreated {
+    required uint32 browser_id = 1;
+}
+
+message Got {
+
+}
+
+message OpenConnection {}
