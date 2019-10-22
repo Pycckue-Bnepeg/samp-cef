@@ -195,7 +195,7 @@ impl Client for WebClient {
                         ValueType::Bool => (if args.bool(idx) { 1 } else { 0 }).to_string(),
                         ValueType::Double => args.double(idx).to_string(),
                         ValueType::Integer => args.integer(idx).to_string(),
-                        _ => continue,
+                        _ => "CEF_NULL".to_string(),
                     };
 
                     arguments.push_str(&arg);

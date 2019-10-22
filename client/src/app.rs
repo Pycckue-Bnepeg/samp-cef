@@ -317,13 +317,13 @@ fn win_event(msg: UINT, wparam: WPARAM, lparam: LPARAM) -> bool {
 
 extern "stdcall" fn async_key_state(key: i32) -> u16 {
     if let Some(app) = App::get() {
-        let manager = app.manager.lock().unwrap();
-
-        if manager.is_input_blocked() {
-            return 0;
-        } else {
-            app.keystate_hook.call(key);
-            return app.keystate_hook.call(key);
+        if let Ok(manager) = app.manager.try_lock() {
+            if manager.is_input_blocked() {
+                return 0;
+            } else {
+                app.keystate_hook.call(key);
+                return app.keystate_hook.call(key);
+            }
         }
     }
 

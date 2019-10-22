@@ -23,6 +23,18 @@ extern "stdcall" fn on_context_created<I: RenderProcessHandler>(
     obj.interface.on_context_created(browser, frame, context);
 }
 
+extern "stdcall" fn on_context_released<I: RenderProcessHandler>(
+    this: *mut cef_render_process_handler_t, browser: *mut cef_browser_t, frame: *mut cef_frame_t,
+    context: *mut cef_v8context_t,
+) {
+    let obj: &mut Wrapper<_, I> = Wrapper::unwrap(this);
+    let browser = Browser::from_raw(browser);
+    let frame = Frame::from_raw(frame);
+    let context = V8Context::from_raw(context);
+
+    obj.interface.on_context_released(browser, frame, context);
+}
+
 extern "stdcall" fn on_webkit_initialized<I: RenderProcessHandler>(
     this: *mut cef_render_process_handler_t,
 ) {
@@ -56,6 +68,7 @@ pub fn wrap<T: RenderProcessHandler>(handler: Arc<T>) -> *mut cef_render_process
     let mut object: cef_render_process_handler_t = unsafe { std::mem::zeroed() };
 
     object.on_context_created = Some(on_context_created::<T>);
+    object.on_context_released = Some(on_context_released::<T>);
     object.on_web_kit_initialized = Some(on_webkit_initialized::<T>);
     object.on_process_message_received = Some(on_process_message::<T>);
 

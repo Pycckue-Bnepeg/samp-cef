@@ -151,6 +151,10 @@ impl RenderProcessHandler for Application {
         global.set_value_by_key(&key_cef, &cef_obj);
     }
 
+    fn on_context_released(self: &Arc<Self>, _browser: Browser, frame: Frame, context: V8Context) {
+        println!("context released!!!");
+    }
+
     fn on_webkit_initialized(self: &Arc<Self>) {}
 
     fn on_process_message(
@@ -250,7 +254,10 @@ fn convert_to_list(v8: &[V8Value], pm: &List) {
             let list = List::new();
             convert_to_list(&values, &list);
             pm.set_list(idx, list);
+            continue;
         }
+
+        pm.set_null(idx); // null value xD
     }
 }
 
@@ -275,7 +282,7 @@ fn convert_to_v8(pm: &List, offset: usize, v8: &mut Vec<V8Value>) {
                 });
             }
 
-            _ => (),
+            _ => v8.push(V8Value::new_undefined()),
         }
     }
 }

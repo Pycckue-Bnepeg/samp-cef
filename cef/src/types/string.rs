@@ -29,6 +29,10 @@ impl CefString {
         }
     }
 
+    pub fn new_empty() -> CefString {
+        Self::new("")
+    }
+
     pub fn to_cef_string(&self) -> cef_string_t {
         let inner = unsafe { &*self.inner };
         cef_string_t {

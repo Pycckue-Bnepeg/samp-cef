@@ -197,8 +197,9 @@ impl V8Value {
         self.inner
             .get_string_value
             .map(|get_str| unsafe { get_str(self.inner.get_mut()) })
+            .filter(|ptr| !ptr.is_null())
             .map(|string| CefString::from(string))
-            .unwrap_or_else(|| CefString::new_null())
+            .unwrap_or_else(|| CefString::new_empty())
     }
 
     pub fn integer(&self) -> i32 {

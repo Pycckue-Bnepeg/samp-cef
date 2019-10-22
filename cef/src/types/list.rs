@@ -43,14 +43,23 @@ impl List {
         self.inner
             .get_string
             .map(|get| unsafe { get(self.inner.get_mut(), index) })
+            .filter(|ptr| !ptr.is_null())
             .map(|raw| CefString::from(raw))
-            .unwrap_or_else(|| CefString::new_null())
+            .unwrap_or_else(|| CefString::new_empty())
     }
 
     pub fn set_string(&self, index: usize, string: &CefString) {
+        let ptr = if string.as_cef_string().length == 0 {
+            std::ptr::null()
+        } else {
+            string.as_cef_string() as *const _
+        };
+
         self.inner
             .set_string
-            .map(|set| unsafe { set(self.inner.get_mut(), index, string.as_cef_string()) });
+            .map(|set| unsafe { set(self.inner.get_mut(), index, ptr) });
+
+        // string.as_cef_string()
     }
 
     pub fn bool(&self, index: usize) -> bool {
@@ -104,6 +113,12 @@ impl List {
         self.inner
             .set_list
             .map(|set| unsafe { set(self.inner.get_mut(), index, list.into_cef()) });
+    }
+
+    pub fn set_null(&self, index: usize) {
+        self.inner
+            .set_null
+            .map(|set| unsafe { set(self.inner.get_mut(), index) });
     }
 
     pub fn into_cef(self) -> *mut cef_list_value_t {
