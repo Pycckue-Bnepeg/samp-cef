@@ -328,6 +328,11 @@ impl WebClient {
 
     // TODO: показывать всплывающие окна
     pub fn update_view(&self) {
+        if self.hidden.load(Ordering::SeqCst) {
+            self.unlock();
+            return;
+        }
+
         {
             let mut texture = self.view.lock().unwrap();
             let mut draw_data = self.draw_data.lock().unwrap();
@@ -376,6 +381,10 @@ impl WebClient {
     }
 
     pub fn internal_hide(&self, hide: bool, store_value: bool) {
+        if store_value {
+            self.hidden.store(hide, Ordering::SeqCst);
+        }
+
         self.browser()
             .map(|browser| browser.host())
             .map(|host| host.was_hidden(hide));
@@ -383,10 +392,6 @@ impl WebClient {
         if hide {
             let mut view = self.view.lock().unwrap();
             view.clear_texture();
-        }
-
-        if store_value {
-            self.hidden.store(hide, Ordering::SeqCst);
         }
     }
 

@@ -46,9 +46,14 @@ fn on_create() {
 
 fn on_render(_: &mut IDirect3DDevice9) {
     let render = Render::get();
-    let mut manager = render.manager.lock().unwrap();
-    manager.do_not_draw(CMenuManager::is_menu_active());
-    manager.draw();
+
+    {
+        let mut manager = render.manager.lock().unwrap();
+        manager.do_not_draw(CMenuManager::is_menu_active());
+        manager.draw();
+    }
+
+    crate::app::mainloop();
 }
 
 fn on_reset(_: &mut IDirect3DDevice9, reset_flag: u8) {

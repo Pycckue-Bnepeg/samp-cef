@@ -294,6 +294,8 @@ impl SampPlugin for CefPlugin {
                 _ => (),
             }
         }
+
+        self.notify_timeout();
     }
 }
 

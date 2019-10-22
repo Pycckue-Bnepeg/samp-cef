@@ -27,13 +27,6 @@ pub extern "C" fn cef_initialize() {
 }
 
 fn initialize() {
-    while !client_api::wndproc::initialize(&client_api::wndproc::WndProcSettings {
-        callback: mainloop2,
-        hwnd: client_api::gta::hwnd(),
-    }) {
-        std::thread::sleep(Duration::from_millis(10));
-    }
-
     std::thread::sleep(Duration::from_secs(2));
 
     let cef = CefApi::wait_loading().expect("No client.dll");
@@ -54,7 +47,8 @@ fn initialize() {
     }
 }
 
-fn mainloop2() {
+#[no_mangle]
+pub extern "C" fn cef_samp_mainloop() {
     if let Some(app) = unsafe { APP.as_mut() } {
         if client_api::utils::is_key_pressed(0x72) {
             if app.pressed.elapsed() >= Duration::from_millis(500) {

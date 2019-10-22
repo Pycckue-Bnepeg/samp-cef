@@ -134,7 +134,7 @@ pub fn initialize() {
 
     // apply hook to WndProc
     while !wndproc::initialize(&wndproc::WndProcSettings {
-        callback: mainloop,
+        callback: shitty,
         hwnd: client_api::gta::hwnd(),
     }) {
         std::thread::sleep(Duration::from_millis(10));
@@ -148,8 +148,10 @@ pub fn uninitialize() {
     client_api::wndproc::uninitialize();
 }
 
+fn shitty() {}
+
 // inside GTA thread
-fn mainloop() {
+pub fn mainloop() {
     if let Some(app) = App::get() {
         if !app.connected && client_api::samp::gamestate() == Gamestate::Connected {
             if let Some(mut addr) = NetGame::get().addr() {
@@ -176,6 +178,8 @@ fn mainloop() {
             manager.set_corrupted(input_active || !app.window_focused);
         }
 
+        crate::external::call_mainloop();
+
         while let Ok(event) = app.event_rx.try_recv() {
             match event {
                 Event::BlockInput(_) => {}
@@ -189,8 +193,8 @@ fn mainloop() {
                     let mut manager = app.manager.lock().unwrap();
                     manager.create_browser(id, app.callbacks.clone(), &url);
                     manager.hide_browser(id, hidden);
-
                     manager.browser_focus(id, focused);
+
                     let show_cursor = manager.is_input_blocked();
                     client_api::samp::inputs::show_cursor(show_cursor);
                 }
@@ -246,7 +250,12 @@ fn mainloop() {
 
 fn win_event(msg: UINT, wparam: WPARAM, lparam: LPARAM) -> bool {
     if let Some(app) = App::get() {
-        let mut manager = app.manager.lock().unwrap();
+        let mut manager = match app.manager.try_lock() {
+            Ok(m) => m,
+            _ => {
+                return false;
+            }
+        };
 
         match msg {
             WM_MOUSEMOVE => {

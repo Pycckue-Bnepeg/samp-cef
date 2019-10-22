@@ -74,6 +74,18 @@ pub fn initialize(event_tx: Sender<Event>, manager: Arc<Mutex<Manager>>) -> Call
     callbacks
 }
 
+pub fn call_mainloop() {
+    if let Some(ext) = ExternalManager::get() {
+        for plugin in &ext.plugins {
+            unsafe {
+                if let Ok(func) = plugin.get::<extern "C" fn()>(b"cef_samp_mainloop") {
+                    func();
+                }
+            }
+        }
+    }
+}
+
 #[no_mangle]
 pub unsafe extern "C" fn cef_create_browser(
     id: u32, url: *const c_char, hidden: bool, focused: bool,
@@ -185,6 +197,8 @@ pub unsafe extern "C" fn cef_try_focus_browser(browser: u32) -> bool {
 
             if manager.is_input_available(browser) {
                 manager.browser_focus(browser, true);
+                drop(manager);
+
                 let event = Event::FocusBrowser(browser, true);
                 ext.event_tx.send(event);
 
