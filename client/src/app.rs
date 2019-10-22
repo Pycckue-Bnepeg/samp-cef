@@ -105,13 +105,16 @@ impl App {
 }
 
 pub fn initialize() {
+    unsafe {
+        winapi::um::consoleapi::AllocConsole();
+    }
+
     let app = App::new();
     let manager = app.manager();
 
     crate::render::initialize(manager);
 
     unsafe {
-        winapi::um::consoleapi::AllocConsole();
         APP = Some(app);
     }
 

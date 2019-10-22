@@ -3,8 +3,9 @@ use libloading::{Library, Symbol};
 use std::ffi::{CStr, CString};
 use std::os::raw::{c_char, c_int};
 
-pub use cef::types::list::List;
+pub use cef::types::{list::List, string::CefString};
 pub use cef_sys::cef_list_value_t;
+pub use cef_sys::cef_string_userfree_t;
 
 pub const CEF_EVENT_CONTINUE: c_int = 0;
 pub const CEF_EVENT_BREAK: c_int = 1;

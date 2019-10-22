@@ -10,7 +10,8 @@ use crossbeam_channel::Sender;
 
 use crate::app::Event;
 use crate::browser::manager::Manager;
-use std::process::exit;
+
+use libloading::Library;
 
 static mut PLUGINS: Option<ExternalManager> = None;
 
@@ -24,6 +25,7 @@ pub struct ExternalManager {
     manager: Arc<Mutex<Manager>>,
     event_tx: Sender<Event>,
     callbacks: CallbackList,
+    plugins: Vec<Library>,
 }
 
 impl ExternalManager {
@@ -39,10 +41,34 @@ pub fn initialize(event_tx: Sender<Event>, manager: Arc<Mutex<Manager>>) -> Call
         manager,
         event_tx,
         callbacks: callbacks.clone(),
+        plugins: Vec::new(),
     };
 
-    unsafe {
+    let external = unsafe {
         PLUGINS = Some(external);
+        PLUGINS.as_mut().unwrap()
+    };
+
+    if let Ok(rd) = std::fs::read_dir("./cef/plugins") {
+        for dir in rd.filter_map(|dir| dir.ok()) {
+            println!("{:?}", dir);
+
+            if let Some(ext) = dir.path().extension() {
+                if ext.to_string_lossy() == "dll" {
+                    match Library::new(dir.path().as_os_str()) {
+                        Ok(lib) => unsafe {
+                            if let Ok(func) = lib.get::<extern "C" fn()>(b"cef_initialize") {
+                                func();
+                                println!("push plguin");
+                                external.plugins.push(lib);
+                            }
+                        },
+
+                        Err(e) => println!("{:?}", e),
+                    }
+                }
+            }
+        }
     }
 
     callbacks
@@ -159,8 +185,6 @@ pub unsafe extern "C" fn cef_try_focus_browser(browser: u32) -> bool {
 
             if manager.is_input_available(browser) {
                 manager.browser_focus(browser, true);
-                drop(manager);
-
                 let event = Event::FocusBrowser(browser, true);
                 ext.event_tx.send(event);
 
