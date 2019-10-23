@@ -148,7 +148,9 @@ pub fn uninitialize() {
     client_api::wndproc::uninitialize();
 }
 
-fn shitty() {}
+fn shitty() {
+    //    mainloop();
+}
 
 // inside GTA thread
 pub fn mainloop() {
@@ -178,8 +180,6 @@ pub fn mainloop() {
             manager.set_corrupted(input_active || !app.window_focused);
         }
 
-        crate::external::call_mainloop();
-
         while let Ok(event) = app.event_rx.try_recv() {
             match event {
                 Event::BlockInput(_) => {}
@@ -196,6 +196,7 @@ pub fn mainloop() {
                     manager.browser_focus(id, focused);
 
                     let show_cursor = manager.is_input_blocked();
+                    drop(manager);
                     client_api::samp::inputs::show_cursor(show_cursor);
                 }
 
@@ -215,6 +216,8 @@ pub fn mainloop() {
                     let mut manager = app.manager.lock().unwrap();
                     manager.browser_focus(id, focus);
                     let show_cursor = manager.is_input_blocked();
+
+                    drop(manager);
                     client_api::samp::inputs::show_cursor(show_cursor);
 
                     println!(
@@ -245,17 +248,14 @@ pub fn mainloop() {
                 _ => (),
             }
         }
+
+        crate::external::call_mainloop();
     }
 }
 
 fn win_event(msg: UINT, wparam: WPARAM, lparam: LPARAM) -> bool {
     if let Some(app) = App::get() {
-        let mut manager = match app.manager.try_lock() {
-            Ok(m) => m,
-            _ => {
-                return false;
-            }
-        };
+        let mut manager = app.manager.lock().unwrap();
 
         match msg {
             WM_MOUSEMOVE => {
@@ -326,12 +326,13 @@ fn win_event(msg: UINT, wparam: WPARAM, lparam: LPARAM) -> bool {
 
 extern "stdcall" fn async_key_state(key: i32) -> u16 {
     if let Some(app) = App::get() {
+        let result = app.keystate_hook.call(key);
+
         if let Ok(manager) = app.manager.try_lock() {
             if manager.is_input_blocked() {
                 return 0;
             } else {
-                app.keystate_hook.call(key);
-                return app.keystate_hook.call(key);
+                return result;
             }
         }
     }

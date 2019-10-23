@@ -89,9 +89,11 @@ unsafe extern "stdcall" fn on_paint<I: RenderHandler>(
     let obj: &mut Wrapper<_, I> = Wrapper::unwrap(this);
     let browser = Browser::from_raw(browser);
 
+    let rects = std::slice::from_raw_parts(dirtyRects, dirtyRectsCount);
+
     let rects = DirtyRects {
         count: dirtyRectsCount,
-        rects: dirtyRects,
+        rects: Vec::from(rects),
     };
 
     let buffer = std::slice::from_raw_parts(buffer as *const u8, (width * height * 4) as usize);

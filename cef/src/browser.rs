@@ -5,6 +5,7 @@ use cef_sys::{
 };
 
 use crate::client::Client;
+use crate::handlers::render::PaintElement;
 use crate::process_message::ProcessMessage;
 use crate::ref_counted::RefGuard;
 use crate::types::string::CefString;
@@ -162,6 +163,15 @@ impl BrowserHost {
             unsafe {
                 ske(self.inner.get_mut(), &event);
             }
+        }
+    }
+
+    pub fn invalidate(&self, paint_type: PaintElement) {
+        let inv = self.inner.invalidate.unwrap();
+        let ty = paint_type.into();
+
+        unsafe {
+            inv(self.inner.get_mut(), ty);
         }
     }
 }

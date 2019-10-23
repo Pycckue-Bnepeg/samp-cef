@@ -120,19 +120,14 @@ pub unsafe extern "C" fn cef_destroy_browser(id: u32) {
 #[no_mangle]
 pub unsafe extern "C" fn cef_hide_browser(id: u32, hide: bool) {
     if let Some(external) = ExternalManager::get() {
-        let manager = external.manager.lock().unwrap();
-        manager.hide_browser(id, hide);
+        let event = Event::HideBrowser(id, hide);
+        external.event_tx.send(event);
     }
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn cef_focus_browser(id: u32, focus: bool) {
     if let Some(external) = ExternalManager::get() {
-        {
-            let mut manager = external.manager.lock().unwrap();
-            manager.browser_focus(id, focus);
-        }
-
         let event = Event::FocusBrowser(id, focus);
         external.event_tx.send(event);
     }

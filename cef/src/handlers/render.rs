@@ -3,14 +3,15 @@ use cef_sys::{cef_paint_element_type_t, cef_rect_t};
 
 use std::sync::Arc;
 
+#[derive(Debug)]
 pub struct DirtyRects {
     pub count: usize,
-    pub rects: *const cef_rect_t,
+    pub rects: Vec<cef_rect_t>,
 }
 
 impl DirtyRects {
     pub fn as_slice(&self) -> &[cef_rect_t] {
-        unsafe { std::slice::from_raw_parts(self.rects, self.count) }
+        &self.rects
     }
 }
 
@@ -25,6 +26,15 @@ impl From<cef_paint_element_type_t::Type> for PaintElement {
         match paint {
             cef_paint_element_type_t::PET_VIEW => PaintElement::View,
             _ => PaintElement::Popup,
+        }
+    }
+}
+
+impl Into<cef_paint_element_type_t::Type> for PaintElement {
+    fn into(self) -> cef_paint_element_type_t::Type {
+        match self {
+            PaintElement::View => cef_paint_element_type_t::PET_VIEW,
+            PaintElement::Popup => cef_paint_element_type_t::PET_POPUP,
         }
     }
 }

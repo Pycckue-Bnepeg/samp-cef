@@ -2,6 +2,7 @@ use crate::app::Event;
 use crate::browser::client::WebClient;
 use crate::external::CallbackList;
 
+use cef::handlers::render::PaintElement;
 use cef::types::list::{List, ValueType};
 use cef::types::string::CefString;
 use cef_sys::{cef_event_flags_t, cef_key_event_t, cef_mouse_button_type_t, cef_mouse_event_t};
@@ -105,8 +106,13 @@ impl Manager {
     }
 
     pub fn on_reset_device(&self) {
-        for (_, browser) in &self.clients {
-            browser.on_reset_device();
+        for (_, client) in &self.clients {
+            client.on_reset_device();
+
+            client
+                .browser()
+                .map(|browser| browser.host())
+                .map(|host| host.invalidate(PaintElement::View));
         }
     }
 

@@ -41,7 +41,7 @@ impl DrawData {
             height: 0,
             rects: DirtyRects {
                 count: 0,
-                rects: std::ptr::null(),
+                rects: Vec::new(),
             },
 
             popup_buffer: Vec::new(),
@@ -271,6 +271,8 @@ impl RenderHandler for WebClient {
         while !*rendered {
             rendered = cv.wait(rendered).unwrap();
         }
+
+        self.draw_data.lock().unwrap().changed = false;
     }
 }
 
@@ -348,12 +350,27 @@ impl WebClient {
             }
 
             if !draw_data.changed {
+                self.unlock();
+                return;
+            }
+
+            let size = texture.rect();
+            if size.height as usize != draw_data.height || size.width as usize != draw_data.width {
+                self.unlock();
                 return;
             }
 
             let bytes = unsafe {
                 std::slice::from_raw_parts(draw_data.buffer, draw_data.width * draw_data.height * 4)
             };
+
+            if draw_data.rects.count > 0 {
+                let rect = unsafe { &draw_data.rects.rects[0] };
+                if rect.width > size.width || rect.height > size.height {
+                    self.unlock();
+                    return;
+                }
+            }
 
             texture.update_texture(&bytes, draw_data.rects.as_slice());
 
@@ -385,13 +402,15 @@ impl WebClient {
             self.hidden.store(hide, Ordering::SeqCst);
         }
 
-        self.browser()
-            .map(|browser| browser.host())
-            .map(|host| host.was_hidden(hide));
-
-        if hide {
-            let mut view = self.view.lock().unwrap();
-            view.clear_texture();
+        if let Some(host) = self.browser().map(|browser| browser.host()) {
+            if hide {
+                host.was_hidden(true);
+                let mut view = self.view.lock().unwrap();
+                view.clear_texture();
+            } else {
+                host.was_hidden(false);
+                host.invalidate(PaintElement::View);
+            }
         }
     }
 

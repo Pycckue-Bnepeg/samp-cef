@@ -14,6 +14,7 @@ const D3DXSPRITE_ALPHABLEND: u32 = 16;
 pub struct View {
     sprite: Option<NonNull<ID3DXSprite>>,
     texture: Option<NonNull<IDirect3DTexture9>>,
+    surface: Option<NonNull<IDirect3DSurface9>>,
     width: usize,
     height: usize,
     extern_texture: bool,
@@ -23,10 +24,15 @@ impl View {
     pub fn new(device: &mut IDirect3DDevice9, width: usize, height: usize) -> View {
         let sprite = Self::create_sprite(device);
         let texture = Self::create_texture(device, width, height);
+        let mut surface: *mut IDirect3DSurface9 = std::ptr::null_mut();
+        unsafe {
+            (*texture).GetSurfaceLevel(0, &mut surface);
+        }
 
         View {
             sprite: NonNull::new(sprite),
             texture: NonNull::new(texture),
+            surface: NonNull::new(surface),
             extern_texture: false,
             width,
             height,
@@ -34,9 +40,15 @@ impl View {
     }
 
     pub fn from_extern(texture: *mut IDirect3DTexture9) -> View {
+        let mut surface: *mut IDirect3DSurface9 = std::ptr::null_mut();
+        unsafe {
+            (*texture).GetSurfaceLevel(0, &mut surface);
+        }
+
         let mut view = View {
             sprite: None,
             texture: NonNull::new(texture),
+            surface: NonNull::new(surface),
             extern_texture: true,
             width: 0,
             height: 0,
@@ -94,21 +106,17 @@ impl View {
 
     pub fn update_texture(&mut self, bytes: &[u8], rects: &[cef_rect_t]) {
         unsafe {
-            if let Some(texture) = self
-                .texture
-                .as_mut()
-                .map(|texture_ptr| texture_ptr.as_mut())
-            {
+            if let Some(surface) = self.surface.as_mut().map(|ptr| ptr.as_mut()) {
                 let mut rect = D3DLOCKED_RECT {
                     Pitch: 0,
                     pBits: null_mut(),
                 };
 
-                let mut surface_desc: D3DSURFACE_DESC = std::mem::zeroed();
+                if (*surface).LockRect(&mut rect, std::ptr::null(), 0) == D3D_OK {
+                    let mut surface_desc: D3DSURFACE_DESC = std::mem::zeroed();
 
-                texture.GetLevelDesc(0, &mut surface_desc);
+                    surface.GetDesc(&mut surface_desc);
 
-                if (*texture).LockRect(0, &mut rect, std::ptr::null(), 0) == D3D_OK {
                     let bits = rect.pBits as *mut u8;
                     let pitch = rect.Pitch as usize;
 
@@ -124,7 +132,7 @@ impl View {
                         }
                     }
 
-                    (*texture).UnlockRect(0);
+                    (*surface).UnlockRect();
                 }
             }
         }
@@ -170,6 +178,10 @@ impl View {
                 sprite.as_mut().Release();
             }
 
+            if let Some(mut surface) = self.surface.take() {
+                surface.as_mut().Release();
+            }
+
             if let Some(mut texture) = self.texture.take() {
                 texture.as_mut().Release();
             }
@@ -178,11 +190,7 @@ impl View {
 
     pub fn clear_texture(&mut self) {
         unsafe {
-            if let Some(texture) = self
-                .texture
-                .as_ref()
-                .map(|texture_ptr| texture_ptr.as_ref())
-            {
+            if let Some(surface) = self.surface.as_ref().map(|ptr| ptr.as_ref()) {
                 let mut rect = D3DLOCKED_RECT {
                     Pitch: 0,
                     pBits: null_mut(),
@@ -190,13 +198,13 @@ impl View {
 
                 let mut surface_desc: D3DSURFACE_DESC = std::mem::zeroed();
 
-                texture.GetLevelDesc(0, &mut surface_desc);
+                surface.GetDesc(&mut surface_desc);
 
-                if (*texture).LockRect(0, &mut rect, std::ptr::null(), 0) == D3D_OK {
+                if (*surface).LockRect(&mut rect, std::ptr::null(), D3DLOCK_DISCARD) == D3D_OK {
                     let size = surface_desc.Height as usize * surface_desc.Width as usize * 4;
                     std::ptr::write_bytes(rect.pBits as *mut u8, 0x00, size);
 
-                    (*texture).UnlockRect(0);
+                    (*surface).UnlockRect();
                 }
             }
         }
@@ -205,6 +213,18 @@ impl View {
     pub fn on_reset_device(&mut self, device: &mut IDirect3DDevice9, width: usize, height: usize) {
         self.sprite = NonNull::new(Self::create_sprite(device));
         self.texture = NonNull::new(Self::create_texture(device, width, height));
+
+        unsafe {
+            if let Some(texture) = self.texture.as_mut().map(|a| a.as_mut()) {
+                let mut surface: *mut IDirect3DSurface9 = std::ptr::null_mut();
+
+                unsafe {
+                    texture.GetSurfaceLevel(0, &mut surface);
+                }
+
+                self.surface = NonNull::new(surface);
+            }
+        }
     }
 
     fn create_sprite(device: &mut IDirect3DDevice9) -> LPD3DXSPRITE {
