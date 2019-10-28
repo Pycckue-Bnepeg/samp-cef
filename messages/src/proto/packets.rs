@@ -431,6 +431,7 @@ impl<'a> MessageWrite for EventValue<'a> {
 #[derive(Debug, Default, PartialEq, Clone)]
 pub struct BrowserCreated {
     pub browser_id: u32,
+    pub status_code: i32,
 }
 
 impl<'a> MessageRead<'a> for BrowserCreated {
@@ -439,6 +440,7 @@ impl<'a> MessageRead<'a> for BrowserCreated {
         while !r.is_eof() {
             match r.next_tag(bytes) {
                 Ok(8) => msg.browser_id = r.read_uint32(bytes)?,
+                Ok(16) => msg.status_code = r.read_int32(bytes)?,
                 Ok(t) => { r.read_unknown(bytes, t)?; }
                 Err(e) => return Err(e),
             }
@@ -451,10 +453,12 @@ impl MessageWrite for BrowserCreated {
     fn get_size(&self) -> usize {
         0
         + 1 + sizeof_varint(*(&self.browser_id) as u64)
+        + 1 + sizeof_varint(*(&self.status_code) as u64)
     }
 
     fn write_message<W: Write>(&self, w: &mut Writer<W>) -> Result<()> {
         w.write_with_tag(8, |w| w.write_uint32(*&self.browser_id))?;
+        w.write_with_tag(16, |w| w.write_int32(*&self.status_code))?;
         Ok(())
     }
 }

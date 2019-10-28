@@ -46,7 +46,7 @@ pub enum Event {
     FocusBrowser(u32, bool),
     EmitEvent(String, List),
     EmitEventOnServer(String, String),
-    BrowserCreated(u32),
+    BrowserCreated(u32, i32),
 
     BlockInput(bool),
     Terminate,
@@ -238,9 +238,9 @@ pub fn mainloop() {
                     }
                 }
 
-                Event::BrowserCreated(id) => {
+                Event::BrowserCreated(id, code) => {
                     if let Some(network) = app.network.as_mut() {
-                        let event = Event::BrowserCreated(id);
+                        let event = Event::BrowserCreated(id, code);
                         network.send(event);
                     }
                 }

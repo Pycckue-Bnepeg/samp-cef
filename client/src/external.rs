@@ -11,7 +11,7 @@ use crossbeam_channel::Sender;
 use crate::app::Event;
 use crate::browser::manager::Manager;
 
-use libloading::Library;
+use libloading::{Library, Symbol};
 
 static mut PLUGINS: Option<ExternalManager> = None;
 
@@ -25,7 +25,12 @@ pub struct ExternalManager {
     manager: Arc<Mutex<Manager>>,
     event_tx: Sender<Event>,
     callbacks: CallbackList,
-    plugins: Vec<Library>,
+    plugins: Vec<ExtPlugin>,
+}
+
+struct ExtPlugin {
+    library: Library,
+    mainloop: Option<Symbol<'static, extern "C" fn()>>,
 }
 
 impl ExternalManager {
@@ -56,11 +61,22 @@ pub fn initialize(event_tx: Sender<Event>, manager: Arc<Mutex<Manager>>) -> Call
             if let Some(ext) = dir.path().extension() {
                 if ext.to_string_lossy() == "dll" {
                     match Library::new(dir.path().as_os_str()) {
-                        Ok(lib) => unsafe {
+                        Ok(mut lib) => unsafe {
                             if let Ok(func) = lib.get::<extern "C" fn()>(b"cef_initialize") {
                                 func();
-                                println!("push plguin");
-                                external.plugins.push(lib);
+
+                                let library: &'static mut Library =
+                                    &mut *(&mut lib as *mut Library);
+
+                                let mainloop =
+                                    library.get::<extern "C" fn()>(b"cef_samp_mainloop").ok();
+
+                                let plugin = ExtPlugin {
+                                    library: lib,
+                                    mainloop,
+                                };
+
+                                external.plugins.push(plugin);
                             }
                         },
 
@@ -77,10 +93,8 @@ pub fn initialize(event_tx: Sender<Event>, manager: Arc<Mutex<Manager>>) -> Call
 pub fn call_mainloop() {
     if let Some(ext) = ExternalManager::get() {
         for plugin in &ext.plugins {
-            unsafe {
-                if let Ok(func) = plugin.get::<extern "C" fn()>(b"cef_samp_mainloop") {
-                    func();
-                }
+            if let Some(func) = plugin.mainloop.as_ref() {
+                func();
             }
         }
     }

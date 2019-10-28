@@ -242,9 +242,12 @@ impl Network {
         }
     }
 
-    fn net_browser_created(&mut self, browser_id: u32) {
+    fn net_browser_created(&mut self, browser_id: u32, status_code: i32) {
         if let ConnectionState::Connected(address) = self.connection_state {
-            let created = packets::BrowserCreated { browser_id };
+            let created = packets::BrowserCreated {
+                browser_id,
+                status_code,
+            };
 
             let packet = messages::try_into_packet(created).unwrap();
             let packet = Packet::unreliable_sequenced(address, packet, Some(1));
@@ -285,7 +288,7 @@ impl Network {
         match event {
             Event::Connect(addr) => self.net_open_connection(addr),
             Event::EmitEventOnServer(event, arguments) => self.net_emit_event(event, arguments),
-            Event::BrowserCreated(id) => self.net_browser_created(id),
+            Event::BrowserCreated(id, code) => self.net_browser_created(id, code),
             _ => (),
         }
     }

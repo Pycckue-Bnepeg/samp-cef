@@ -1,5 +1,6 @@
 use crate::handlers::context_menu::ContextMenuHandler;
 use crate::handlers::lifespan::LifespanHandler;
+use crate::handlers::load::LoadHandler;
 use crate::handlers::render::RenderHandler;
 
 use crate::browser::{Browser, Frame};
@@ -12,6 +13,7 @@ pub trait Client {
     type LifespanHandler: LifespanHandler;
     type RenderHandler: RenderHandler;
     type ContextMenuHandler: ContextMenuHandler;
+    type LoadHandler: LoadHandler;
 
     fn lifespan_handler(self: &Arc<Self>) -> Option<Arc<Self::LifespanHandler>> {
         None
@@ -22,6 +24,10 @@ pub trait Client {
     }
 
     fn context_menu_handler(self: &Arc<Self>) -> Option<Arc<Self::ContextMenuHandler>> {
+        None
+    }
+
+    fn load_handler(self: &Arc<Self>) -> Option<Arc<Self::LoadHandler>> {
         None
     }
 

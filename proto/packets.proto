@@ -70,6 +70,7 @@ message EventValue {
 
 message BrowserCreated {
     required uint32 browser_id = 1;
+    required int32 status_code = 2;
 }
 
 message Got {

@@ -21,6 +21,7 @@ use client_api::utils::handle_result;
 use crate::app::Event;
 use crate::browser::view::View;
 use crate::external::{CallbackList, EXTERNAL_BREAK};
+use cef::handlers::load::LoadHandler;
 use std::ffi::CString;
 
 struct DrawData {
@@ -103,9 +104,6 @@ impl LifespanHandler for WebClient {
         if self.hidden.load(Ordering::SeqCst) {
             self.hide(true);
         }
-
-        let event = Event::BrowserCreated(self.id);
-        handle_result(self.event_tx.send(event));
     }
 
     fn on_before_close(self: &Arc<Self>, _: Browser) {
@@ -118,6 +116,7 @@ impl Client for WebClient {
     type LifespanHandler = Self;
     type RenderHandler = Self;
     type ContextMenuHandler = Self;
+    type LoadHandler = Self;
 
     fn lifespan_handler(self: &Arc<Self>) -> Option<Arc<Self>> {
         Some(self.clone())
@@ -128,6 +127,10 @@ impl Client for WebClient {
     }
 
     fn context_menu_handler(self: &Arc<Self>) -> Option<Arc<Self>> {
+        Some(self.clone())
+    }
+
+    fn load_handler(self: &Arc<Self>) -> Option<Arc<Self>> {
         Some(self.clone())
     }
 
@@ -273,6 +276,15 @@ impl RenderHandler for WebClient {
         }
 
         self.draw_data.lock().unwrap().changed = false;
+    }
+}
+
+impl LoadHandler for WebClient {
+    fn on_load_end(self: &Arc<Self>, browser: Browser, frame: Frame, status_code: i32) {
+        if frame.is_main() {
+            let event = Event::BrowserCreated(self.id, status_code);
+            handle_result(self.event_tx.send(event));
+        }
     }
 }
 

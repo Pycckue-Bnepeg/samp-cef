@@ -214,6 +214,12 @@ impl Frame {
             send(self.inner.get_mut(), pid, message.into_cef());
         }
     }
+
+    pub fn is_main(&self) -> bool {
+        let is_main = self.inner.is_main.unwrap();
+
+        unsafe { is_main(self.inner.get_mut()) == 1 }
+    }
 }
 
 #[derive(Clone)]

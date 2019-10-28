@@ -26,7 +26,7 @@ const INIT_TIMEOUT: Duration = Duration::from_secs(2);
 pub enum Event {
     EmitEvent(i32, String, String),
     Connected(i32),
-    BrowserCreated(i32, u32),
+    BrowserCreated(i32, u32, i32),
 }
 
 struct CefPlugin {
@@ -243,10 +243,10 @@ impl CefPlugin {
         });
     }
 
-    fn notify_browser_created(&self, player_id: i32, browser_id: u32) {
+    fn notify_browser_created(&self, player_id: i32, browser_id: u32, code: i32) {
         self.amx_list.iter().for_each(|&ident| {
             samp::amx::get(ident)
-                .map(|amx| exec_public!(amx, "OnCefBrowserCreated", player_id, browser_id));
+                .map(|amx| exec_public!(amx, "OnCefBrowserCreated", player_id, browser_id, code));
         });
     }
 }
@@ -287,8 +287,8 @@ impl SampPlugin for CefPlugin {
                         .map(|idx| self.await_connect.remove(idx));
                 }
 
-                Event::BrowserCreated(player, browser) => {
-                    self.notify_browser_created(player, browser);
+                Event::BrowserCreated(player, browser, code) => {
+                    self.notify_browser_created(player, browser, code);
                 }
 
                 _ => (),

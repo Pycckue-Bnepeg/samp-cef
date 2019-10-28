@@ -8,6 +8,7 @@ pub mod app;
 pub mod client;
 pub mod context_menu_handler;
 pub mod lifespan_handler;
+pub mod load_handler;
 pub mod render_handler;
 pub mod render_process_handler;
 pub mod task;

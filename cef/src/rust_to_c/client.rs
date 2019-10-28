@@ -96,8 +96,13 @@ extern "stdcall" fn keyboard<I: Client>(this: *mut cef_client_t) -> *mut cef_key
 // load
 
 extern "stdcall" fn load<I: Client>(this: *mut cef_client_t) -> *mut cef_load_handler_t {
-    println!("load");
-    null_mut()
+    let obj: &mut Wrapper<_, I> = Wrapper::unwrap(this);
+
+    if let Some(handler) = obj.interface.load_handler() {
+        super::load_handler::wrap(handler)
+    } else {
+        null_mut()
+    }
 }
 
 // render

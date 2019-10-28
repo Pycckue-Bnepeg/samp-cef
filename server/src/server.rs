@@ -144,7 +144,7 @@ impl Server {
         let client = self.clients.get_mut(&addr).unwrap(); // safe
         let player_id = client.id();
 
-        let event = Event::BrowserCreated(player_id, packet.browser_id);
+        let event = Event::BrowserCreated(player_id, packet.browser_id, packet.status_code);
         self.event_tx.send(event);
     }
 

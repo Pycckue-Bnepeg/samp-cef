@@ -43,6 +43,12 @@ pub fn run_message_loop() {
     }
 }
 
+pub fn do_message_loop_work() {
+    unsafe {
+        cef_sys::cef_do_message_loop_work();
+    }
+}
+
 pub fn quit_message_loop() {
     unsafe {
         cef_sys::cef_quit_message_loop();
