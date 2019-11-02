@@ -2,21 +2,37 @@ use winapi::um::libloaderapi::GetModuleHandleA;
 
 use cef::app::App;
 use cef::client::Client;
+use cef::handlers::browser_process::BrowserProcessHandler;
 use cef::handlers::render_process::RenderProcessHandler;
 use cef::types::string::CefString;
 
 use std::sync::Arc;
 
-// App placeholder. Literally does nothing.
-struct DefaultApp;
+use crossbeam_channel::Sender;
+
+use crate::app::Event;
+
+struct DefaultApp {
+    event_tx: Sender<Event>,
+}
 
 impl RenderProcessHandler for DefaultApp {}
+impl BrowserProcessHandler for DefaultApp {
+    fn on_context_initialized(self: &Arc<Self>) {
+        self.event_tx.send(Event::CefInitialize);
+    }
+}
 
 impl App for DefaultApp {
     type RenderProcessHandler = Self;
+    type BrowserProcessHandler = Self;
+
+    fn browser_process_handler(self: &Arc<Self>) -> Option<Arc<Self::BrowserProcessHandler>> {
+        Some(self.clone())
+    }
 }
 
-pub fn initialize() {
+pub fn initialize(event_tx: Sender<Event>) {
     let instance = unsafe { GetModuleHandleA(std::ptr::null()) };
 
     let main_args = cef_sys::cef_main_args_t { instance };
@@ -31,7 +47,9 @@ pub fn initialize() {
     settings.windowless_rendering_enabled = 1;
     settings.multi_threaded_message_loop = 1;
 
-    cef::initialize::<DefaultApp>(&main_args, &settings, None);
+    let app = Arc::new(DefaultApp { event_tx });
+
+    cef::initialize(&main_args, &settings, Some(app));
 }
 
 pub fn create_browser<T: Client>(client: Arc<T>, url: &str) {

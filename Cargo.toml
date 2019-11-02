@@ -19,5 +19,5 @@ default-members = [
     "cef-interface",
 ]
 
-#[profile.release]
-#lto = true
+[profile.release]
+lto = true

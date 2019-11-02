@@ -41,6 +41,7 @@ impl Into<cef_paint_element_type_t::Type> for PaintElement {
 
 pub trait RenderHandler {
     fn view_rect(self: &Arc<Self>, browser: Browser, rect: &mut cef_rect_t);
+    fn on_popup_show(self: &Arc<Self>, browser: Browser, show: bool);
     fn on_popup_size(self: &Arc<Self>, browser: Browser, rect: &cef_rect_t);
     fn on_paint(
         self: &Arc<Self>, browser: Browser, paint_type: PaintElement, dirty_rects: DirtyRects,

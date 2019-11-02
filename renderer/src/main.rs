@@ -5,15 +5,16 @@ use winapi::um::winuser::MessageBoxA;
 
 use cef::app::App;
 use cef::browser::{Browser, Frame};
+use cef::handlers::browser_process::BrowserProcessHandler;
 use cef::handlers::render_process::RenderProcessHandler;
 use cef::handlers::v8handler::V8Handler;
+use cef::process_message::ProcessMessage;
+use cef::types::list::List;
 use cef::types::list::ValueType;
 use cef::types::string::CefString;
 use cef::v8::{V8Context, V8Value};
-
-use cef::process_message::ProcessMessage;
-use cef::types::list::List;
 use cef::ProcessId;
+
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
@@ -82,6 +83,28 @@ impl V8Handler for Handler {
                 return true;
             }
 
+            "off" => {
+                if args.len() != 2 {
+                    return true;
+                }
+
+                let name = args[0].string().to_string();
+                let func = args[1].clone();
+
+                let mut events = self.subs.lock().unwrap();
+
+                if let Some(subs) = events.get_mut(&name) {
+                    let ctx = V8Context::current_context();
+
+                    if let Some(idx) = subs
+                        .iter()
+                        .position(|(fun, context)| fun.is_same(&func) && context.is_same(&ctx))
+                    {
+                        subs.remove(idx);
+                    }
+                }
+            }
+
             "emit" => {
                 if args.len() < 1 {
                     return false;
@@ -105,12 +128,16 @@ impl V8Handler for Handler {
     }
 }
 
+pub struct Placeholder;
+impl BrowserProcessHandler for Placeholder {}
+
 pub struct Application {
     subs: Arc<Mutex<Callbacks>>,
 }
 
 impl App for Application {
     type RenderProcessHandler = Self;
+    type BrowserProcessHandler = Placeholder;
 
     fn render_process_handler(self: &Arc<Self>) -> Option<Arc<Self>> {
         Some(self.clone())
@@ -131,12 +158,14 @@ impl RenderProcessHandler for Application {
         let version = V8Value::new_string("0.1.0");
         let func_focus = V8Value::new_function("set_focus", Some(handler.clone()));
         let func_on = V8Value::new_function("on", Some(handler.clone()));
+        let func_off = V8Value::new_function("off", Some(handler.clone()));
         let func_hide = V8Value::new_function("hide", Some(handler.clone()));
         let func_emit = V8Value::new_function("emit", Some(handler));
 
         let key_str = CefString::new("version");
         let key_focus = CefString::new("set_focus");
         let key_on = CefString::new("on");
+        let key_off = CefString::new("off");
         let key_emit = CefString::new("emit");
         let key_hide = CefString::new("hide");
 
@@ -144,6 +173,7 @@ impl RenderProcessHandler for Application {
         cef_obj.set_value_by_key(&key_focus, &func_focus);
         cef_obj.set_value_by_key(&key_hide, &func_hide);
         cef_obj.set_value_by_key(&key_on, &func_on);
+        cef_obj.set_value_by_key(&key_off, &func_off);
         cef_obj.set_value_by_key(&key_emit, &func_emit);
 
         let key_cef = CefString::new("cef");
@@ -152,7 +182,13 @@ impl RenderProcessHandler for Application {
     }
 
     fn on_context_released(self: &Arc<Self>, _browser: Browser, frame: Frame, context: V8Context) {
-        println!("context released!!!");
+        let mut subs = self.subs.lock().unwrap();
+
+        for value in subs.values_mut() {
+            while let Some(idx) = value.iter().position(|(_, ctx)| ctx.is_same(&context)) {
+                value.remove(idx);
+            }
+        }
     }
 
     fn on_webkit_initialized(self: &Arc<Self>) {}
@@ -279,6 +315,8 @@ fn convert_to_v8(pm: &List, offset: usize, v8: &mut Vec<V8Value>) {
                         .into_iter()
                         .enumerate()
                         .for_each(|(idx, value)| array.set_value_by_index(idx, &value));
+
+                    v8.push(array);
                 });
             }
 

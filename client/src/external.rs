@@ -1,7 +1,10 @@
 use std::collections::HashMap;
 use std::ffi::CStr;
 use std::os::raw::{c_char, c_int};
-use std::sync::{Arc, Mutex};
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc, Mutex,
+};
 
 use cef::types::list::List;
 use cef_sys::cef_list_value_t;
@@ -15,6 +18,7 @@ use libloading::{Library, Symbol};
 
 static mut PLUGINS: Option<ExternalManager> = None;
 
+pub type BrowserReadyCallback = extern "C" fn(u32);
 pub type EventCallback = extern "C" fn(*const c_char, *mut cef_list_value_t) -> c_int;
 pub type CallbackList = Arc<Mutex<HashMap<String, EventCallback>>>;
 
@@ -26,11 +30,14 @@ pub struct ExternalManager {
     event_tx: Sender<Event>,
     callbacks: CallbackList,
     plugins: Vec<ExtPlugin>,
+    window_active: AtomicBool,
 }
 
 struct ExtPlugin {
     library: Library,
+    initialize: Option<Symbol<'static, extern "C" fn()>>,
     mainloop: Option<Symbol<'static, extern "C" fn()>>,
+    dxreset: Option<Symbol<'static, extern "C" fn()>>,
 }
 
 impl ExternalManager {
@@ -47,6 +54,7 @@ pub fn initialize(event_tx: Sender<Event>, manager: Arc<Mutex<Manager>>) -> Call
         event_tx,
         callbacks: callbacks.clone(),
         plugins: Vec::new(),
+        window_active: AtomicBool::new(true),
     };
 
     let external = unsafe {
@@ -56,28 +64,26 @@ pub fn initialize(event_tx: Sender<Event>, manager: Arc<Mutex<Manager>>) -> Call
 
     if let Ok(rd) = std::fs::read_dir("./cef/plugins") {
         for dir in rd.filter_map(|dir| dir.ok()) {
-            println!("{:?}", dir);
-
             if let Some(ext) = dir.path().extension() {
                 if ext.to_string_lossy() == "dll" {
                     match Library::new(dir.path().as_os_str()) {
                         Ok(mut lib) => unsafe {
-                            if let Ok(func) = lib.get::<extern "C" fn()>(b"cef_initialize") {
-                                func();
+                            let library: &'static mut Library = &mut *(&mut lib as *mut Library);
 
-                                let library: &'static mut Library =
-                                    &mut *(&mut lib as *mut Library);
+                            let mainloop =
+                                library.get::<extern "C" fn()>(b"cef_samp_mainloop").ok();
 
-                                let mainloop =
-                                    library.get::<extern "C" fn()>(b"cef_samp_mainloop").ok();
+                            let dxreset = library.get::<extern "C" fn()>(b"cef_dxreset").ok();
+                            let initialize = library.get::<extern "C" fn()>(b"cef_initialize").ok();
 
-                                let plugin = ExtPlugin {
-                                    library: lib,
-                                    mainloop,
-                                };
+                            let plugin = ExtPlugin {
+                                library: lib,
+                                initialize,
+                                mainloop,
+                                dxreset,
+                            };
 
-                                external.plugins.push(plugin);
-                            }
+                            external.plugins.push(plugin);
                         },
 
                         Err(e) => println!("{:?}", e),
@@ -97,6 +103,32 @@ pub fn call_mainloop() {
                 func();
             }
         }
+    }
+}
+
+pub fn call_dxreset() {
+    if let Some(ext) = ExternalManager::get() {
+        for plugin in &ext.plugins {
+            if let Some(func) = plugin.dxreset.as_ref() {
+                func();
+            }
+        }
+    }
+}
+
+pub fn call_initialize() {
+    if let Some(ext) = ExternalManager::get() {
+        for plugin in &ext.plugins {
+            if let Some(func) = plugin.initialize.as_ref() {
+                func();
+            }
+        }
+    }
+}
+
+pub fn window_active(active: bool) {
+    if let Some(ext) = ExternalManager::get() {
+        ext.window_active.store(active, Ordering::SeqCst);
     }
 }
 
@@ -216,5 +248,40 @@ pub unsafe extern "C" fn cef_try_focus_browser(browser: u32) -> bool {
                 false
             }
         })
+        .unwrap_or(false)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn cef_browser_exists(browser: u32) -> bool {
+    ExternalManager::get()
+        .map(|ext| {
+            let manager = ext.manager.lock().unwrap();
+            manager.browser_exists(browser)
+        })
+        .unwrap_or(false)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn cef_browser_ready(browser: u32) -> bool {
+    ExternalManager::get()
+        .map(|ext| {
+            let manager = ext.manager.lock().unwrap();
+            manager.browser_ready(browser)
+        })
+        .unwrap_or(false)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn cef_on_browser_ready(browser: u32, callback: BrowserReadyCallback) {
+    if let Some(ext) = ExternalManager::get() {
+        let mut manager = ext.manager.lock().unwrap();
+        manager.add_browser_ready(browser, callback);
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn cef_gta_window_active() -> bool {
+    ExternalManager::get()
+        .map(|ext| ext.window_active.load(Ordering::SeqCst))
         .unwrap_or(false)
 }

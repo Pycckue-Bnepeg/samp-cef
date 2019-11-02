@@ -61,7 +61,11 @@ fn on_reset(_: &mut IDirect3DDevice9, reset_flag: u8) {
     let mut manager = render.manager.lock().unwrap();
 
     match reset_flag {
-        RESET_FLAG_PRE => manager.on_lost_device(),
+        RESET_FLAG_PRE => {
+            manager.on_lost_device();
+            crate::external::call_dxreset();
+        }
+
         RESET_FLAG_POST => {
             manager.on_reset_device();
             let rect = crate::utils::client_rect();

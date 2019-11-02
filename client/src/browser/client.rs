@@ -31,6 +31,8 @@ struct DrawData {
     rects: DirtyRects,
     popup_buffer: Vec<u8>,
     popup_rect: cef_rect_t,
+    popup_show: bool,
+    popup_was_before: bool,
     changed: bool,
 }
 
@@ -53,6 +55,8 @@ impl DrawData {
                 height: 0,
             },
 
+            popup_show: false,
+            popup_was_before: false,
             changed: false,
         }
     }
@@ -108,7 +112,9 @@ impl LifespanHandler for WebClient {
 
     fn on_before_close(self: &Arc<Self>, _: Browser) {
         let mut browser = self.browser.lock().unwrap();
-        browser.take();
+        if let Some(browser) = browser.take() {
+            //            browser.host().close_dev_tools();
+        }
     }
 }
 
@@ -230,6 +236,16 @@ impl RenderHandler for WebClient {
         *rect = texture.rect();
     }
 
+    fn on_popup_show(self: &Arc<Self>, _: Browser, show: bool) {
+        let mut draw_data = self.draw_data.lock().unwrap();
+        draw_data.popup_show = show;
+
+        if !show {
+            draw_data.popup_buffer.clear();
+            draw_data.popup_was_before = true;
+        }
+    }
+
     fn on_popup_size(self: &Arc<Self>, _: Browser, rect: &cef_rect_t) {
         let mut draw_data = self.draw_data.lock().unwrap();
 
@@ -241,7 +257,7 @@ impl RenderHandler for WebClient {
     }
 
     fn on_paint(
-        self: &Arc<Self>, _: Browser, paint_type: PaintElement, dirty_rects: DirtyRects,
+        self: &Arc<Self>, _: Browser, paint_type: PaintElement, mut dirty_rects: DirtyRects,
         buffer: &[u8], width: usize, height: usize,
     ) {
         {
@@ -257,6 +273,12 @@ impl RenderHandler for WebClient {
                 }
 
                 PaintElement::View => {
+                    if draw_data.popup_was_before && !draw_data.popup_show {
+                        draw_data.popup_was_before = false;
+                        dirty_rects.count += 1;
+                        dirty_rects.rects.push(draw_data.popup_rect.clone());
+                    }
+
                     draw_data.rects = dirty_rects;
                     draw_data.buffer = buffer.as_ptr();
                     draw_data.height = height;
@@ -340,7 +362,6 @@ impl WebClient {
         }
     }
 
-    // TODO: показывать всплывающие окна
     pub fn update_view(&self) {
         if self.hidden.load(Ordering::SeqCst) {
             self.unlock();
@@ -351,42 +372,54 @@ impl WebClient {
             let mut texture = self.view.lock().unwrap();
             let mut draw_data = self.draw_data.lock().unwrap();
 
-            if draw_data.buffer.is_null() {
-                self.unlock();
-                return;
-            }
-
-            if draw_data.height == 0 || draw_data.width == 0 {
-                self.unlock();
-                return;
-            }
-
-            if !draw_data.changed {
-                self.unlock();
-                return;
-            }
-
             let size = texture.rect();
-            if size.height as usize != draw_data.height || size.width as usize != draw_data.width {
-                self.unlock();
-                return;
-            }
 
-            let bytes = unsafe {
-                std::slice::from_raw_parts(draw_data.buffer, draw_data.width * draw_data.height * 4)
-            };
-
-            if draw_data.rects.count > 0 {
-                let rect = unsafe { &draw_data.rects.rects[0] };
-                if rect.width > size.width || rect.height > size.height {
+            if draw_data.changed {
+                if draw_data.buffer.is_null() {
                     self.unlock();
                     return;
                 }
+
+                if draw_data.height == 0 || draw_data.width == 0 {
+                    self.unlock();
+                    return;
+                }
+
+                if size.height as usize != draw_data.height
+                    || size.width as usize != draw_data.width
+                {
+                    self.unlock();
+                    return;
+                }
+
+                let bytes = unsafe {
+                    std::slice::from_raw_parts(
+                        draw_data.buffer,
+                        draw_data.width * draw_data.height * 4,
+                    )
+                };
+
+                if draw_data.rects.count > 0 {
+                    let rect = unsafe { &draw_data.rects.rects[0] };
+                    if rect.width > size.width || rect.height > size.height {
+                        self.unlock();
+                        return;
+                    }
+                }
+
+                texture.update_texture(&bytes, draw_data.rects.as_slice());
             }
 
-            texture.update_texture(&bytes, draw_data.rects.as_slice());
+            if draw_data.popup_show {
+                if draw_data.popup_rect.x + draw_data.popup_rect.width >= size.width
+                    || draw_data.popup_rect.y + draw_data.popup_rect.height >= size.height
+                {
+                    self.unlock();
+                    return;
+                }
 
-            draw_data.changed = false;
+                texture.update_popup(&draw_data.popup_buffer, &draw_data.popup_rect);
+            }
         }
 
         self.unlock();

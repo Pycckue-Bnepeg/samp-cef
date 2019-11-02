@@ -48,6 +48,8 @@ pub enum Event {
     EmitEventOnServer(String, String),
     BrowserCreated(u32, i32),
 
+    CefInitialize,
+
     BlockInput(bool),
     Terminate,
 }
@@ -55,6 +57,8 @@ pub enum Event {
 pub struct App {
     connected: bool,
     window_focused: bool,
+    cef_ready: bool,
+    samp_ready: bool,
 
     manager: Arc<Mutex<Manager>>,
     network: Option<NetworkClient>,
@@ -85,6 +89,8 @@ impl App {
 
         App {
             connected: false,
+            cef_ready: false,
+            samp_ready: false,
             window_focused: true,
             network: None,
             manager,
@@ -149,12 +155,20 @@ pub fn uninitialize() {
 }
 
 fn shitty() {
-    //    mainloop();
+    if let Some(app) = App::get() {
+        if !app.samp_ready {
+            app.samp_ready = true;
+        }
+    }
 }
 
 // inside GTA thread
 pub fn mainloop() {
     if let Some(app) = App::get() {
+        if !app.samp_ready {
+            return;
+        }
+
         if !app.connected && client_api::samp::gamestate() == Gamestate::Connected {
             if let Some(mut addr) = NetGame::get().addr() {
                 addr.set_port(CEF_SERVER_PORT);
@@ -208,8 +222,6 @@ pub fn mainloop() {
                 Event::HideBrowser(id, hide) => {
                     let manager = app.manager.lock().unwrap();
                     manager.hide_browser(id, hide);
-
-                    println!("HideBrowser({}, {})", id, hide,);
                 }
 
                 Event::FocusBrowser(id, focus) => {
@@ -219,11 +231,6 @@ pub fn mainloop() {
 
                     drop(manager);
                     client_api::samp::inputs::show_cursor(show_cursor);
-
-                    println!(
-                        "FocusBrowser({}, {}). need cursor? {}",
-                        id, focus, show_cursor
-                    );
                 }
 
                 Event::EmitEvent(event, list) => {
@@ -243,13 +250,23 @@ pub fn mainloop() {
                         let event = Event::BrowserCreated(id, code);
                         network.send(event);
                     }
+
+                    let manager = app.manager.lock().unwrap();
+                    manager.call_browser_ready(id);
+                }
+
+                Event::CefInitialize => {
+                    app.cef_ready = true;
+                    crate::external::call_initialize();
                 }
 
                 _ => (),
             }
         }
 
-        crate::external::call_mainloop();
+        if app.cef_ready {
+            crate::external::call_mainloop();
+        }
     }
 }
 
@@ -309,6 +326,7 @@ fn win_event(msg: UINT, wparam: WPARAM, lparam: LPARAM) -> bool {
                 let status = (wparam & 0xFFFF) as u16;
                 let active = status != WA_INACTIVE;
 
+                crate::external::window_active(active);
                 app.window_focused = active;
                 manager.set_corrupted(!active);
 

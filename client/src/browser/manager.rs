@@ -1,6 +1,6 @@
 use crate::app::Event;
 use crate::browser::client::WebClient;
-use crate::external::CallbackList;
+use crate::external::{BrowserReadyCallback, CallbackList};
 
 use cef::handlers::render::PaintElement;
 use cef::types::list::{List, ValueType};
@@ -28,6 +28,7 @@ struct Mouse {
 
 pub struct Manager {
     clients: HashMap<u32, Arc<WebClient>>,
+    ready_callbacks: HashMap<u32, Vec<BrowserReadyCallback>>,
     focused: Option<u32>,
     focused_queue: VecDeque<u32>,
     input_corrupted: bool,
@@ -41,7 +42,7 @@ pub struct Manager {
 impl Manager {
     pub fn new(event_tx: Sender<Event>) -> Manager {
         // init cef
-        crate::browser::cef::initialize();
+        crate::browser::cef::initialize(event_tx.clone());
 
         let mut keys = HashMap::new();
 
@@ -53,6 +54,7 @@ impl Manager {
 
         Manager {
             clients: HashMap::new(),
+            ready_callbacks: HashMap::new(),
             view_height: 0,
             view_width: 0,
             input_corrupted: false,
@@ -288,6 +290,36 @@ impl Manager {
             self.do_not_draw = donot;
             self.temporary_hide(donot);
         }
+    }
+
+    pub fn browser_exists(&self, browser_id: u32) -> bool {
+        self.clients.contains_key(&browser_id)
+    }
+
+    pub fn browser_ready(&self, browser_id: u32) -> bool {
+        self.clients
+            .get(&browser_id)
+            .and_then(|client| client.browser())
+            .map(|browser| !browser.is_loading())
+            .unwrap_or(false)
+    }
+
+    pub fn call_browser_ready(&self, browser_id: u32) {
+        self.ready_callbacks
+            .get(&browser_id)
+            .map(|callbacks| callbacks.iter().for_each(|cb| cb(browser_id)));
+    }
+
+    pub fn add_browser_ready(&mut self, browser_id: u32, callback: BrowserReadyCallback) {
+        if self.browser_ready(browser_id) {
+            callback(browser_id);
+            return;
+        }
+
+        self.ready_callbacks
+            .entry(browser_id)
+            .or_insert_with(|| Vec::new())
+            .push(callback);
     }
 
     fn temporary_hide(&self, hide: bool) {

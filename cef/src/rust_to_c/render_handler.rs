@@ -67,9 +67,10 @@ unsafe extern "stdcall" fn get_screen_info<I: RenderHandler>(
 unsafe extern "stdcall" fn on_popup_show<I: RenderHandler>(
     this: *mut cef_render_handler_t, browser: *mut cef_browser_t, show: ::std::os::raw::c_int,
 ) {
-    //    let obj: &mut Wrapper<_, I> = Wrapper::unwrap(this);
-    (*browser).base.release.unwrap()(&mut (*browser).base);
-    // let _ = obj.interface.on_popup_show();
+    let obj: &mut Wrapper<_, I> = Wrapper::unwrap(this);
+    let browser = Browser::from_raw(browser);
+    let show = show == 1;
+    obj.interface.on_popup_show(browser, show);
 }
 
 unsafe extern "stdcall" fn on_popup_size<I: RenderHandler>(

@@ -3,13 +3,18 @@ use libloading::{Library, Symbol};
 use std::ffi::{CStr, CString};
 use std::os::raw::{c_char, c_int};
 
-pub use cef::types::{list::List, string::CefString};
+pub use cef::types::{
+    list::{List, ValueType},
+    string::CefString,
+};
+
 pub use cef_sys::cef_list_value_t;
 pub use cef_sys::cef_string_userfree_t;
 
 pub const CEF_EVENT_CONTINUE: c_int = 0;
 pub const CEF_EVENT_BREAK: c_int = 1;
 
+pub type BrowserReadyCallback = extern "C" fn(u32);
 pub type EventCallback = extern "C" fn(*const c_char, *mut cef_list_value_t) -> c_int;
 
 pub struct CefApi {
@@ -25,10 +30,15 @@ pub struct Symbols {
     focus_browser: Symbol<'static, extern "C" fn(id: u32, focus: bool)>,
     create_list: Symbol<'static, extern "C" fn() -> *mut cef_list_value_t>,
     emit_event: Symbol<'static, extern "C" fn(event: *const c_char, args: *mut cef_list_value_t)>,
-
     subscribe: Symbol<'static, extern "C" fn(event: *const c_char, callback: EventCallback)>,
     input_available: Symbol<'static, extern "C" fn(id: u32) -> bool>,
     try_focus_browser: Symbol<'static, extern "C" fn(id: u32) -> bool>,
+    browser_exists: Symbol<'static, extern "C" fn(id: u32) -> bool>,
+    browser_ready: Symbol<'static, extern "C" fn(id: u32) -> bool>,
+    on_browser_ready:
+        Symbol<'static, extern "C" fn(id: u32, callback: BrowserReadyCallback) -> bool>,
+
+    window_active: Symbol<'static, extern "C" fn() -> bool>,
     //    is_ready: Symbol<'static, extern "C" fn() -> bool>,
 }
 
@@ -64,6 +74,10 @@ impl CefApi {
                     subscribe: library.get(b"cef_subscribe").unwrap(),
                     input_available: library.get(b"cef_input_available").unwrap(),
                     try_focus_browser: library.get(b"cef_try_focus_browser").unwrap(),
+                    browser_exists: library.get(b"cef_browser_exists").unwrap(),
+                    browser_ready: library.get(b"cef_browser_ready").unwrap(),
+                    on_browser_ready: library.get(b"cef_on_browser_ready").unwrap(),
+                    window_active: library.get(b"cef_gta_window_active").unwrap(),
                 }
             };
 
@@ -118,5 +132,21 @@ impl CefApi {
 
     pub fn try_focus_browser(&self, browser: u32) -> bool {
         (self.funcs.try_focus_browser)(browser)
+    }
+
+    pub fn browser_exists(&self, browser: u32) -> bool {
+        (self.funcs.browser_exists)(browser)
+    }
+
+    pub fn browser_ready(&self, browser: u32) -> bool {
+        (self.funcs.browser_ready)(browser)
+    }
+
+    pub fn on_browser_ready(&self, browser: u32, callback: BrowserReadyCallback) {
+        (self.funcs.on_browser_ready)(browser, callback);
+    }
+
+    pub fn is_window_active(&self) -> bool {
+        (self.funcs.window_active)()
     }
 }

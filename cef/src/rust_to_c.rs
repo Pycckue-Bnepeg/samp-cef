@@ -5,6 +5,7 @@ use std::sync::atomic::{self, AtomicUsize, Ordering};
 use std::sync::Arc;
 
 pub mod app;
+pub mod browser_process_handler;
 pub mod client;
 pub mod context_menu_handler;
 pub mod lifespan_handler;

@@ -138,6 +138,40 @@ impl View {
         }
     }
 
+    pub fn update_popup(&mut self, bytes: &[u8], popup_rect: &cef_rect_t) {
+        unsafe {
+            if let Some(surface) = self.surface.as_mut().map(|ptr| ptr.as_mut()) {
+                let mut rect = D3DLOCKED_RECT {
+                    Pitch: 0,
+                    pBits: null_mut(),
+                };
+
+                if (*surface).LockRect(&mut rect, std::ptr::null(), 0) == D3D_OK {
+                    let mut surface_desc: D3DSURFACE_DESC = std::mem::zeroed();
+
+                    surface.GetDesc(&mut surface_desc);
+
+                    let bits = rect.pBits as *mut u8;
+                    let pitch = rect.Pitch as usize;
+
+                    let popup_pitch = popup_rect.width * 4;
+
+                    for y in 0..popup_rect.height {
+                        let source_index = y * popup_pitch;
+                        let dest_index = (y + popup_rect.y) * pitch as i32 + popup_rect.x * 4;
+
+                        let surface_data = bits.add(dest_index as usize);
+                        let new_data = bytes.as_ptr().add(source_index as usize);
+
+                        std::ptr::copy(new_data, surface_data, popup_pitch as usize);
+                    }
+
+                    (*surface).UnlockRect();
+                }
+            }
+        }
+    }
+
     pub fn rect(&self) -> cef_rect_t {
         cef_rect_t {
             x: 0,

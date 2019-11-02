@@ -48,6 +48,12 @@ impl Browser {
 
         Frame::from_raw(frame)
     }
+
+    pub fn is_loading(&self) -> bool {
+        let is_loading = self.inner.is_loading.unwrap();
+
+        unsafe { is_loading(self.inner.get_mut()) == 1 }
+    }
 }
 
 impl Clone for Browser {
@@ -125,6 +131,14 @@ impl BrowserHost {
                 settings,
                 &cef_point_t { x: 0, y: 0 },
             );
+        }
+    }
+
+    pub fn close_dev_tools(&self) {
+        let dev_tools = self.inner.close_dev_tools.unwrap();
+
+        unsafe {
+            dev_tools(self.inner.get_mut());
         }
     }
 

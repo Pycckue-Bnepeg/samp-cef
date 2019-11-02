@@ -44,6 +44,12 @@ impl V8Context {
         }
     }
 
+    pub fn is_same(&self, another: &V8Context) -> bool {
+        let is_same = self.inner.is_same.unwrap();
+
+        unsafe { is_same(self.inner.get_mut(), another.clone().inner.get_mut()) == 1 }
+    }
+
     pub fn current_context() -> V8Context {
         let ptr = unsafe { cef_sys::cef_v8context_get_current_context() };
 
@@ -303,6 +309,12 @@ impl V8Value {
             .map(|get_val| unsafe { get_val(self.inner.get_mut(), index as _) })
             .map(|raw| V8Value::from_raw(raw))
             .unwrap_or_else(|| V8Value::new_undefined())
+    }
+
+    pub fn is_same(&self, other: &V8Value) -> bool {
+        let is_same = self.inner.is_same.unwrap();
+
+        unsafe { is_same(self.inner.get_mut(), other.inner.get_mut()) == 1 }
     }
 }
 
