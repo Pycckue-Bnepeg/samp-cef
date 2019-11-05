@@ -7,6 +7,7 @@ use std::sync::Arc;
 pub mod app;
 pub mod browser;
 pub mod client;
+pub mod command_line;
 pub mod handlers;
 pub mod process_message;
 pub mod ref_counted;

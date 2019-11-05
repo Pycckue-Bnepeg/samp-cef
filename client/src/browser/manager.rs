@@ -10,6 +10,7 @@ use cef_sys::{cef_event_flags_t, cef_key_event_t, cef_mouse_button_type_t, cef_m
 use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
 
+use client_api::gta::rw::rwcore::{RwRaster, RwTexture};
 use crossbeam_channel::Sender;
 
 #[derive(Debug, Clone, Copy, Hash, Ord, PartialOrd, Eq, PartialEq)]
@@ -78,6 +79,20 @@ impl Manager {
         }
     }
 
+    pub fn create_browser_on_texture(
+        &mut self, id: u32, cbs: CallbackList, url: &str, raster: &mut RwRaster,
+    ) {
+        let client = WebClient::new_extern(id, cbs, self.event_tx.clone(), raster);
+        crate::browser::cef::create_browser(client.clone(), url);
+
+        if let Some(client) = self.clients.insert(id, client) {
+            client
+                .browser()
+                .map(|br| br.host())
+                .map(|host| host.close_browser(true));
+        }
+    }
+
     pub fn draw(&self) {
         if self.do_not_draw {
             return;
@@ -99,6 +114,13 @@ impl Manager {
                 client.draw();
             }
         }
+    }
+
+    pub fn raster(&self, id: u32) -> *mut RwTexture {
+        self.clients
+            .get(&id)
+            .map(|cl| cl.raster())
+            .unwrap_or(std::ptr::null_mut())
     }
 
     pub fn on_lost_device(&self) {

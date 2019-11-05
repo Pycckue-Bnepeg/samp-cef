@@ -2,6 +2,7 @@ use winapi::um::libloaderapi::GetModuleHandleA;
 
 use cef::app::App;
 use cef::client::Client;
+use cef::command_line::CommandLine;
 use cef::handlers::browser_process::BrowserProcessHandler;
 use cef::handlers::render_process::RenderProcessHandler;
 use cef::types::string::CefString;
@@ -29,6 +30,12 @@ impl App for DefaultApp {
 
     fn browser_process_handler(self: &Arc<Self>) -> Option<Arc<Self::BrowserProcessHandler>> {
         Some(self.clone())
+    }
+
+    fn on_before_command_line_processing(
+        self: &Arc<Self>, process_type: CefString, command_line: CommandLine,
+    ) {
+        command_line.append_switch_with_value("autoplay-policy", "no-user-gesture-required");
     }
 }
 

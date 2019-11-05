@@ -22,6 +22,7 @@ use crate::app::Event;
 use crate::browser::view::View;
 use crate::external::{CallbackList, EXTERNAL_BREAK};
 use cef::handlers::load::LoadHandler;
+use client_api::gta::rw::rwcore::{RwRaster, RwTexture};
 use std::ffi::CString;
 
 struct DrawData {
@@ -329,9 +330,36 @@ impl WebClient {
         Arc::new(client)
     }
 
+    pub fn new_extern(
+        id: u32, cbs: CallbackList, event_tx: Sender<Event>, raster: &mut RwRaster,
+    ) -> Arc<WebClient> {
+        let view = View::from_extern(raster);
+
+        let client = WebClient {
+            hidden: AtomicBool::new(false),
+            view: Mutex::new(view),
+            draw_data: Mutex::new(DrawData::new()),
+            browser: Mutex::new(None),
+            rendered: (Mutex::new(false), Condvar::new()),
+            callbacks: cbs,
+            event_tx,
+            id,
+        };
+
+        Arc::new(client)
+    }
+
     pub fn draw(&self) {
         let mut texture = self.view.lock().unwrap();
         texture.draw();
+    }
+
+    pub fn raster(&self) -> *mut RwTexture {
+        let view = self.view.lock().unwrap();
+        view.rw_texture
+            .as_ref()
+            .map(|a| a.as_ptr())
+            .unwrap_or(std::ptr::null_mut())
     }
 
     pub fn on_lost_device(&self) {
@@ -352,10 +380,16 @@ impl WebClient {
     }
 
     pub fn resize(&self, width: usize, height: usize) {
-        let resized_view = View::new(client_api::gta::d3d9::device(), width, height);
         let mut view = self.view.lock().unwrap();
-        let browser = self.browser.lock().unwrap();
+
+        if view.is_extern() {
+            return;
+        }
+
+        let resized_view = View::new(client_api::gta::d3d9::device(), width, height);
         *view = resized_view;
+
+        let browser = self.browser.lock().unwrap();
 
         if let Some(host) = browser.as_ref().map(|brw| brw.host()) {
             host.was_resized();
