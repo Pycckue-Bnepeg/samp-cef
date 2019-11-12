@@ -12,3 +12,6 @@ impl_into_packet!(BlockInput, PacketId::BLOCK_INPUT);
 impl_into_packet!(BrowserCreated, PacketId::BROWSER_CREATED);
 impl_into_packet!(Got, PacketId::GOT);
 impl_into_packet!(OpenConnection, PacketId::OPEN_CONNECTION);
+impl_into_packet!(CreateExternalBrowser<'a>, PacketId::CREATE_EXTERNAL_BROWSER);
+impl_into_packet!(AppendToObject, PacketId::APPEND_TO_OBJECT);
+impl_into_packet!(RemoveFromObject, PacketId::REMOVE_FROM_OBJECT);

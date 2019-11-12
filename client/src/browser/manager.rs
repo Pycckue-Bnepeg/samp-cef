@@ -1,4 +1,4 @@
-use crate::app::Event;
+use crate::app::{Event, ExternalBrowser};
 use crate::browser::client::WebClient;
 use crate::external::{BrowserReadyCallback, CallbackList};
 
@@ -11,6 +11,7 @@ use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
 
 use client_api::gta::rw::rwcore::{RwRaster, RwTexture};
+
 use crossbeam_channel::Sender;
 
 #[derive(Debug, Clone, Copy, Hash, Ord, PartialOrd, Eq, PartialEq)]
@@ -27,9 +28,20 @@ struct Mouse {
     keys: HashMap<MouseKey, bool>,
 }
 
+#[derive(Clone)]
+pub struct ExternalClient {
+    pub browser: Arc<WebClient>,
+    pub object_ids: Vec<i32>,
+    pub texture: String,
+    pub scale: i32,
+    pub origin_texture: *mut RwTexture,
+    pub prev_replacement: *mut RwTexture,
+}
+
 pub struct Manager {
     clients: HashMap<u32, Arc<WebClient>>,
     ready_callbacks: HashMap<u32, Vec<BrowserReadyCallback>>,
+    clients_on_txd: Vec<ExternalClient>,
     focused: Option<u32>,
     focused_queue: VecDeque<u32>,
     input_corrupted: bool,
@@ -56,6 +68,7 @@ impl Manager {
         Manager {
             clients: HashMap::new(),
             ready_callbacks: HashMap::new(),
+            clients_on_txd: Vec::new(),
             view_height: 0,
             view_width: 0,
             input_corrupted: false,
@@ -70,26 +83,63 @@ impl Manager {
     pub fn create_browser(&mut self, id: u32, cbs: CallbackList, url: &str) {
         let client = WebClient::new(id, cbs, self.event_tx.clone());
         crate::browser::cef::create_browser(client.clone(), url);
-
-        if let Some(client) = self.clients.insert(id, client) {
-            client
-                .browser()
-                .map(|br| br.host())
-                .map(|host| host.close_browser(true));
-        }
+        self.append_client(id, client);
     }
 
-    pub fn create_browser_on_texture(
-        &mut self, id: u32, cbs: CallbackList, url: &str, raster: &mut RwRaster,
-    ) {
-        let client = WebClient::new_extern(id, cbs, self.event_tx.clone(), raster);
-        crate::browser::cef::create_browser(client.clone(), url);
+    pub fn create_browser_on_texture(&mut self, ext: &ExternalBrowser, cbs: CallbackList) {
+        let client = WebClient::new_extern(ext.id, cbs, self.event_tx.clone());
+        crate::browser::cef::create_browser(client.clone(), &ext.url);
+        self.append_client(ext.id, client.clone());
 
+        let ext_client = ExternalClient {
+            browser: client,
+            texture: ext.texture.clone(),
+            object_ids: Vec::new(),
+            scale: ext.scale,
+            origin_texture: std::ptr::null_mut(),
+            prev_replacement: std::ptr::null_mut(),
+        };
+
+        self.clients_on_txd.push(ext_client);
+    }
+
+    pub fn browser_append_to_object(&mut self, id: u32, object_id: i32) {
+        println!(
+            "BrowserManager::browser_append_to_object({}, {})",
+            id, object_id
+        );
+
+        self.clients_on_txd
+            .iter_mut()
+            .filter(|cl| cl.browser.id() == id)
+            .for_each(|cl| cl.object_ids.push(object_id));
+    }
+
+    pub fn browser_remove_from_object(&mut self, id: u32, object_id: i32) {
+        println!(
+            "BrowserManager::browser_remove_from_object({}, {})",
+            id, object_id
+        );
+
+        self.clients_on_txd
+            .iter_mut()
+            .filter(|cl| cl.browser.id() == id)
+            .for_each(|cl| {
+                let mut idx = 0;
+
+                while idx < cl.object_ids.len() {
+                    if cl.object_ids[idx] == object_id {
+                        cl.object_ids.remove(idx);
+                    } else {
+                        idx += 1;
+                    }
+                }
+            });
+    }
+
+    fn append_client(&mut self, id: u32, client: Arc<WebClient>) {
         if let Some(client) = self.clients.insert(id, client) {
-            client
-                .browser()
-                .map(|br| br.host())
-                .map(|host| host.close_browser(true));
+            self.internal_close(client, true);
         }
     }
 
@@ -116,16 +166,16 @@ impl Manager {
         }
     }
 
-    pub fn raster(&self, id: u32) -> *mut RwTexture {
-        self.clients
-            .get(&id)
-            .map(|cl| cl.raster())
-            .unwrap_or(std::ptr::null_mut())
-    }
-
-    pub fn on_lost_device(&self) {
+    pub fn on_lost_device(&mut self) {
         for (_, browser) in &self.clients {
             browser.on_lost_device();
+
+            if browser.is_extern() {
+                self.clients_on_txd
+                    .iter_mut()
+                    .filter(|client| client.browser.id() == browser.id())
+                    .for_each(|client| client.origin_texture = std::ptr::null_mut());
+            }
         }
     }
 
@@ -149,7 +199,9 @@ impl Manager {
         self.view_height = height;
 
         for (_, browser) in &self.clients {
-            browser.resize(width, height);
+            if !browser.is_extern() {
+                browser.resize(width, height);
+            }
         }
     }
 
@@ -251,10 +303,7 @@ impl Manager {
 
     pub fn close_browser(&mut self, id: u32, force_close: bool) {
         if let Some(client) = self.clients.remove(&id) {
-            client
-                .browser()
-                .map(|br| br.host())
-                .map(|host| host.close_browser(force_close));
+            self.internal_close(client, force_close);
         }
     }
 
@@ -344,6 +393,10 @@ impl Manager {
             .push(callback);
     }
 
+    pub fn external_browsers(&mut self) -> &mut [ExternalClient] {
+        &mut self.clients_on_txd
+    }
+
     fn temporary_hide(&self, hide: bool) {
         for client in self.clients.values() {
             if hide {
@@ -352,5 +405,22 @@ impl Manager {
                 client.restore_hide_status();
             }
         }
+    }
+
+    fn internal_close(&mut self, client: Arc<WebClient>, force_close: bool) {
+        if client.is_extern() {
+            if let Some(idx) = self
+                .clients_on_txd
+                .iter()
+                .position(|cl| cl.browser.id() == client.id())
+            {
+                self.clients_on_txd.remove(idx);
+            }
+        }
+
+        client
+            .browser()
+            .map(|br| br.host())
+            .map(|host| host.close_browser(force_close));
     }
 }

@@ -223,6 +223,38 @@ impl CefPlugin {
         Ok(has_plugin)
     }
 
+    #[native(name = "cef_create_ext_browser")]
+    fn create_external_browser(
+        &mut self, _: &Amx, player_id: i32, browser_id: i32, texture: AmxString, url: AmxString,
+        scale: i32,
+    ) -> AmxResult<bool> {
+        let texture = texture.to_string();
+        let url = url.to_string();
+
+        let mut server = self.server.lock().unwrap();
+        server.create_external_browser(player_id, browser_id, texture, url, scale);
+
+        Ok(true)
+    }
+
+    #[native(name = "cef_append_to_object")]
+    fn append_to_object(
+        &mut self, _: &Amx, player_id: i32, browser_id: i32, object_id: i32,
+    ) -> AmxResult<bool> {
+        let mut server = self.server.lock().unwrap();
+        server.append_to_object(player_id, browser_id, object_id);
+        Ok(true)
+    }
+
+    #[native(name = "cef_remove_from_object")]
+    fn remove_from_object(
+        &mut self, _: &Amx, player_id: i32, browser_id: i32, object_id: i32,
+    ) -> AmxResult<bool> {
+        let mut server = self.server.lock().unwrap();
+        server.remove_from_object(player_id, browser_id, object_id);
+        Ok(true)
+    }
+
     // utils
     fn notify_timeout(&mut self) {
         let mut i = 0;
@@ -311,6 +343,9 @@ initialize_plugin!(
         CefPlugin::hide_browser,
         CefPlugin::browser_listen_events,
         CefPlugin::is_player_has_plugin,
+        CefPlugin::create_external_browser,
+        CefPlugin::append_to_object,
+        CefPlugin::remove_from_object,
     ],
     {
         samp::plugin::enable_process_tick();

@@ -1,230 +1,139 @@
-use std::ptr::{null_mut, NonNull};
-
-use d3dx9::d3dx9core::{D3DXCreateSprite, ID3DXSprite, LPD3DXSPRITE};
-use d3dx9::d3dx9math::D3DXVECTOR3;
-
 use cef_sys::cef_rect_t;
-
-use winapi::shared::d3d9::*;
-use winapi::shared::d3d9types::*;
-
 use client_api::gta::rw::rwcore::{RwRaster, RwTexture};
+use d3dx9::d3dx9core::{D3DXCreateSprite, ID3DXSprite};
+use d3dx9::d3dx9math::D3DXVECTOR3;
+use std::ops::{Deref, DerefMut};
+use std::ptr::NonNull;
+use winapi::shared::d3d9::{IDirect3DDevice9, IDirect3DSurface9, IDirect3DTexture9};
+use winapi::shared::d3d9types::{
+    D3DFMT_A8R8G8B8, D3DLOCKED_RECT, D3DPOOL_MANAGED, D3DSURFACE_DESC,
+};
 
 const D3D_OK: i32 = 0;
 const D3DXSPRITE_ALPHABLEND: u32 = 16;
 
-pub struct View {
+pub struct D3LockGuard<'a> {
+    bytes: &'a mut [u8],
+    pub pitch: usize,
+    surface: NonNull<IDirect3DSurface9>,
+}
+
+impl D3LockGuard<'_> {
+    pub fn bytes_as_mut_ptr(&mut self) -> *mut u8 {
+        self.bytes.as_mut_ptr()
+    }
+}
+
+impl Deref for D3LockGuard<'_> {
+    type Target = [u8];
+
+    fn deref(&self) -> &[u8] {
+        self.bytes
+    }
+}
+
+impl DerefMut for D3LockGuard<'_> {
+    fn deref_mut(&mut self) -> &mut [u8] {
+        self.bytes
+    }
+}
+
+impl Drop for D3LockGuard<'_> {
+    fn drop(&mut self) {
+        unsafe {
+            self.surface.as_mut().UnlockRect();
+        }
+    }
+}
+
+pub struct D3Container {
     sprite: Option<NonNull<ID3DXSprite>>,
     texture: Option<NonNull<IDirect3DTexture9>>,
     surface: Option<NonNull<IDirect3DSurface9>>,
-    pub rw_texture: Option<NonNull<RwTexture>>,
-    rw_raster: Option<NonNull<RwRaster>>,
-    width: usize,
-    height: usize,
-    extern_texture: bool,
 }
 
-impl View {
-    pub fn new(device: &mut IDirect3DDevice9, width: usize, height: usize) -> View {
-        let sprite = Self::create_sprite(device);
-        let texture = Self::create_texture(device, width, height);
-        let mut surface: *mut IDirect3DSurface9 = std::ptr::null_mut();
+impl D3Container {
+    pub fn new(device: &mut IDirect3DDevice9, width: usize, height: usize) -> D3Container {
+        let mut sprite = std::ptr::null_mut();
+        let mut texture = std::ptr::null_mut();
+        let mut surface = std::ptr::null_mut();
 
         unsafe {
+            D3DXCreateSprite(device, &mut sprite);
+
+            device.CreateTexture(
+                width as _,
+                height as _,
+                1,
+                0,
+                D3DFMT_A8R8G8B8,
+                D3DPOOL_MANAGED,
+                &mut texture,
+                std::ptr::null_mut(),
+            );
+
             (*texture).GetSurfaceLevel(0, &mut surface);
         }
 
-        View {
+        D3Container {
             sprite: NonNull::new(sprite),
             texture: NonNull::new(texture),
             surface: NonNull::new(surface),
-            rw_texture: None,
-            rw_raster: None,
-            extern_texture: false,
-            width,
-            height,
         }
-    }
-
-    pub fn from_extern(origin_raster: &mut RwRaster) -> View {
-        let raster = RwRaster::new(origin_raster.width * 5, origin_raster.height * 5);
-        let texture = RwTexture::new(raster);
-
-        let mut view = View {
-            sprite: None,
-            texture: None,
-            surface: None,
-            rw_texture: NonNull::new(texture),
-            rw_raster: NonNull::new(raster),
-            extern_texture: true,
-            width: (origin_raster.width * 5) as usize,
-            height: (origin_raster.height * 5) as usize,
-        };
-
-        view
-    }
-
-    pub fn is_extern(&self) -> bool {
-        self.extern_texture
     }
 
     pub fn draw(&mut self) {
-        if self.is_extern() {
-            return;
-        }
-
         unsafe {
-            if let Some(sprite) = self.sprite.as_mut().map(|sprite_ptr| sprite_ptr.as_mut()) {
-                if let Some(texture) = self
-                    .texture
-                    .as_mut()
-                    .map(|texture_ptr| texture_ptr.as_mut())
-                {
-                    let device = client_api::gta::d3d9::device();
+            if let Some(sprite) = self.sprite.as_mut().map(|s| s.as_mut()) {
+                if let Some(texture) = self.texture.as_mut().map(|t| t.as_mut()) {
+                    sprite.Begin(D3DXSPRITE_ALPHABLEND);
 
-                    if device.TestCooperativeLevel() == 0 {
-                        sprite.Begin(D3DXSPRITE_ALPHABLEND);
+                    sprite.Draw(
+                        texture,
+                        std::ptr::null_mut(),
+                        std::ptr::null_mut(),
+                        &D3DXVECTOR3::new(0.0, 0.0, 1.0),
+                        u32::max_value(),
+                    );
 
-                        sprite.Draw(
-                            texture,
-                            null_mut(),
-                            null_mut(),
-                            &D3DXVECTOR3::new(0.0, 0.0, 1.0),
-                            u32::max_value(),
-                        );
-
-                        sprite.End();
-                    }
+                    sprite.End();
                 }
             }
         }
     }
 
-    pub fn update_texture(&mut self, bytes: &[u8], rects: &[cef_rect_t]) {
+    pub fn bytes(&mut self) -> Option<D3LockGuard> {
         unsafe {
-            let set_pixels = |dest: *mut u8, pitch: usize| {
-                if dest.is_null() {
-                    return;
-                }
-
-                for cef_rect in rects {
-                    for y in cef_rect.y as usize..(cef_rect.y as usize + cef_rect.height as usize) {
-                        let index = pitch * y + cef_rect.x as usize * 4;
-                        let ptr = dest.add(index);
-                        let pixels = bytes.as_ptr();
-                        let pixels = pixels.add(index);
-                        std::ptr::copy(pixels, ptr, cef_rect.width as usize * 4);
-                    }
-                }
-            };
-
-            if self.is_extern() {
-                if let Some(raster) = self.rw_raster.as_mut().map(|ptr| ptr.as_mut()) {
-                    let dest = raster.lock(0);
-                    let pitch = raster.stride as usize;
-
-                    set_pixels(dest, pitch);
-
-                    raster.unlock();
-                }
-            } else {
-                if let Some(surface) = self.surface.as_mut().map(|ptr| ptr.as_mut()) {
-                    let mut rect = D3DLOCKED_RECT {
-                        Pitch: 0,
-                        pBits: null_mut(),
-                    };
-
-                    if surface.LockRect(&mut rect, std::ptr::null(), 0) == D3D_OK {
-                        let dest = rect.pBits as *mut u8;
-                        let pitch = rect.Pitch as usize;
-
-                        set_pixels(dest, pitch);
-
-                        surface.UnlockRect();
-                    }
-                }
-            }
-        }
-    }
-
-    pub fn update_popup(&mut self, bytes: &[u8], popup_rect: &cef_rect_t) {
-        unsafe {
-            if self.is_extern() {
-                return;
-            }
-
-            if let Some(surface) = self.surface.as_mut().map(|ptr| ptr.as_mut()) {
+            self.surface.as_mut().and_then(|surface| {
                 let mut rect = D3DLOCKED_RECT {
                     Pitch: 0,
-                    pBits: null_mut(),
+                    pBits: std::ptr::null_mut(),
                 };
 
-                if (*surface).LockRect(&mut rect, std::ptr::null(), 0) == D3D_OK {
-                    let mut surface_desc: D3DSURFACE_DESC = std::mem::zeroed();
+                let mut desc: D3DSURFACE_DESC = std::mem::zeroed();
 
-                    surface.GetDesc(&mut surface_desc);
+                surface.as_mut().GetDesc(&mut desc);
 
-                    let bits = rect.pBits as *mut u8;
-                    let pitch = rect.Pitch as usize;
-
-                    let popup_pitch = popup_rect.width * 4;
-
-                    for y in 0..popup_rect.height {
-                        let source_index = y * popup_pitch;
-                        let dest_index = (y + popup_rect.y) * pitch as i32 + popup_rect.x * 4;
-
-                        let surface_data = bits.add(dest_index as usize);
-                        let new_data = bytes.as_ptr().add(source_index as usize);
-
-                        std::ptr::copy(new_data, surface_data, popup_pitch as usize);
-                    }
-
-                    (*surface).UnlockRect();
+                if surface.as_mut().LockRect(&mut rect, std::ptr::null(), 0) == D3D_OK
+                    && !rect.pBits.is_null()
+                {
+                    let size = desc.Width * desc.Height * 4;
+                    Some(D3LockGuard {
+                        bytes: std::slice::from_raw_parts_mut(rect.pBits as *mut u8, size as usize),
+                        pitch: rect.Pitch as usize,
+                        surface: surface.clone(),
+                    })
+                } else {
+                    None
                 }
-            }
+            })
         }
     }
+}
 
-    pub fn rect(&self) -> cef_rect_t {
-        cef_rect_t {
-            x: 0,
-            y: 0,
-            width: self.width as _,
-            height: self.height as _,
-        }
-    }
-
-    fn get_rect(&self) -> Option<cef_rect_t> {
+impl Drop for D3Container {
+    fn drop(&mut self) {
         unsafe {
-            if let Some(texture) = self
-                .texture
-                .as_ref()
-                .map(|texture_ptr| texture_ptr.as_ref())
-            {
-                let mut surface_desc: D3DSURFACE_DESC = std::mem::zeroed();
-
-                texture.GetLevelDesc(0, &mut surface_desc);
-
-                let rect = cef_rect_t {
-                    x: 0,
-                    y: 0,
-                    width: surface_desc.Width as _,
-                    height: surface_desc.Height as _,
-                };
-
-                return Some(rect);
-            }
-        }
-
-        None
-    }
-
-    pub fn on_lost_device(&mut self) {
-        unsafe {
-            if let Some(mut sprite) = self.sprite.take() {
-                sprite.as_mut().Release();
-            }
-
             if let Some(mut surface) = self.surface.take() {
                 surface.as_mut().Release();
             }
@@ -233,113 +142,261 @@ impl View {
                 texture.as_mut().Release();
             }
 
-            if let Some(mut texture) = self.rw_texture.take() {
+            if let Some(mut sprite) = self.sprite.take() {
+                sprite.as_mut().Release();
+            }
+        }
+    }
+}
+
+pub struct RwLockGuard<'a> {
+    bytes: &'a mut [u8],
+    pub pitch: usize,
+    raster: NonNull<RwRaster>,
+}
+
+impl RwLockGuard<'_> {
+    pub fn bytes_as_mut_ptr(&mut self) -> *mut u8 {
+        self.bytes.as_mut_ptr()
+    }
+}
+
+impl Deref for RwLockGuard<'_> {
+    type Target = [u8];
+
+    fn deref(&self) -> &[u8] {
+        self.bytes
+    }
+}
+
+impl DerefMut for RwLockGuard<'_> {
+    fn deref_mut(&mut self) -> &mut [u8] {
+        self.bytes
+    }
+}
+
+impl Drop for RwLockGuard<'_> {
+    fn drop(&mut self) {
+        unsafe {
+            self.raster.as_mut().unlock();
+        }
+    }
+}
+
+pub struct RwContainer {
+    texture: Option<NonNull<RwTexture>>,
+    raster: Option<NonNull<RwRaster>>,
+}
+
+impl RwContainer {
+    pub fn new(width: usize, height: usize) -> RwContainer {
+        let raster = RwRaster::new(width as i32, height as i32);
+        let texture = RwTexture::new(raster);
+
+        RwContainer {
+            texture: NonNull::new(texture),
+            raster: NonNull::new(raster),
+        }
+    }
+
+    pub fn bytes(&mut self) -> Option<RwLockGuard> {
+        unsafe {
+            self.raster.as_mut().map(|raster| {
+                let bytes = raster.as_mut().lock(0);
+                let size = {
+                    let raster = raster.as_mut();
+                    raster.height * raster.width * 4
+                };
+
+                RwLockGuard {
+                    bytes: std::slice::from_raw_parts_mut(bytes, size as usize),
+                    pitch: raster.as_mut().stride as usize,
+                    raster: raster.clone(),
+                }
+            })
+        }
+    }
+}
+
+impl Drop for RwContainer {
+    fn drop(&mut self) {
+        unsafe {
+            if let Some(mut texture) = self.texture.take() {
                 texture.as_mut().destroy();
             }
 
-            if let Some(mut raster) = self.rw_raster.take() {
+            if let Some(mut raster) = self.raster.take() {
                 raster.as_mut().destroy();
             }
         }
     }
+}
 
-    pub fn clear_texture(&mut self) {
-        unsafe {
-            if self.is_extern() {
-                return;
-            } else {
-                if let Some(surface) = self.surface.as_ref().map(|ptr| ptr.as_ref()) {
-                    let mut rect = D3DLOCKED_RECT {
-                        Pitch: 0,
-                        pBits: null_mut(),
-                    };
+pub struct View {
+    directx: Option<D3Container>,
+    renderware: Option<RwContainer>,
+    width: usize,
+    height: usize,
+}
 
-                    let mut surface_desc: D3DSURFACE_DESC = std::mem::zeroed();
+impl View {
+    pub fn new() -> View {
+        View {
+            directx: None,
+            renderware: None,
+            width: 0,
+            height: 0,
+        }
+    }
 
-                    surface.GetDesc(&mut surface_desc);
+    pub fn make_directx(&mut self, device: &mut IDirect3DDevice9, width: usize, height: usize) {
+        self.destroy_previous();
+        self.directx = Some(D3Container::new(device, width, height));
+        self.set_size(width, height);
+    }
 
-                    if (*surface).LockRect(&mut rect, std::ptr::null(), D3DLOCK_DISCARD) == D3D_OK {
-                        let size = surface_desc.Height as usize * surface_desc.Width as usize * 4;
-                        std::ptr::write_bytes(rect.pBits as *mut u8, 0x00, size);
+    pub fn make_renderware(&mut self, raster: &mut RwRaster, scale: i32) {
+        println!("View::make_renderware");
 
-                        (*surface).UnlockRect();
+        let width = (raster.width * scale) as usize;
+        let height = (raster.height * scale) as usize;
+
+        self.destroy_previous();
+
+        let container = RwContainer::new(width, height);
+
+        self.renderware = Some(container);
+        self.set_size(width, height);
+    }
+
+    pub fn draw(&mut self) {
+        self.directx.as_mut().map(|d3d9| d3d9.draw());
+    }
+
+    pub fn update_texture(&mut self, bytes: &[u8], rects: &[cef_rect_t]) {
+        let set_pixels = |dest: &mut [u8], pitch: usize| {
+            let dest = dest.as_mut_ptr();
+
+            for cef_rect in rects {
+                for y in cef_rect.y as usize..(cef_rect.y as usize + cef_rect.height as usize) {
+                    unsafe {
+                        let index = pitch * y + cef_rect.x as usize * 4;
+                        let ptr = dest.add(index);
+                        let pixels = bytes.as_ptr();
+                        let pixels = pixels.add(index);
+                        std::ptr::copy(pixels, ptr, cef_rect.width as usize * 4);
                     }
                 }
             }
-        }
+        };
+
+        self.set_texture_bytes(set_pixels);
     }
 
-    pub fn on_reset_device(&mut self, device: &mut IDirect3DDevice9, width: usize, height: usize) {
-        if self.extern_texture {
-            let raster = RwRaster::new(self.width as i32, self.height as i32);
-            let texture = RwTexture::new(raster);
+    pub fn update_popup(&mut self, bytes: &[u8], popup_rect: &cef_rect_t) {
+        let set_pixels = |dest: &mut [u8], pitch: usize| {
+            let dest = dest.as_mut_ptr();
+            let popup_pitch = popup_rect.width * 4;
 
-            println!("on_reset_device: {:?} {:?}", raster, texture);
+            for y in 0..popup_rect.height {
+                let source_index = y * popup_pitch;
+                let dest_index = (y + popup_rect.y) * pitch as i32 + popup_rect.x * 4;
 
-            self.rw_raster = NonNull::new(raster);
-            self.rw_texture = NonNull::new(texture);
+                unsafe {
+                    let surface_data = dest.add(dest_index as usize);
+                    let new_data = bytes.as_ptr().add(source_index as usize);
 
+                    std::ptr::copy(new_data, surface_data, popup_pitch as usize);
+                }
+            }
+        };
+
+        self.set_texture_bytes(set_pixels);
+    }
+
+    pub fn clear(&mut self) {
+        let clear = |dest: &mut [u8], _: usize| {
+            let size = dest.len();
+            let dest = dest.as_mut_ptr();
+
+            unsafe {
+                std::ptr::write_bytes(dest, 0x00, size);
+            }
+        };
+
+        self.set_texture_bytes(clear);
+    }
+
+    pub fn on_lost_device(&mut self) {
+        println!("View::on_lost_device");
+        self.destroy_previous();
+    }
+
+    pub fn resize(&mut self, device: Option<&mut IDirect3DDevice9>, width: usize, height: usize) {
+        let should_replace = (device.is_some() && self.directx.is_none())
+            || (device.is_none() && self.renderware.is_none());
+
+        if self.width == width && self.height == height && !should_replace {
             return;
         }
 
-        self.sprite = NonNull::new(Self::create_sprite(device));
-        self.texture = NonNull::new(Self::create_texture(device, width, height));
+        self.destroy_previous();
+        self.set_size(width, height);
 
-        unsafe {
-            if let Some(texture) = self.texture.as_mut().map(|a| a.as_mut()) {
-                let mut surface: *mut IDirect3DSurface9 = std::ptr::null_mut();
-
-                unsafe {
-                    texture.GetSurfaceLevel(0, &mut surface);
-                }
-
-                self.surface = NonNull::new(surface);
-            }
+        if let Some(device) = device {
+            self.directx = Some(D3Container::new(device, width, height));
+        } else {
+            self.renderware = Some(RwContainer::new(width, height));
         }
     }
 
-    fn create_sprite(device: &mut IDirect3DDevice9) -> LPD3DXSPRITE {
-        let mut sprite: LPD3DXSPRITE = null_mut();
+    pub fn rect(&self) -> cef_rect_t {
+        let width = if self.width == 0 {
+            1
+        } else {
+            self.width as i32
+        };
 
-        unsafe {
-            D3DXCreateSprite(device, &mut sprite);
+        let height = if self.height == 0 {
+            1
+        } else {
+            self.height as i32
+        };
+
+        cef_rect_t {
+            width,
+            height,
+            x: 0,
+            y: 0,
         }
-
-        sprite
     }
 
-    fn create_texture(
-        device: &mut IDirect3DDevice9, width: usize, height: usize,
-    ) -> LPDIRECT3DTEXTURE9 {
-        let mut texture_handle: LPDIRECT3DTEXTURE9 = std::ptr::null_mut();
+    pub fn rwtexture(&mut self) -> Option<NonNull<RwTexture>> {
+        self.renderware.as_mut().and_then(|rw| rw.texture.clone())
+    }
 
-        unsafe {
-            device.CreateTexture(
-                width as _,
-                height as _,
-                1,
-                0,
-                D3DFMT_A8R8G8B8,
-                D3DPOOL_MANAGED,
-                &mut texture_handle,
-                null_mut(),
-            );
+    fn destroy_previous(&mut self) {
+        self.directx.take();
+        self.renderware.take();
+    }
+
+    fn set_size(&mut self, width: usize, height: usize) {
+        self.width = width;
+        self.height = height;
+    }
+
+    fn set_texture_bytes<F>(&mut self, mut func: F)
+    where
+        F: FnMut(&mut [u8], usize),
+    {
+        if let Some(mut bytes) = self.directx.as_mut().and_then(|d3d9| d3d9.bytes()) {
+            let pitch = bytes.pitch;
+            func(&mut *bytes, pitch);
         }
 
-        texture_handle
-    }
-}
-
-impl Drop for View {
-    fn drop(&mut self) {
-        unsafe {
-            if let Some(mut sprite) = self.sprite.take() {
-                sprite.as_mut().Release();
-            }
-
-            if let Some(mut texture) = self.texture.take() {
-                texture.as_mut().Release();
-            }
+        if let Some(mut bytes) = self.renderware.as_mut().and_then(|rw| rw.bytes()) {
+            let pitch = bytes.pitch;
+            func(&mut *bytes, pitch);
         }
     }
 }

@@ -15,6 +15,7 @@ use crate::network::NetworkClient;
 use client_api::gta::menu_manager::CMenuManager;
 use client_api::samp::inputs;
 use client_api::samp::netgame::NetGame;
+use client_api::samp::objects::Object;
 use client_api::samp::Gamestate;
 use client_api::wndproc;
 
@@ -41,17 +42,28 @@ pub enum Event {
         focused: bool,
     },
 
+    CreateExternBrowser(ExternalBrowser),
+
     DestroyBrowser(u32),
     HideBrowser(u32, bool),
     FocusBrowser(u32, bool),
     EmitEvent(String, List),
     EmitEventOnServer(String, String),
     BrowserCreated(u32, i32),
+    AppendToObject(u32, i32),
+    RemoveFromObject(u32, i32),
 
     CefInitialize,
 
     BlockInput(bool),
     Terminate,
+}
+
+pub struct ExternalBrowser {
+    pub id: u32,
+    pub texture: String,
+    pub url: String,
+    pub scale: i32,
 }
 
 pub struct App {
@@ -214,6 +226,11 @@ pub fn mainloop() {
                     client_api::samp::inputs::show_cursor(show_cursor);
                 }
 
+                Event::CreateExternBrowser(ext) => {
+                    let mut manager = app.manager.lock().unwrap();
+                    manager.create_browser_on_texture(&ext, app.callbacks.clone());
+                }
+
                 Event::DestroyBrowser(id) => {
                     let mut manager = app.manager.lock().unwrap();
                     manager.close_browser(id, true);
@@ -258,6 +275,16 @@ pub fn mainloop() {
                 Event::CefInitialize => {
                     app.cef_ready = true;
                     crate::external::call_initialize();
+                }
+
+                Event::AppendToObject(browser, object) => {
+                    let mut manager = app.manager.lock().unwrap();
+                    manager.browser_append_to_object(browser, object);
+                }
+
+                Event::RemoveFromObject(browser, object) => {
+                    let mut manager = app.manager.lock().unwrap();
+                    manager.browser_remove_from_object(browser, object);
                 }
 
                 _ => (),
@@ -357,3 +384,18 @@ extern "stdcall" fn async_key_state(key: i32) -> u16 {
 
     return 0;
 }
+
+/*
+
+public on_browser_ready(id, status) {
+    if (status == 200) {
+        new obj = create_tv();
+        cef_browser_append_to_object(id, obj, "CJ_TV_SCREEN");
+    }
+}
+
+cef_create_external_browser(ID, URL, SCALE, TEXTURE_NAME);
+cef_browser_append_to_object(ID, OBJECT_ID);
+cef_browser_remove_from_texture(ID, OBJECT_ID);
+
+*/

@@ -1,3 +1,4 @@
+use std::ffi::CString;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc, Condvar, Mutex,
@@ -9,6 +10,7 @@ use cef::browser::{Browser, ContextMenuParams, Frame, MenuModel};
 use cef::client::Client;
 use cef::handlers::context_menu::ContextMenuHandler;
 use cef::handlers::lifespan::LifespanHandler;
+use cef::handlers::load::LoadHandler;
 use cef::handlers::render::{DirtyRects, PaintElement, RenderHandler};
 use cef::process_message::ProcessMessage;
 use cef::types::list::ValueType;
@@ -16,14 +18,13 @@ use cef::ProcessId;
 
 use cef_sys::cef_rect_t;
 
+use client_api::gta::rw::rwcore::{RwRaster, RwTexture};
 use client_api::utils::handle_result;
 
 use crate::app::Event;
+//use crate::browser::view::View;
 use crate::browser::view::View;
 use crate::external::{CallbackList, EXTERNAL_BREAK};
-use cef::handlers::load::LoadHandler;
-use client_api::gta::rw::rwcore::{RwRaster, RwTexture};
-use std::ffi::CString;
 
 struct DrawData {
     buffer: *const u8,
@@ -65,8 +66,9 @@ impl DrawData {
 
 pub struct WebClient {
     id: u32, // static
+    is_extern: bool,
     hidden: AtomicBool,
-    view: Mutex<View>,
+    pub view: Mutex<View>,
     draw_data: Mutex<DrawData>,
     browser: Mutex<Option<Browser>>,
     rendered: (Mutex<bool>, Condvar),
@@ -314,7 +316,8 @@ impl LoadHandler for WebClient {
 impl WebClient {
     pub fn new(id: u32, cbs: CallbackList, event_tx: Sender<Event>) -> Arc<WebClient> {
         let rect = crate::utils::client_rect();
-        let view = View::new(client_api::gta::d3d9::device(), rect[0], rect[1]);
+        let mut view = View::new();
+        view.make_directx(client_api::gta::d3d9::device(), rect[0], rect[1]);
 
         let client = WebClient {
             hidden: AtomicBool::new(false),
@@ -323,6 +326,7 @@ impl WebClient {
             browser: Mutex::new(None),
             rendered: (Mutex::new(false), Condvar::new()),
             callbacks: cbs,
+            is_extern: false,
             event_tx,
             id,
         };
@@ -330,10 +334,8 @@ impl WebClient {
         Arc::new(client)
     }
 
-    pub fn new_extern(
-        id: u32, cbs: CallbackList, event_tx: Sender<Event>, raster: &mut RwRaster,
-    ) -> Arc<WebClient> {
-        let view = View::from_extern(raster);
+    pub fn new_extern(id: u32, cbs: CallbackList, event_tx: Sender<Event>) -> Arc<WebClient> {
+        let view = View::new();
 
         let client = WebClient {
             hidden: AtomicBool::new(false),
@@ -342,6 +344,7 @@ impl WebClient {
             browser: Mutex::new(None),
             rendered: (Mutex::new(false), Condvar::new()),
             callbacks: cbs,
+            is_extern: true,
             event_tx,
             id,
         };
@@ -354,14 +357,6 @@ impl WebClient {
         texture.draw();
     }
 
-    pub fn raster(&self) -> *mut RwTexture {
-        let view = self.view.lock().unwrap();
-        view.rw_texture
-            .as_ref()
-            .map(|a| a.as_ptr())
-            .unwrap_or(std::ptr::null_mut())
-    }
-
     pub fn on_lost_device(&self) {
         self.internal_hide(true, false); // hide browser but do not save value
 
@@ -371,23 +366,27 @@ impl WebClient {
 
     pub fn on_reset_device(&self) {
         {
-            let mut texture = self.view.lock().unwrap();
-            let rect = crate::utils::client_rect();
-            texture.on_reset_device(client_api::gta::d3d9::device(), rect[0], rect[1]);
+            let mut view = self.view.lock().unwrap();
+
+            if self.is_extern() {
+            } else {
+                let rect = crate::utils::client_rect();
+                view.make_directx(client_api::gta::d3d9::device(), rect[0], rect[1]);
+            }
         }
 
         self.restore_hide_status();
     }
 
     pub fn resize(&self, width: usize, height: usize) {
+        let device = if self.is_extern() {
+            None
+        } else {
+            Some(client_api::gta::d3d9::device())
+        };
+
         let mut view = self.view.lock().unwrap();
-
-        if view.is_extern() {
-            return;
-        }
-
-        let resized_view = View::new(client_api::gta::d3d9::device(), width, height);
-        *view = resized_view;
+        view.resize(device, width, height);
 
         let browser = self.browser.lock().unwrap();
 
@@ -404,7 +403,7 @@ impl WebClient {
 
         {
             let mut texture = self.view.lock().unwrap();
-            let mut draw_data = self.draw_data.lock().unwrap();
+            let draw_data = self.draw_data.lock().unwrap();
 
             let size = texture.rect();
 
@@ -434,7 +433,7 @@ impl WebClient {
                 };
 
                 if draw_data.rects.count > 0 {
-                    let rect = unsafe { &draw_data.rects.rects[0] };
+                    let rect = &draw_data.rects.rects[0];
                     if rect.width > size.width || rect.height > size.height {
                         self.unlock();
                         return;
@@ -485,7 +484,7 @@ impl WebClient {
             if hide {
                 host.was_hidden(true);
                 let mut view = self.view.lock().unwrap();
-                view.clear_texture();
+                view.clear();
             } else {
                 host.was_hidden(false);
                 host.invalidate(PaintElement::View);
@@ -499,5 +498,9 @@ impl WebClient {
 
     pub fn id(&self) -> u32 {
         self.id
+    }
+
+    pub fn is_extern(&self) -> bool {
+        self.is_extern
     }
 }

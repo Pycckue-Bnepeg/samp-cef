@@ -10,6 +10,9 @@ enum PacketId {
     BLOCK_INPUT = 5;
     HIDE_BROWSER = 6;
     BROWSER_LISTEN_EVENTS = 7;
+    CREATE_EXTERNAL_BROWSER = 11;
+    APPEND_TO_OBJECT = 12;
+    REMOVE_FROM_OBJECT = 13;
 
     // client/server side
     EMIT_EVENT = 8;
@@ -78,3 +81,20 @@ message Got {
 }
 
 message OpenConnection {}
+
+message CreateExternalBrowser {
+    required uint32 browser_id = 1;
+    required string url = 2;
+    required int32 scale = 3;
+    required string texture = 4;
+}
+
+message AppendToObject {
+    required uint32 browser_id = 1;
+    required int32 object_id = 2;
+}
+
+message RemoveFromObject {
+    required uint32 browser_id = 1;
+    required int32 object_id = 2;
+}

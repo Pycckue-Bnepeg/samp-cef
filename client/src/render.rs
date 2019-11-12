@@ -1,10 +1,13 @@
+use std::ffi::c_void;
 use std::sync::{Arc, Mutex};
 use winapi::shared::d3d9::IDirect3DDevice9;
 
-use crate::browser::manager::Manager;
+use crate::browser::manager::{ExternalClient, Manager};
 
 use client_api::gta::entity::CEntity;
 use client_api::gta::menu_manager::CMenuManager;
+use client_api::gta::rw::{self, rpworld::*, rwcore::*, rwplcore::*};
+use client_api::samp::objects::Object;
 
 use detour::GenericDetour;
 
@@ -92,81 +95,140 @@ fn on_reset(_: &mut IDirect3DDevice9, reset_flag: u8) {
     }
 }
 
+struct RenderState {
+    client: *mut ExternalClient,
+    before: bool,
+}
+
 extern "thiscall" fn centity_render(obj: *mut CEntity) {
     let render = Render::get();
+    let mut manager = render.manager.lock().unwrap();
     let entity = unsafe { &mut *obj };
 
-    //    if entity.entity_type() == 4 {
-    if entity.m_nModelIndex == 3653 {
-        let rwobject = entity.rw_entity as *mut RwObject;
+    let browsers = manager.external_browsers();
 
-        if !rwobject.is_null() {
-            unsafe {
-                if (*rwobject).obj_type == rpCLUMP {
-                    rw::rpclump_for_all_atomics(
-                        rwobject as *mut _,
-                        Some(atomic_callback),
-                        std::ptr::null_mut(),
-                    );
-                } else {
-                    atomic_callback(rwobject as *mut _, std::ptr::null_mut());
+    for browser in browsers {
+        let browser_ptr = browser as *mut _; // должно быть safe
+        for &object_id in &browser.object_ids {
+            if let Some(object) = Object::get(object_id) {
+                if let Some(obj_entity) = object.entity() {
+                    if obj == obj_entity as *mut _ as *mut CEntity {
+                        let rwobject = obj_entity._base._base.rw_entity as *mut RwObject;
+
+                        if !rwobject.is_null() {
+                            let render_state = Box::new(RenderState {
+                                client: browser_ptr,
+                                before: true,
+                            });
+
+                            let render_state = Box::into_raw(render_state) as *mut c_void;
+
+                            replace_texture(rwobject, render_state);
+
+                            render.centity_render.call(obj);
+
+                            let mut render_state =
+                                unsafe { Box::from_raw(render_state as *mut RenderState) };
+
+                            render_state.before = false;
+
+                            let render_state = Box::into_raw(render_state) as *mut c_void;
+
+                            replace_texture(rwobject, render_state);
+
+                            return;
+                        }
+                    }
                 }
             }
         }
-        //        }
     }
 
     render.centity_render.call(obj);
 }
 
-use client_api::gta::rw::{self, rpworld::*, rwcore::*, rwplcore::*};
-use std::ffi::c_void;
+fn replace_texture(rwobject: *mut RwObject, render_state: *mut c_void) {
+    unsafe {
+        if (*rwobject).obj_type == rpCLUMP {
+            rw::rpclump_for_all_atomics(rwobject as *mut _, Some(atomic_callback), render_state);
+        } else {
+            atomic_callback(rwobject as *mut _, render_state);
+        }
+    }
+}
 
 extern "C" fn atomic_callback(atomic: *mut RpAtomic, data: *mut c_void) -> *mut RpAtomic {
     unsafe {
         if !atomic.is_null() && !(*atomic).geometry.is_null() {
-            rw::rpgeometry_for_all_materials(
-                (*atomic).geometry,
-                Some(material_callback),
-                std::ptr::null_mut(),
-            );
+            let render = Box::from_raw(data as *mut RenderState);
+
+            if render.before {
+                before_entity_render(
+                    (*(*atomic).geometry).matList.as_mut_slice(),
+                    &mut *render.client,
+                );
+            } else {
+                after_entity_render(
+                    (*(*atomic).geometry).matList.as_mut_slice(),
+                    &mut *render.client,
+                );
+            }
+
+            Box::into_raw(render);
         }
     }
 
     return atomic;
 }
 
-extern "C" fn material_callback(material: *mut RpMaterial, data: *mut c_void) -> *mut RpMaterial {
-    unsafe {
-        if !(*material).texture.is_null() {
-            let name = (*(*material).texture).name();
+unsafe fn before_entity_render(materials: &mut [*mut RpMaterial], client: &mut ExternalClient) {
+    let mut view = client.browser.view.lock().unwrap();
 
-            let render = Render::get();
+    for material in materials {
+        if !(*material).is_null() {
+            let texture = (**material).texture;
 
-            if !render.init {
-                render.init = true;
-                let raster = &mut *(*(*material).texture).raster;
+            if texture.is_null() {
+                continue;
+            }
 
-                let mut manager = render.manager.lock().unwrap();
+            if !(*texture).name().contains(&client.texture) {
+                continue;
+            }
 
-                manager.create_browser_on_texture(
-                    2556,
-                    Arc::new(Mutex::new(std::collections::HashMap::new())),
-                    "https://www.youtube.com/embed/lWZ-SzhppiM?controls=0&autoplay=1",
-                    raster,
-                );
+            if view.rwtexture().is_none() {
+                if !(*texture).raster.is_null() {
+                    let raster = &mut *(*texture).raster;
+                    let width = (raster.width * client.scale) as usize;
+                    let height = (raster.height * client.scale) as usize;
 
-                manager.hide_browser(2556, false);
-            } else {
-                let manager = render.manager.lock().unwrap();
-                let texture = manager.raster(2556);
+                    drop(view);
 
-                if !texture.is_null() {
-                    (*material).texture = texture;
+                    client.browser.resize(width, height);
+
+                    view = client.browser.view.lock().unwrap();
                 }
+            }
+
+            if let Some(replace) = view.rwtexture() {
+                client.origin_texture = (**material).texture;
+                client.prev_replacement = replace.as_ptr();
+                (**material).set_texture(replace.as_ptr());
             }
         }
     }
+}
 
-    return material;
+unsafe fn after_entity_render(materials: &mut [*mut RpMaterial], client: &mut ExternalClient) {
+    for material in materials {
+        if !(*material).is_null() {
+            let texture = (**material).texture;
+
+            if texture.is_null() || texture != client.prev_replacement {
+                continue;
+            }
+
+            (**material).set_texture(client.origin_texture);
+        }
+    }
 }

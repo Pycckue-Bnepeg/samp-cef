@@ -25,6 +25,9 @@ pub enum PacketId {
     BLOCK_INPUT = 5,
     HIDE_BROWSER = 6,
     BROWSER_LISTEN_EVENTS = 7,
+    CREATE_EXTERNAL_BROWSER = 11,
+    APPEND_TO_OBJECT = 12,
+    REMOVE_FROM_OBJECT = 13,
     EMIT_EVENT = 8,
     BROWSER_CREATED = 9,
     GOT = 10,
@@ -47,6 +50,9 @@ impl From<i32> for PacketId {
             5 => PacketId::BLOCK_INPUT,
             6 => PacketId::HIDE_BROWSER,
             7 => PacketId::BROWSER_LISTEN_EVENTS,
+            11 => PacketId::CREATE_EXTERNAL_BROWSER,
+            12 => PacketId::APPEND_TO_OBJECT,
+            13 => PacketId::REMOVE_FROM_OBJECT,
             8 => PacketId::EMIT_EVENT,
             9 => PacketId::BROWSER_CREATED,
             10 => PacketId::GOT,
@@ -66,6 +72,9 @@ impl<'a> From<&'a str> for PacketId {
             "BLOCK_INPUT" => PacketId::BLOCK_INPUT,
             "HIDE_BROWSER" => PacketId::HIDE_BROWSER,
             "BROWSER_LISTEN_EVENTS" => PacketId::BROWSER_LISTEN_EVENTS,
+            "CREATE_EXTERNAL_BROWSER" => PacketId::CREATE_EXTERNAL_BROWSER,
+            "APPEND_TO_OBJECT" => PacketId::APPEND_TO_OBJECT,
+            "REMOVE_FROM_OBJECT" => PacketId::REMOVE_FROM_OBJECT,
             "EMIT_EVENT" => PacketId::EMIT_EVENT,
             "BROWSER_CREATED" => PacketId::BROWSER_CREATED,
             "GOT" => PacketId::GOT,
@@ -486,4 +495,117 @@ impl<'a> MessageRead<'a> for OpenConnection {
 }
 
 impl MessageWrite for OpenConnection { }
+
+#[derive(Debug, Default, PartialEq, Clone)]
+pub struct CreateExternalBrowser<'a> {
+    pub browser_id: u32,
+    pub url: Cow<'a, str>,
+    pub scale: i32,
+    pub texture: Cow<'a, str>,
+}
+
+impl<'a> MessageRead<'a> for CreateExternalBrowser<'a> {
+    fn from_reader(r: &mut BytesReader, bytes: &'a [u8]) -> Result<Self> {
+        let mut msg = Self::default();
+        while !r.is_eof() {
+            match r.next_tag(bytes) {
+                Ok(8) => msg.browser_id = r.read_uint32(bytes)?,
+                Ok(18) => msg.url = r.read_string(bytes).map(Cow::Borrowed)?,
+                Ok(24) => msg.scale = r.read_int32(bytes)?,
+                Ok(34) => msg.texture = r.read_string(bytes).map(Cow::Borrowed)?,
+                Ok(t) => { r.read_unknown(bytes, t)?; }
+                Err(e) => return Err(e),
+            }
+        }
+        Ok(msg)
+    }
+}
+
+impl<'a> MessageWrite for CreateExternalBrowser<'a> {
+    fn get_size(&self) -> usize {
+        0
+        + 1 + sizeof_varint(*(&self.browser_id) as u64)
+        + 1 + sizeof_len((&self.url).len())
+        + 1 + sizeof_varint(*(&self.scale) as u64)
+        + 1 + sizeof_len((&self.texture).len())
+    }
+
+    fn write_message<W: Write>(&self, w: &mut Writer<W>) -> Result<()> {
+        w.write_with_tag(8, |w| w.write_uint32(*&self.browser_id))?;
+        w.write_with_tag(18, |w| w.write_string(&**&self.url))?;
+        w.write_with_tag(24, |w| w.write_int32(*&self.scale))?;
+        w.write_with_tag(34, |w| w.write_string(&**&self.texture))?;
+        Ok(())
+    }
+}
+
+#[derive(Debug, Default, PartialEq, Clone)]
+pub struct AppendToObject {
+    pub browser_id: u32,
+    pub object_id: i32,
+}
+
+impl<'a> MessageRead<'a> for AppendToObject {
+    fn from_reader(r: &mut BytesReader, bytes: &'a [u8]) -> Result<Self> {
+        let mut msg = Self::default();
+        while !r.is_eof() {
+            match r.next_tag(bytes) {
+                Ok(8) => msg.browser_id = r.read_uint32(bytes)?,
+                Ok(16) => msg.object_id = r.read_int32(bytes)?,
+                Ok(t) => { r.read_unknown(bytes, t)?; }
+                Err(e) => return Err(e),
+            }
+        }
+        Ok(msg)
+    }
+}
+
+impl MessageWrite for AppendToObject {
+    fn get_size(&self) -> usize {
+        0
+        + 1 + sizeof_varint(*(&self.browser_id) as u64)
+        + 1 + sizeof_varint(*(&self.object_id) as u64)
+    }
+
+    fn write_message<W: Write>(&self, w: &mut Writer<W>) -> Result<()> {
+        w.write_with_tag(8, |w| w.write_uint32(*&self.browser_id))?;
+        w.write_with_tag(16, |w| w.write_int32(*&self.object_id))?;
+        Ok(())
+    }
+}
+
+#[derive(Debug, Default, PartialEq, Clone)]
+pub struct RemoveFromObject {
+    pub browser_id: u32,
+    pub object_id: i32,
+}
+
+impl<'a> MessageRead<'a> for RemoveFromObject {
+    fn from_reader(r: &mut BytesReader, bytes: &'a [u8]) -> Result<Self> {
+        let mut msg = Self::default();
+        while !r.is_eof() {
+            match r.next_tag(bytes) {
+                Ok(8) => msg.browser_id = r.read_uint32(bytes)?,
+                Ok(16) => msg.object_id = r.read_int32(bytes)?,
+                Ok(t) => { r.read_unknown(bytes, t)?; }
+                Err(e) => return Err(e),
+            }
+        }
+        Ok(msg)
+    }
+}
+
+impl MessageWrite for RemoveFromObject {
+    fn get_size(&self) -> usize {
+        0
+        + 1 + sizeof_varint(*(&self.browser_id) as u64)
+        + 1 + sizeof_varint(*(&self.object_id) as u64)
+    }
+
+    fn write_message<W: Write>(&self, w: &mut Writer<W>) -> Result<()> {
+        w.write_with_tag(8, |w| w.write_uint32(*&self.browser_id))?;
+        w.write_with_tag(16, |w| w.write_int32(*&self.object_id))?;
+        Ok(())
+    }
+}
 

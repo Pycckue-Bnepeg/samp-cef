@@ -4,7 +4,7 @@ use laminar::{Config, Packet, Socket, SocketEvent};
 use messages::packets;
 use quick_protobuf::deserialize_from_slice;
 
-use crate::app::Event;
+use crate::app::{Event, ExternalBrowser};
 
 use std::net::SocketAddr;
 use std::time::{Duration, Instant};
@@ -136,6 +136,24 @@ impl Network {
                     .ok();
             }
 
+            CREATE_EXTERNAL_BROWSER => {
+                deserialize_from_slice(&packet.bytes)
+                    .map(|packet| self.handle_create_external_browser(packet))
+                    .ok();
+            }
+
+            APPEND_TO_OBJECT => {
+                deserialize_from_slice(&packet.bytes)
+                    .map(|packet| self.handle_append_to_object(packet))
+                    .ok();
+            }
+
+            REMOVE_FROM_OBJECT => {
+                deserialize_from_slice(&packet.bytes)
+                    .map(|packet| self.handle_remove_from_object(packet))
+                    .ok();
+            }
+
             _ => (),
         }
     }
@@ -202,6 +220,28 @@ impl Network {
 
     fn handle_listen_events(&mut self, packet: packets::BrowserListenEvents) {
         let event = Event::FocusBrowser(packet.browser_id, packet.listen);
+        handle_result(self.event_tx.send(event));
+    }
+
+    fn handle_create_external_browser(&mut self, packet: packets::CreateExternalBrowser) {
+        let ext = ExternalBrowser {
+            id: packet.browser_id,
+            texture: packet.texture.to_string(),
+            scale: packet.scale,
+            url: packet.url.to_string(),
+        };
+
+        let event = Event::CreateExternBrowser(ext);
+        handle_result(self.event_tx.send(event));
+    }
+
+    fn handle_append_to_object(&mut self, packet: packets::AppendToObject) {
+        let event = Event::AppendToObject(packet.browser_id, packet.object_id);
+        handle_result(self.event_tx.send(event));
+    }
+
+    fn handle_remove_from_object(&mut self, packet: packets::RemoveFromObject) {
+        let event = Event::RemoveFromObject(packet.browser_id, packet.object_id);
         handle_result(self.event_tx.send(event));
     }
 

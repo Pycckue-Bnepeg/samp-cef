@@ -318,6 +318,73 @@ impl Server {
             .unwrap_or(false)
     }
 
+    pub fn create_external_browser(
+        &mut self, player_id: i32, browser_id: i32, texture: String, url: String, scale: i32,
+    ) {
+        if let Some(addr) = self.addr_by_id(player_id) {
+            let Server {
+                ref mut clients,
+                ref mut sender,
+                ..
+            } = self;
+
+            clients.get_mut(&addr).map(|client| {
+                let packet = packets::CreateExternalBrowser {
+                    browser_id: browser_id as u32,
+                    url: url.into(),
+                    texture: texture.into(),
+                    scale,
+                };
+
+                let bytes = try_into_packet(packet).unwrap();
+                let packet = Packet::unreliable_sequenced(client.addr(), bytes.clone(), Some(1));
+                sender.send(packet);
+            });
+        }
+    }
+
+    pub fn append_to_object(&mut self, player_id: i32, browser_id: i32, object_id: i32) {
+        if let Some(addr) = self.addr_by_id(player_id) {
+            let Server {
+                ref mut clients,
+                ref mut sender,
+                ..
+            } = self;
+
+            clients.get_mut(&addr).map(|client| {
+                let packet = packets::AppendToObject {
+                    browser_id: browser_id as u32,
+                    object_id,
+                };
+
+                let bytes = try_into_packet(packet).unwrap();
+                let packet = Packet::unreliable_sequenced(client.addr(), bytes.clone(), Some(1));
+                sender.send(packet);
+            });
+        }
+    }
+
+    pub fn remove_from_object(&mut self, player_id: i32, browser_id: i32, object_id: i32) {
+        if let Some(addr) = self.addr_by_id(player_id) {
+            let Server {
+                ref mut clients,
+                ref mut sender,
+                ..
+            } = self;
+
+            clients.get_mut(&addr).map(|client| {
+                let packet = packets::RemoveFromObject {
+                    browser_id: browser_id as u32,
+                    object_id,
+                };
+
+                let bytes = try_into_packet(packet).unwrap();
+                let packet = Packet::unreliable_sequenced(client.addr(), bytes.clone(), Some(1));
+                sender.send(packet);
+            });
+        }
+    }
+
     pub fn receiver(&self) -> Receiver<Event> {
         self.event_rx.clone()
     }
