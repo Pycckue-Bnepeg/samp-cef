@@ -18,8 +18,13 @@ use cef_sys::{
 // audio
 
 extern "stdcall" fn audio<I: Client>(this: *mut cef_client_t) -> *mut cef_audio_handler_t {
-    println!("audio");
-    null_mut()
+    let obj: &mut Wrapper<_, I> = Wrapper::unwrap(this);
+
+    if let Some(handler) = obj.interface.audio_handler() {
+        super::audio_handler::wrap(handler)
+    } else {
+        null_mut()
+    }
 }
 
 // context menu

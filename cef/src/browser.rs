@@ -188,6 +188,14 @@ impl BrowserHost {
             inv(self.inner.get_mut(), ty);
         }
     }
+
+    pub fn set_audio_muted(&self, mute: bool) {
+        let set = self.inner.set_audio_muted.unwrap();
+
+        unsafe {
+            set(self.inner.get_mut(), if mute { 1 } else { 0 });
+        }
+    }
 }
 
 #[derive(Clone)]

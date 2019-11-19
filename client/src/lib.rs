@@ -7,6 +7,7 @@ use winapi::um::libloaderapi::DisableThreadLibraryCalls;
 use winapi::um::winnt::{DLL_PROCESS_ATTACH, DLL_PROCESS_DETACH};
 
 pub mod app;
+pub mod audio;
 pub mod browser;
 pub mod external;
 pub mod network;

@@ -8,14 +8,17 @@ use cef_sys::{cef_key_event_t, cef_key_event_type_t};
 use winapi::shared::minwindef::{LPARAM, UINT, WPARAM};
 use winapi::um::winuser::*;
 
+use crate::audio::Audio;
 use crate::browser::manager::{Manager, MouseKey};
 use crate::external::CallbackList;
 use crate::network::NetworkClient;
 
+use client_api::gta::camera::CCamera;
 use client_api::gta::menu_manager::CMenuManager;
 use client_api::samp::inputs;
 use client_api::samp::netgame::NetGame;
 use client_api::samp::objects::Object;
+use client_api::samp::players::local_player;
 use client_api::samp::Gamestate;
 use client_api::wndproc;
 
@@ -73,6 +76,7 @@ pub struct App {
     samp_ready: bool,
 
     manager: Arc<Mutex<Manager>>,
+    audio: Arc<Audio>,
     network: Option<NetworkClient>,
     callbacks: CallbackList,
     keystate_hook: GenericDetour<extern "stdcall" fn(i32) -> u16>,
@@ -84,7 +88,8 @@ pub struct App {
 impl App {
     pub fn new() -> App {
         let (event_tx, event_rx) = crossbeam_channel::unbounded();
-        let manager = Arc::new(Mutex::new(Manager::new(event_tx.clone())));
+        let audio = Audio::new();
+        let manager = Arc::new(Mutex::new(Manager::new(event_tx.clone(), audio.clone())));
 
         let callbacks = crate::external::initialize(event_tx.clone(), manager.clone());
 
@@ -110,6 +115,7 @@ impl App {
             event_tx,
             event_rx,
             callbacks,
+            audio,
         }
     }
 
@@ -228,6 +234,7 @@ pub fn mainloop() {
 
                 Event::CreateExternBrowser(ext) => {
                     let mut manager = app.manager.lock().unwrap();
+
                     manager.create_browser_on_texture(&ext, app.callbacks.clone());
                 }
 
@@ -293,6 +300,16 @@ pub fn mainloop() {
 
         if app.cef_ready {
             crate::external::call_mainloop();
+
+            if let Some(local) = local_player() {
+                let position = local.position();
+                let velocity = local.velocity();
+                let matrix = CCamera::get().matrix();
+
+                app.audio.set_position(position);
+                app.audio.set_velocity(velocity);
+                app.audio.set_orientation(matrix);
+            }
         }
     }
 }

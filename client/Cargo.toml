@@ -21,3 +21,4 @@ messages = { path = "../messages" }
 quick-protobuf = "0.6.3"
 detour = "0.7.1"
 libloading = "0.5.2"
+alto = "3.0.4"

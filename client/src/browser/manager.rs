@@ -1,4 +1,5 @@
 use crate::app::{Event, ExternalBrowser};
+use crate::audio::Audio;
 use crate::browser::client::WebClient;
 use crate::external::{BrowserReadyCallback, CallbackList};
 
@@ -40,6 +41,7 @@ pub struct ExternalClient {
 
 pub struct Manager {
     clients: HashMap<u32, Arc<WebClient>>,
+    audio: Arc<Audio>,
     ready_callbacks: HashMap<u32, Vec<BrowserReadyCallback>>,
     clients_on_txd: Vec<ExternalClient>,
     focused: Option<u32>,
@@ -53,7 +55,7 @@ pub struct Manager {
 }
 
 impl Manager {
-    pub fn new(event_tx: Sender<Event>) -> Manager {
+    pub fn new(event_tx: Sender<Event>, audio: Arc<Audio>) -> Manager {
         // init cef
         crate::browser::cef::initialize(event_tx.clone());
 
@@ -75,6 +77,7 @@ impl Manager {
             do_not_draw: false,
             focused: None,
             focused_queue: VecDeque::new(),
+            audio,
             mouse,
             event_tx,
         }
@@ -87,7 +90,7 @@ impl Manager {
     }
 
     pub fn create_browser_on_texture(&mut self, ext: &ExternalBrowser, cbs: CallbackList) {
-        let client = WebClient::new_extern(ext.id, cbs, self.event_tx.clone());
+        let client = WebClient::new_extern(ext.id, cbs, self.event_tx.clone(), self.audio.clone());
         crate::browser::cef::create_browser(client.clone(), &ext.url);
         self.append_client(ext.id, client.clone());
 
@@ -109,10 +112,19 @@ impl Manager {
             id, object_id
         );
 
+        self.audio.add_source(id, object_id);
+
         self.clients_on_txd
             .iter_mut()
             .filter(|cl| cl.browser.id() == id)
-            .for_each(|cl| cl.object_ids.push(object_id));
+            .for_each(|cl| {
+                cl.object_ids.push(object_id);
+                cl.browser.add_object(object_id);
+
+                if cl.object_ids.len() == 1 {
+                    cl.browser.hide(false);
+                }
+            });
     }
 
     pub fn browser_remove_from_object(&mut self, id: u32, object_id: i32) {
@@ -120,6 +132,8 @@ impl Manager {
             "BrowserManager::browser_remove_from_object({}, {})",
             id, object_id
         );
+
+        self.audio.remove_source(id, object_id);
 
         self.clients_on_txd
             .iter_mut()
@@ -130,9 +144,14 @@ impl Manager {
                 while idx < cl.object_ids.len() {
                     if cl.object_ids[idx] == object_id {
                         cl.object_ids.remove(idx);
+                        cl.browser.remove_object(object_id);
                     } else {
                         idx += 1;
                     }
+                }
+
+                if cl.object_ids.len() == 0 {
+                    cl.browser.hide(true);
                 }
             });
     }

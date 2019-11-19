@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::ffi::CString;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
@@ -8,6 +9,7 @@ use crossbeam_channel::Sender;
 
 use cef::browser::{Browser, ContextMenuParams, Frame, MenuModel};
 use cef::client::Client;
+use cef::handlers::audio::AudioHandler;
 use cef::handlers::context_menu::ContextMenuHandler;
 use cef::handlers::lifespan::LifespanHandler;
 use cef::handlers::load::LoadHandler;
@@ -22,7 +24,7 @@ use client_api::gta::rw::rwcore::{RwRaster, RwTexture};
 use client_api::utils::handle_result;
 
 use crate::app::Event;
-//use crate::browser::view::View;
+use crate::audio::Audio;
 use crate::browser::view::View;
 use crate::external::{CallbackList, EXTERNAL_BREAK};
 
@@ -71,9 +73,11 @@ pub struct WebClient {
     pub view: Mutex<View>,
     draw_data: Mutex<DrawData>,
     browser: Mutex<Option<Browser>>,
+    audio: Option<Arc<Audio>>, // static
     rendered: (Mutex<bool>, Condvar),
     event_tx: Sender<Event>,
     callbacks: CallbackList,
+    object_list: Mutex<HashSet<i32>>,
 }
 
 impl LifespanHandler for WebClient {
@@ -111,6 +115,10 @@ impl LifespanHandler for WebClient {
         if self.hidden.load(Ordering::SeqCst) {
             self.hide(true);
         }
+
+        if self.is_extern() {
+            self.set_audio_muted(true);
+        }
     }
 
     fn on_before_close(self: &Arc<Self>, _: Browser) {
@@ -126,6 +134,7 @@ impl Client for WebClient {
     type RenderHandler = Self;
     type ContextMenuHandler = Self;
     type LoadHandler = Self;
+    type AudioHandler = Self;
 
     fn lifespan_handler(self: &Arc<Self>) -> Option<Arc<Self>> {
         Some(self.clone())
@@ -141,6 +150,14 @@ impl Client for WebClient {
 
     fn load_handler(self: &Arc<Self>) -> Option<Arc<Self>> {
         Some(self.clone())
+    }
+
+    fn audio_handler(self: &Arc<Self>) -> Option<Arc<Self>> {
+        if self.is_extern {
+            Some(self.clone())
+        } else {
+            None
+        }
     }
 
     fn on_process_message(
@@ -313,6 +330,37 @@ impl LoadHandler for WebClient {
     }
 }
 
+impl AudioHandler for WebClient {
+    fn on_audio_stream_packet(
+        self: &Arc<Self>, browser: Browser, stream_id: i32, data: *mut *const f32, frames: i32,
+        pts: i64,
+    ) {
+        if let Some(audio) = self.audio.as_ref() {
+            audio.append_pcm(self.id, stream_id, data, frames, pts as u64);
+        }
+    }
+
+    fn on_audio_stream_started(
+        self: &Arc<Self>, browser: Browser, stream_id: i32, channels: i32, channel_layout: i32,
+        sample_rate: i32, frames_per_buffer: i32,
+    ) {
+        if let Some(audio) = self.audio.as_ref() {
+            audio.create_stream(self.id, stream_id, channels, sample_rate, frames_per_buffer);
+            let objects = self.object_list.lock().unwrap();
+
+            for &object_id in objects.iter() {
+                audio.add_source(self.id, object_id);
+            }
+        }
+    }
+
+    fn on_audio_stream_stopped(self: &Arc<Self>, browser: Browser, stream_id: i32) {
+        if let Some(audio) = self.audio.as_ref() {
+            audio.remove_stream(self.id, stream_id);
+        }
+    }
+}
+
 impl WebClient {
     pub fn new(id: u32, cbs: CallbackList, event_tx: Sender<Event>) -> Arc<WebClient> {
         let rect = crate::utils::client_rect();
@@ -326,7 +374,9 @@ impl WebClient {
             browser: Mutex::new(None),
             rendered: (Mutex::new(false), Condvar::new()),
             callbacks: cbs,
+            object_list: Mutex::new(HashSet::new()),
             is_extern: false,
+            audio: None,
             event_tx,
             id,
         };
@@ -334,7 +384,9 @@ impl WebClient {
         Arc::new(client)
     }
 
-    pub fn new_extern(id: u32, cbs: CallbackList, event_tx: Sender<Event>) -> Arc<WebClient> {
+    pub fn new_extern(
+        id: u32, cbs: CallbackList, event_tx: Sender<Event>, audio: Arc<Audio>,
+    ) -> Arc<WebClient> {
         let view = View::new();
 
         let client = WebClient {
@@ -344,7 +396,9 @@ impl WebClient {
             browser: Mutex::new(None),
             rendered: (Mutex::new(false), Condvar::new()),
             callbacks: cbs,
+            object_list: Mutex::new(HashSet::new()),
             is_extern: true,
+            audio: Some(audio),
             event_tx,
             id,
         };
@@ -494,6 +548,22 @@ impl WebClient {
 
     pub fn restore_hide_status(&self) {
         self.internal_hide(self.hidden.load(Ordering::SeqCst), false);
+    }
+
+    pub fn set_audio_muted(&self, muted: bool) {
+        if let Some(host) = self.browser().map(|br| br.host()) {
+            host.set_audio_muted(muted);
+        }
+    }
+
+    pub fn add_object(&self, object_id: i32) {
+        let mut objects = self.object_list.lock().unwrap();
+        objects.insert(object_id);
+    }
+
+    pub fn remove_object(&self, object_id: i32) {
+        let mut objects = self.object_list.lock().unwrap();
+        objects.remove(&object_id);
     }
 
     pub fn id(&self) -> u32 {
