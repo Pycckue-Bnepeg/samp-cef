@@ -544,6 +544,10 @@ impl WebClient {
                 host.invalidate(PaintElement::View);
             }
         }
+
+        if !self.is_extern() {
+            self.set_audio_muted(hide);
+        }
     }
 
     pub fn restore_hide_status(&self) {

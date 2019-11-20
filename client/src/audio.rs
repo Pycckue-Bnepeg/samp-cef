@@ -1,7 +1,12 @@
 use alto::{Alto, Buffer, Context, DistanceModel, Mono, Source, SourceState, StreamingSource};
 use client_api::gta::matrix::{CVector, RwMatrix};
+
 use std::collections::{BTreeMap, HashMap};
-use std::sync::{Arc, Mutex};
+use std::path::PathBuf;
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc, Mutex,
+};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 pub const MAX_DISTANCE: f32 = 30.0;
@@ -9,6 +14,7 @@ pub const MAX_DISTANCE: f32 = 30.0;
 pub struct Audio {
     alto: Alto,
     context: Context,
+    paused: AtomicBool,
     streams: Mutex<HashMap<u32, Vec<AudioStream>>>, // browser_id -> streams
 }
 
@@ -28,6 +34,22 @@ impl AudioStream {
         self.sources.values_mut().for_each(|source| source.play());
     }
 
+    pub fn clear_queue(&mut self) {
+        self.pending_pcm = BTreeMap::new();
+    }
+
+    pub fn reset(&mut self) {
+        self.clear_queue();
+
+        self.sources.values_mut().for_each(|source| {
+            while source.source.buffers_queued() != 0 && source.source.buffers_processed() != 0 {
+                if let Ok(buffer) = source.source.unqueue_buffer() {
+                    source.buffers.push(buffer);
+                }
+            }
+        })
+    }
+
     pub fn unqueue_buffers(&mut self) {
         self.sources
             .values_mut()
@@ -38,6 +60,7 @@ impl AudioStream {
 pub struct AudioSource {
     buffers: Vec<Buffer>,
     source: StreamingSource,
+    muted: bool,
 }
 
 impl AudioSource {
@@ -45,7 +68,6 @@ impl AudioSource {
         if let Some(mut buffer) = self.free_buffer() {
             buffer.set_data::<Mono<f32>, _>(&pcm, sample_rate);
             self.source.queue_buffer(buffer);
-
             true
         } else {
             false
@@ -53,11 +75,17 @@ impl AudioSource {
     }
 
     pub fn play(&mut self) {
-        if
-        /*self.source.buffers_queued() >= 1 &&*/
-        self.source.state() != SourceState::Playing {
-            self.source.play();
+        match self.source.state() {
+            SourceState::Initial | SourceState::Stopped => {
+                self.source.play();
+            }
+
+            _ => (),
         }
+    }
+
+    pub fn stop(&mut self) {
+        self.source.stop();
     }
 
     pub fn unqueue_buffers(&mut self) {
@@ -81,10 +109,18 @@ impl AudioSource {
 
 impl Audio {
     pub fn new() -> Arc<Audio> {
-        let alto = match Alto::load("openal.dll") {
+        let exe = std::env::current_exe().ok();
+
+        let path = exe
+            .as_ref()
+            .and_then(|exe| exe.parent())
+            .map(|parent| parent.join("./cef/sound.dll"))
+            .unwrap_or_else(|| PathBuf::from("./cef/sound.dll"));
+
+        let alto = match Alto::load(path) {
             Ok(alto) => alto,
             Err(_) => {
-                client_api::utils::error_message_box("CEF error", "There is no OpenAL library in the root folder of GTA.\nPlease reinstall the plugin and try again.");
+                client_api::utils::error_message_box("CEF error", "There is no OpenAL library (sound.dll) in the CEF folder.\nPlease reinstall the plugin and try again.");
                 std::process::exit(0);
             }
         };
@@ -107,6 +143,7 @@ impl Audio {
         let audio = Audio {
             alto,
             context,
+            paused: AtomicBool::new(false),
             streams: Mutex::new(HashMap::new()),
         };
 
@@ -143,7 +180,17 @@ impl Audio {
     pub fn append_pcm(
         &self, browser: u32, stream_id: i32, data: *mut *const f32, frames: i32, pts: u64,
     ) {
+        if self.paused.load(Ordering::SeqCst) {
+            return;
+        }
+
         if frames == 0 || data.is_null() {
+            return;
+        }
+
+        let current_time = current_time();
+
+        if current_time - pts as i128 > 0 {
             return;
         }
 
@@ -220,16 +267,17 @@ impl Audio {
 
                 source.set_distance_model(DistanceModel::InverseClamped);
                 source.set_max_distance(MAX_DISTANCE);
-                source.set_position([0.0, 0.0, 0.0]);
                 source.set_reference_distance(1.0);
                 source.set_air_absorption_factor(10.0);
                 source.set_cone_inner_angle(120.0);
                 source.set_cone_outer_angle(180.0);
-                source.set_relative(true);
-                source.set_gain(1.0);
-                //                source.set_relative(false);
+                source.set_relative(false);
 
-                let audio_source = AudioSource { source, buffers };
+                let audio_source = AudioSource {
+                    source,
+                    buffers,
+                    muted: true,
+                };
 
                 entry.sources.insert(object_id, audio_source);
             });
@@ -247,7 +295,9 @@ impl Audio {
     }
 
     pub fn set_gain(&self, gain: f32) {
-        self.context.set_gain(gain);
+        if !self.paused.load(Ordering::SeqCst) {
+            self.context.set_gain(gain);
+        }
     }
 
     pub fn set_velocity(&self, velocity: CVector) {
@@ -266,21 +316,75 @@ impl Audio {
             [matrix.up.x, matrix.up.y, matrix.up.z],
         ));
     }
+
+    pub fn set_object_settings(
+        &self, object_id: i32, pos: CVector, velo: CVector, direction: CVector,
+    ) {
+        self.for_object(object_id, |source| {
+            source.source.set_position([pos.x, pos.y, pos.z]);
+            source.source.set_velocity([velo.x, velo.y, velo.z]);
+
+            source
+                .source
+                .set_direction([direction.x, direction.y, direction.z]);
+
+            if source.muted {
+                source.source.set_max_gain(1.0);
+                source.muted = false;
+            }
+        });
+    }
+
+    pub fn object_mute(&self, object_id: i32) {
+        self.for_object(object_id, |source| {
+            if !source.muted {
+                source.source.set_max_gain(0.0);
+                source.muted = true;
+            }
+        });
+    }
+
+    pub fn set_paused(&self, paused: bool) {
+        let prev = self.paused.swap(paused, Ordering::SeqCst);
+
+        if prev != paused && paused {
+            self.context.set_gain(0.0);
+            let mut streams = self.streams.lock().unwrap();
+
+            streams.values_mut().for_each(|stream| {
+                stream.iter_mut().for_each(|stream| {
+                    stream.reset();
+                })
+            });
+        }
+    }
+
+    fn for_object<F>(&self, object_id: i32, mut func: F)
+    where
+        F: FnMut(&mut AudioSource),
+    {
+        let mut streams = self.streams.lock().unwrap();
+
+        streams.values_mut().for_each(|stream| {
+            stream.iter_mut().for_each(|stream| {
+                stream.sources.get_mut(&object_id).map(|source| {
+                    func(source);
+                });
+            })
+        });
+    }
 }
 
 fn audio_thread(audio: Arc<Audio>) {
     loop {
-        {
+        if !audio.paused.load(Ordering::SeqCst) {
             let mut browsers = audio.streams.lock().unwrap();
 
             for streams in browsers.values_mut() {
                 for stream in streams {
                     stream.unqueue_buffers();
 
-                    let current_time = SystemTime::now()
-                        .duration_since(UNIX_EPOCH)
-                        .unwrap_or_else(|_| Duration::from_secs(0))
-                        .as_millis() as i128;
+                    let current_time = current_time();
 
                     for (pts, pending) in stream.pending_pcm.iter() {
                         let pts_big = *pts as i128;
@@ -336,4 +440,11 @@ fn audio_thread(audio: Arc<Audio>) {
 
         std::thread::sleep(std::time::Duration::from_micros(500));
     }
+}
+
+fn current_time() -> i128 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_else(|_| Duration::from_secs(0))
+        .as_millis() as i128
 }

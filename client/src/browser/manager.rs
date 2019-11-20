@@ -9,7 +9,7 @@ use cef::types::string::CefString;
 use cef_sys::{cef_event_flags_t, cef_key_event_t, cef_mouse_button_type_t, cef_mouse_event_t};
 
 use std::collections::{HashMap, VecDeque};
-use std::sync::Arc;
+use std::sync::{Arc, MutexGuard};
 
 use client_api::gta::rw::rwcore::{RwRaster, RwTexture};
 

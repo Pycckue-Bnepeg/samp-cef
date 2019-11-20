@@ -208,6 +208,13 @@ pub fn mainloop() {
                 || inputs::Dialog::is_input_focused()
                 || CMenuManager::is_menu_active();
 
+            let menu = CMenuManager::get();
+
+            app.audio
+                .set_paused(menu.is_active() || !app.window_focused);
+
+            app.audio.set_gain(menu.sfx_volume());
+
             let mut manager = app.manager.lock().unwrap();
             manager.set_corrupted(input_active || !app.window_focused);
         }
@@ -309,6 +316,31 @@ pub fn mainloop() {
                 app.audio.set_position(position);
                 app.audio.set_velocity(velocity);
                 app.audio.set_orientation(matrix);
+
+                let mut manager = app.manager.lock().unwrap();
+
+                for browser in manager.external_browsers() {
+                    for &object_id in browser.object_ids.iter() {
+                        if let Some(object) = Object::get(object_id) {
+                            let obj_position = object.position();
+                            let velocity = object.velocity();
+                            let heading = object.heading();
+
+                            if client_api::utils::distance(&position, &obj_position) <= 30.0 {
+                                app.audio.set_object_settings(
+                                    object_id,
+                                    obj_position,
+                                    velocity,
+                                    heading,
+                                );
+                            } else {
+                                app.audio.object_mute(object_id);
+                            }
+                        } else {
+                            app.audio.object_mute(object_id);
+                        }
+                    }
+                }
             }
         }
     }
