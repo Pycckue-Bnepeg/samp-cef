@@ -256,8 +256,6 @@ impl View {
     }
 
     pub fn make_renderware(&mut self, raster: &mut RwRaster, scale: i32) {
-        println!("View::make_renderware");
-
         let width = (raster.width * scale) as usize;
         let height = (raster.height * scale) as usize;
 
@@ -328,7 +326,6 @@ impl View {
     }
 
     pub fn on_lost_device(&mut self) {
-        println!("View::on_lost_device");
         self.destroy_previous();
     }
 

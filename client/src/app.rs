@@ -149,11 +149,6 @@ pub fn initialize() {
         );
 
         return; // don't waste time
-    } else {
-        println!(
-            "detected version of SAMP is {:?}",
-            client_api::samp::version::version()
-        );
     }
 
     // apply hook to WndProc

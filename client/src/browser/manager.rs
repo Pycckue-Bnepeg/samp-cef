@@ -107,11 +107,6 @@ impl Manager {
     }
 
     pub fn browser_append_to_object(&mut self, id: u32, object_id: i32) {
-        println!(
-            "BrowserManager::browser_append_to_object({}, {})",
-            id, object_id
-        );
-
         self.audio.add_source(id, object_id);
 
         self.clients_on_txd
@@ -128,11 +123,6 @@ impl Manager {
     }
 
     pub fn browser_remove_from_object(&mut self, id: u32, object_id: i32) {
-        println!(
-            "BrowserManager::browser_remove_from_object({}, {})",
-            id, object_id
-        );
-
         self.audio.remove_source(id, object_id);
 
         self.clients_on_txd
