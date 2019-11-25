@@ -419,6 +419,15 @@ impl Manager {
         }
     }
 
+    pub fn close_all_browsers(&mut self) {
+        self.clients_on_txd.clear();
+        let audio = self.audio.clone();
+
+        self.clients
+            .drain()
+            .for_each(|(_, client)| Self::internal_close_client(client, &audio, true));
+    }
+
     fn temporary_hide(&self, hide: bool) {
         for client in self.clients.values() {
             if hide {
@@ -440,9 +449,15 @@ impl Manager {
             }
         }
 
+        Self::internal_close_client(client, &self.audio, force_close);
+    }
+
+    fn internal_close_client(client: Arc<WebClient>, audio: &Arc<Audio>, force_close: bool) {
         client
             .browser()
             .map(|br| br.host())
             .map(|host| host.close_browser(force_close));
+
+        audio.remove_all_streams(client.id());
     }
 }

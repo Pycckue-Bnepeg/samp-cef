@@ -245,6 +245,11 @@ impl Audio {
         }
     }
 
+    pub fn remove_all_streams(&self, browser: u32) {
+        let mut streams = self.streams.lock().unwrap();
+        streams.remove(&browser);
+    }
+
     pub fn add_source(&self, browser: u32, object_id: i32) {
         let mut streams = self.streams.lock().unwrap();
 
@@ -274,6 +279,7 @@ impl Audio {
                 source.set_cone_inner_angle(120.0);
                 source.set_cone_outer_angle(180.0);
                 source.set_relative(false);
+                source.set_max_gain(0.0); //
 
                 let audio_source = AudioSource {
                     source,

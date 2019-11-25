@@ -38,6 +38,8 @@ struct ExtPlugin {
     initialize: Option<Symbol<'static, extern "C" fn()>>,
     mainloop: Option<Symbol<'static, extern "C" fn()>>,
     dxreset: Option<Symbol<'static, extern "C" fn()>>,
+    connect: Option<Symbol<'static, extern "C" fn()>>,
+    disconnect: Option<Symbol<'static, extern "C" fn()>>,
     quit: Option<Symbol<'static, extern "C" fn()>>,
 }
 
@@ -76,6 +78,8 @@ pub fn initialize(event_tx: Sender<Event>, manager: Arc<Mutex<Manager>>) -> Call
 
                             let dxreset = library.get::<extern "C" fn()>(b"cef_dxreset").ok();
                             let initialize = library.get::<extern "C" fn()>(b"cef_initialize").ok();
+                            let connect = library.get::<extern "C" fn()>(b"cef_connect").ok();
+                            let disconnect = library.get::<extern "C" fn()>(b"cef_disconnect").ok();
                             let quit = library.get::<extern "C" fn()>(b"cef_quit").ok();
 
                             let plugin = ExtPlugin {
@@ -83,6 +87,8 @@ pub fn initialize(event_tx: Sender<Event>, manager: Arc<Mutex<Manager>>) -> Call
                                 initialize,
                                 mainloop,
                                 dxreset,
+                                connect,
+                                disconnect,
                                 quit,
                             };
 
@@ -123,6 +129,26 @@ pub fn call_initialize() {
     if let Some(ext) = ExternalManager::get() {
         for plugin in &ext.plugins {
             if let Some(func) = plugin.initialize.as_ref() {
+                func();
+            }
+        }
+    }
+}
+
+pub fn call_connect() {
+    if let Some(ext) = ExternalManager::get() {
+        for plugin in &ext.plugins {
+            if let Some(func) = plugin.connect.as_ref() {
+                func();
+            }
+        }
+    }
+}
+
+pub fn call_disconnect() {
+    if let Some(ext) = ExternalManager::get() {
+        for plugin in &ext.plugins {
+            if let Some(func) = plugin.disconnect.as_ref() {
                 func();
             }
         }

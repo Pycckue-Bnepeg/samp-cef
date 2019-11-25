@@ -87,6 +87,11 @@ pub struct App {
 
 impl Drop for App {
     fn drop(&mut self) {
+        {
+            let mut manager = self.manager.lock().unwrap();
+            manager.close_all_browsers();
+        }
+
         self.network.take();
         self.audio.terminate();
 
@@ -186,7 +191,6 @@ pub fn uninitialize() {
 }
 
 fn quit() {
-    println!("app::quit()");
     crate::render::uninitialize();
     crate::external::quit();
 
@@ -197,6 +201,10 @@ fn shitty() {
     if let Some(app) = App::get() {
         if !app.samp_ready {
             app.samp_ready = true;
+        } else {
+            if !app.window_focused {
+                mainloop(); //
+            }
         }
     }
 }
@@ -217,11 +225,19 @@ pub fn mainloop() {
 
                 app.network = Some(network);
                 app.connected = true;
+
+                crate::external::call_connect();
             }
         }
 
         if app.connected && client_api::samp::gamestate() != Gamestate::Connected {
             // disconnected
+            crate::external::call_disconnect();
+
+            let mut manager = app.manager.lock().unwrap();
+            manager.close_all_browsers();
+            app.network.take();
+            app.connected = false;
         }
 
         {
@@ -230,10 +246,9 @@ pub fn mainloop() {
                 || CMenuManager::is_menu_active();
 
             let menu = CMenuManager::get();
+            let paused = menu.is_active() || !app.window_focused;
 
-            app.audio
-                .set_paused(menu.is_active() || !app.window_focused);
-
+            app.audio.set_paused(paused);
             app.audio.set_gain(menu.sfx_volume());
 
             let mut manager = app.manager.lock().unwrap();
@@ -326,7 +341,7 @@ pub fn mainloop() {
             }
         }
 
-        if app.cef_ready {
+        if app.cef_ready && app.connected {
             crate::external::call_mainloop();
 
             if let Some(local) = local_player() {
