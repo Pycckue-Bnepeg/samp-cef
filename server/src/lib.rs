@@ -21,7 +21,7 @@ use crate::utils::{handle_result, IdPool};
 
 use crossbeam_channel::Receiver;
 
-const INIT_TIMEOUT: Duration = Duration::from_secs(2);
+const INIT_TIMEOUT: Duration = Duration::from_secs(10);
 
 pub enum Event {
     EmitEvent(i32, String, String),

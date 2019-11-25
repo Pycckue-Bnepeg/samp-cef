@@ -1,5 +1,7 @@
 use std::ffi::c_void;
 use std::sync::{Arc, Mutex};
+use std::time::Instant;
+
 use winapi::shared::d3d9::IDirect3DDevice9;
 
 use crate::browser::manager::{ExternalClient, Manager};
@@ -16,9 +18,18 @@ const RESET_FLAG_POST: u8 = 1;
 
 static mut RENDER: Option<Render> = None;
 
+const REFERENCE_FRAMES: u64 = 10;
+
+struct FrameCounter {
+    start_at: Instant,
+    frames: u64,
+    last_fps: u64,
+}
+
 struct Render {
     manager: Arc<Mutex<Manager>>,
     centity_render: GenericDetour<extern "thiscall" fn(obj: *mut CEntity)>,
+    counter: FrameCounter,
     init: bool,
 }
 
@@ -29,6 +40,26 @@ impl Render {
                 .as_mut()
                 .expect("Unexpected null pointer to client::render::RENDER")
         }
+    }
+
+    fn calc_frames(&mut self) -> Option<u64> {
+        let counter = &mut self.counter;
+
+        counter.frames += 1;
+
+        if counter.frames == REFERENCE_FRAMES {
+            let elapsed = counter.start_at.elapsed().as_millis() as u64;
+
+            let fps = (REFERENCE_FRAMES * 1000) / elapsed;
+
+            counter.last_fps = fps;
+            counter.frames = 0;
+            counter.start_at = Instant::now();
+
+            return Some(fps);
+        }
+
+        None
     }
 }
 
@@ -43,9 +74,16 @@ pub fn initialize(manager: Arc<Mutex<Manager>>) {
         centity_render
     };
 
+    let counter = FrameCounter {
+        start_at: Instant::now(),
+        frames: 0,
+        last_fps: 0,
+    };
+
     let render = Render {
         manager,
         centity_render,
+        counter,
         init: false,
     };
 
@@ -66,9 +104,15 @@ fn on_create() {
 
 fn on_render(_: &mut IDirect3DDevice9) {
     let render = Render::get();
+    let fps = render.calc_frames();
 
     {
         let mut manager = render.manager.lock().unwrap();
+
+        if let Some(fps) = fps {
+            manager.update_fps(fps);
+        }
+
         manager.do_not_draw(CMenuManager::is_menu_active());
         manager.draw();
     }

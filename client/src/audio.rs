@@ -15,6 +15,7 @@ pub struct Audio {
     alto: Alto,
     context: Context,
     paused: AtomicBool,
+    terminate: AtomicBool,
     streams: Mutex<HashMap<u32, Vec<AudioStream>>>, // browser_id -> streams
 }
 
@@ -144,6 +145,7 @@ impl Audio {
             alto,
             context,
             paused: AtomicBool::new(false),
+            terminate: AtomicBool::new(false),
             streams: Mutex::new(HashMap::new()),
         };
 
@@ -359,6 +361,10 @@ impl Audio {
         }
     }
 
+    pub fn terminate(&self) {
+        self.terminate.store(true, Ordering::SeqCst);
+    }
+
     fn for_object<F>(&self, object_id: i32, mut func: F)
     where
         F: FnMut(&mut AudioSource),
@@ -377,6 +383,10 @@ impl Audio {
 
 fn audio_thread(audio: Arc<Audio>) {
     loop {
+        if audio.terminate.load(Ordering::SeqCst) {
+            break;
+        }
+
         if !audio.paused.load(Ordering::SeqCst) {
             let mut browsers = audio.streams.lock().unwrap();
 

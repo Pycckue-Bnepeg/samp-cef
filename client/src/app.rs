@@ -85,6 +85,15 @@ pub struct App {
     event_rx: Receiver<Event>,
 }
 
+impl Drop for App {
+    fn drop(&mut self) {
+        self.network.take();
+        self.audio.terminate();
+
+        quit();
+    }
+}
+
 impl App {
     pub fn new() -> App {
         let (event_tx, event_rx) = crossbeam_channel::unbounded();
@@ -160,10 +169,27 @@ pub fn initialize() {
     }
 
     client_api::wndproc::append_callback(win_event);
+
+    NetGame::on_destroy(|| {
+        uninitialize();
+    });
+
+    client_api::gta::game::on_shutdown(|| {
+        uninitialize();
+    });
 }
 
 pub fn uninitialize() {
+    unsafe {
+        APP.take();
+    }
+}
+
+fn quit() {
+    println!("app::quit()");
     crate::render::uninitialize();
+    crate::external::quit();
+
     client_api::wndproc::uninitialize();
 }
 
@@ -428,18 +454,3 @@ extern "stdcall" fn async_key_state(key: i32) -> u16 {
 
     return 0;
 }
-
-/*
-
-public on_browser_ready(id, status) {
-    if (status == 200) {
-        new obj = create_tv();
-        cef_browser_append_to_object(id, obj, "CJ_TV_SCREEN");
-    }
-}
-
-cef_create_external_browser(ID, URL, SCALE, TEXTURE_NAME);
-cef_browser_append_to_object(ID, OBJECT_ID);
-cef_browser_remove_from_texture(ID, OBJECT_ID);
-
-*/

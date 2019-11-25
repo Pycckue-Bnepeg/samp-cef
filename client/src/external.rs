@@ -38,6 +38,7 @@ struct ExtPlugin {
     initialize: Option<Symbol<'static, extern "C" fn()>>,
     mainloop: Option<Symbol<'static, extern "C" fn()>>,
     dxreset: Option<Symbol<'static, extern "C" fn()>>,
+    quit: Option<Symbol<'static, extern "C" fn()>>,
 }
 
 impl ExternalManager {
@@ -75,12 +76,14 @@ pub fn initialize(event_tx: Sender<Event>, manager: Arc<Mutex<Manager>>) -> Call
 
                             let dxreset = library.get::<extern "C" fn()>(b"cef_dxreset").ok();
                             let initialize = library.get::<extern "C" fn()>(b"cef_initialize").ok();
+                            let quit = library.get::<extern "C" fn()>(b"cef_quit").ok();
 
                             let plugin = ExtPlugin {
                                 library: lib,
                                 initialize,
                                 mainloop,
                                 dxreset,
+                                quit,
                             };
 
                             external.plugins.push(plugin);
@@ -129,6 +132,16 @@ pub fn call_initialize() {
 pub fn window_active(active: bool) {
     if let Some(ext) = ExternalManager::get() {
         ext.window_active.store(active, Ordering::SeqCst);
+    }
+}
+
+pub fn quit() {
+    if let Some(ext) = ExternalManager::get() {
+        for mut plugin in ext.plugins.drain(..) {
+            if let Some(quit) = plugin.quit.as_mut() {
+                quit();
+            }
+        }
     }
 }
 

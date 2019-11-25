@@ -406,6 +406,19 @@ impl Manager {
         &mut self.clients_on_txd
     }
 
+    pub fn update_fps(&mut self, fps: u64) {
+        let fps = fps as i32;
+        let fps = std::cmp::max(15, std::cmp::min(60, fps));
+
+        for browser in self.clients.values().filter_map(|client| client.browser()) {
+            let host = browser.host();
+
+            if host.windowless_frame_rate() != fps {
+                host.set_windowless_frame_rate(fps);
+            }
+        }
+    }
+
     fn temporary_hide(&self, hide: bool) {
         for client in self.clients.values() {
             if hide {

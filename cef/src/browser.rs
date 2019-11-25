@@ -196,6 +196,20 @@ impl BrowserHost {
             set(self.inner.get_mut(), if mute { 1 } else { 0 });
         }
     }
+
+    pub fn set_windowless_frame_rate(&self, framerate: i32) {
+        let set = self.inner.set_windowless_frame_rate.unwrap();
+
+        unsafe {
+            set(self.inner.get_mut(), framerate);
+        }
+    }
+
+    pub fn windowless_frame_rate(&self) -> i32 {
+        let get = self.inner.get_windowless_frame_rate.unwrap();
+
+        unsafe { get(self.inner.get_mut()) }
+    }
 }
 
 #[derive(Clone)]
