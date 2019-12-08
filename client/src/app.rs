@@ -1,6 +1,6 @@
 use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use cef::types::list::List;
 use cef_sys::{cef_key_event_t, cef_key_event_type_t};
@@ -36,6 +36,7 @@ pub enum Event {
     Connect(SocketAddr),
     Timeout,
     NetworkError,
+    NetworkJoined,
     BadVersion,
 
     CreateBrowser {
@@ -83,6 +84,9 @@ pub struct App {
 
     event_tx: Sender<Event>,
     event_rx: Receiver<Event>,
+
+    // debug
+    initialization: Instant,
 }
 
 impl Drop for App {
@@ -124,6 +128,7 @@ impl App {
             samp_ready: false,
             window_focused: true,
             network: None,
+            initialization: Instant::now(),
             manager,
             keystate_hook,
             event_tx,
@@ -131,6 +136,40 @@ impl App {
             callbacks,
             audio,
         }
+    }
+
+    pub fn connect(&mut self) {
+        if let Some(mut addr) = NetGame::get().addr() {
+            if !self.samp_ready {
+                self.samp_ready = true;
+            }
+
+            println!("SAMP: CNetGame address: {}", addr);
+
+            addr.set_port(CEF_SERVER_PORT);
+
+            println!(
+                "CEF: Event::Connect({}). Elapsed {:?}",
+                addr,
+                self.initialization.elapsed()
+            );
+
+            let network = NetworkClient::new(self.event_tx.clone());
+            network.send(Event::Connect(addr));
+
+            self.network = Some(network);
+            self.connected = true;
+        }
+    }
+
+    pub fn disconnect(&mut self) {
+        // disconnected
+        crate::external::call_disconnect();
+
+        let mut manager = self.manager.lock().unwrap();
+        manager.close_all_browsers();
+        self.network.take();
+        self.connected = false;
     }
 
     pub fn manager(&self) -> Arc<Mutex<Manager>> {
@@ -147,8 +186,18 @@ pub fn initialize() {
         winapi::um::consoleapi::AllocConsole();
     }
 
+    let start = Instant::now();
+
+    println!("CEF: Allocate console.");
+    println!("CEF: Create Application");
+
     let app = App::new();
     let manager = app.manager();
+
+    println!(
+        "CEF: Initialize render module. (elapsed: {:?})",
+        start.elapsed()
+    );
 
     crate::render::initialize(manager);
 
@@ -165,6 +214,11 @@ pub fn initialize() {
         return; // don't waste time
     }
 
+    println!(
+        "CEF: Trying to hook WndProc. (elapsed: {:?})",
+        start.elapsed()
+    );
+
     // apply hook to WndProc
     while !wndproc::initialize(&wndproc::WndProcSettings {
         callback: shitty,
@@ -173,15 +227,27 @@ pub fn initialize() {
         std::thread::sleep(Duration::from_millis(10));
     }
 
+    println!("CEF: Append WndProc callback.");
+
     client_api::wndproc::append_callback(win_event);
+
+    println!("CEF: Hooking destroy functions.");
 
     NetGame::on_destroy(|| {
         uninitialize();
     });
 
+    NetGame::on_reconnect(|| {
+        if let Some(app) = App::get() {
+            app.disconnect();
+        }
+    });
+
     client_api::gta::game::on_shutdown(|| {
         uninitialize();
     });
+
+    println!("CEF: Initialize done. (elapsed: {:?})", start.elapsed());
 }
 
 pub fn uninitialize() {
@@ -200,6 +266,7 @@ fn quit() {
 fn shitty() {
     if let Some(app) = App::get() {
         if !app.samp_ready {
+            println!("CEF: SAMP init within {:?}", app.initialization.elapsed());
             app.samp_ready = true;
         } else {
             if !app.window_focused {
@@ -212,32 +279,12 @@ fn shitty() {
 // inside GTA thread
 pub fn mainloop() {
     if let Some(app) = App::get() {
+        if !app.connected {
+            app.connect();
+        }
+
         if !app.samp_ready {
             return;
-        }
-
-        if !app.connected && client_api::samp::gamestate() == Gamestate::Connected {
-            if let Some(mut addr) = NetGame::get().addr() {
-                addr.set_port(CEF_SERVER_PORT);
-
-                let network = NetworkClient::new(app.event_tx.clone());
-                network.send(Event::Connect(addr));
-
-                app.network = Some(network);
-                app.connected = true;
-
-                crate::external::call_connect();
-            }
-        }
-
-        if app.connected && client_api::samp::gamestate() != Gamestate::Connected {
-            // disconnected
-            crate::external::call_disconnect();
-
-            let mut manager = app.manager.lock().unwrap();
-            manager.close_all_browsers();
-            app.network.take();
-            app.connected = false;
         }
 
         {
@@ -265,6 +312,11 @@ pub fn mainloop() {
                     hidden,
                     focused,
                 } => {
+                    println!(
+                        "CEF: Request to create browser view with id: {}. URL: {}",
+                        id, url
+                    );
+
                     let mut manager = app.manager.lock().unwrap();
                     manager.create_browser(id, app.callbacks.clone(), &url);
                     manager.hide_browser(id, hidden);
@@ -276,6 +328,7 @@ pub fn mainloop() {
                 }
 
                 Event::CreateExternBrowser(ext) => {
+                    println!("CEF: Request from server to create external browser with id {}. Texture name: {}", ext.id, ext.texture);
                     let mut manager = app.manager.lock().unwrap();
 
                     manager.create_browser_on_texture(&ext, app.callbacks.clone());
@@ -313,6 +366,13 @@ pub fn mainloop() {
                 }
 
                 Event::BrowserCreated(id, code) => {
+                    println!(
+                        "CEF: Browser {} created. Status code: {}. Network available? {}",
+                        id,
+                        code,
+                        app.network.is_some()
+                    );
+
                     if let Some(network) = app.network.as_mut() {
                         let event = Event::BrowserCreated(id, code);
                         network.send(event);
@@ -323,8 +383,13 @@ pub fn mainloop() {
                 }
 
                 Event::CefInitialize => {
+                    println!(
+                        "CEF: Initialized. Elapsed: {:?}",
+                        app.initialization.elapsed()
+                    );
+
                     app.cef_ready = true;
-                    crate::external::call_initialize();
+                    //                    crate::external::call_initialize();
                 }
 
                 Event::AppendToObject(browser, object) => {
@@ -335,6 +400,10 @@ pub fn mainloop() {
                 Event::RemoveFromObject(browser, object) => {
                     let mut manager = app.manager.lock().unwrap();
                     manager.browser_remove_from_object(browser, object);
+                }
+
+                Event::NetworkJoined => {
+                    crate::external::call_connect();
                 }
 
                 _ => (),

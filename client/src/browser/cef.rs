@@ -20,6 +20,8 @@ struct DefaultApp {
 impl RenderProcessHandler for DefaultApp {}
 impl BrowserProcessHandler for DefaultApp {
     fn on_context_initialized(self: &Arc<Self>) {
+        println!("CEF: Event::CefInitialize");
+        crate::external::call_initialize();
         self.event_tx.send(Event::CefInitialize);
     }
 }

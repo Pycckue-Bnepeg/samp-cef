@@ -84,6 +84,7 @@ impl CefPlugin {
         if let Ok(addr) = player_ip.parse() {
             let mut server = self.server.lock().unwrap();
             server.allow_connection(player_id, addr);
+            println!("Cef::on_player_connect({}, {})", player_id, player_ip);
             self.await_connect.push((player_id, Instant::now()));
         }
 
@@ -258,9 +259,15 @@ impl CefPlugin {
     // utils
     fn notify_timeout(&mut self) {
         let mut i = 0;
-        while i != self.await_connect.len() {
+        while i < self.await_connect.len() {
             if self.await_connect[i].1.elapsed() >= INIT_TIMEOUT {
-                let (player, _) = self.await_connect.remove(i);
+                let (player, instant) = self.await_connect.remove(i);
+                println!(
+                    "notify_timeout({}, id:{} elapsed:{:?})",
+                    i,
+                    player,
+                    instant.elapsed()
+                );
                 self.notify_connect(player, false);
             } else {
                 i += 1;
@@ -311,12 +318,16 @@ impl SampPlugin for CefPlugin {
                 }
 
                 Event::Connected(player) => {
+                    println!("Event::Connected({})", player);
                     self.notify_connect(player, true);
 
                     self.await_connect
                         .iter()
                         .position(|(player_id, _)| *player_id == player)
-                        .map(|idx| self.await_connect.remove(idx));
+                        .map(|idx| {
+                            println!("Remove {}", idx);
+                            self.await_connect.remove(idx);
+                        });
                 }
 
                 Event::BrowserCreated(player, browser, code) => {

@@ -100,9 +100,8 @@ impl LifespanHandler for WebClient {
             *br = Some(browser);
         }
 
-        if self.hidden.load(Ordering::SeqCst) {
-            self.hide(true);
-        }
+        let hidden = self.hidden.load(Ordering::SeqCst);
+        self.hide(hidden);
 
         if self.is_extern() {
             self.set_audio_muted(true);
@@ -511,6 +510,11 @@ impl WebClient {
     pub fn remove_object(&self, object_id: i32) {
         let mut objects = self.object_list.lock().unwrap();
         objects.remove(&object_id);
+    }
+
+    pub fn remove_view(&self) {
+        let view = View::new();
+        *self.view.lock().unwrap() = view;
     }
 
     pub fn id(&self) -> u32 {

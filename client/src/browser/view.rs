@@ -250,14 +250,17 @@ impl View {
     }
 
     pub fn make_directx(&mut self, device: &mut IDirect3DDevice9, width: usize, height: usize) {
+        let width = std::cmp::max(1, width);
+        let height = std::cmp::max(1, height);
+
         self.destroy_previous();
         self.directx = Some(D3Container::new(device, width, height));
         self.set_size(width, height);
     }
 
     pub fn make_renderware(&mut self, raster: &mut RwRaster, scale: i32) {
-        let width = (raster.width * scale) as usize;
-        let height = (raster.height * scale) as usize;
+        let width = std::cmp::max(1, (raster.width * scale) as usize);
+        let height = std::cmp::max(1, (raster.height * scale) as usize);
 
         self.destroy_previous();
 
@@ -336,6 +339,9 @@ impl View {
         if self.width == width && self.height == height && !should_replace {
             return;
         }
+
+        let width = std::cmp::max(1, width);
+        let height = std::cmp::max(1, height);
 
         self.destroy_previous();
         self.set_size(width, height);

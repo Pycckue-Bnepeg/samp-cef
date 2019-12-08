@@ -21,6 +21,8 @@ pub extern "stdcall" fn DllMain(instance: HMODULE, reason: u32, _reserved: u32) 
             DisableThreadLibraryCalls(instance);
         }
 
+        render::preinitialize();
+
         std::thread::spawn(|| {
             app::initialize();
         });

@@ -1,8 +1,10 @@
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
+
 use winapi::shared::minwindef::{LPARAM, WPARAM};
+use winapi::shared::windef::RECT;
 use winapi::um::winuser::*;
 
 use cef_sys::cef_event_flags_t::*;
-use winapi::shared::windef::RECT;
 
 pub fn is_key_pressed(key: i32) -> bool {
     let key_state = unsafe { GetKeyState(key) as u16 };
@@ -112,4 +114,11 @@ pub fn client_rect() -> [usize; 2] {
     }
 
     size
+}
+
+pub fn current_time() -> i128 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_else(|_| Duration::from_secs(0))
+        .as_millis() as i128
 }

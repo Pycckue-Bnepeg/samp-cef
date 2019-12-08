@@ -21,6 +21,7 @@ impl NetworkClient {
             if let Some(network) = Network::new(net_tx.clone(), client_rx) {
                 network.run();
             } else {
+                println!("network error ...");
                 std::thread::sleep(Duration::from_secs(2));
                 handle_result(net_tx.send(Event::NetworkError));
             }
@@ -44,7 +45,7 @@ impl Drop for NetworkClient {
 
 #[derive(Debug, Clone, Copy)]
 enum ConnectionState {
-    Auth(SocketAddr),
+    Auth(SocketAddr, Instant),
     Connected(SocketAddr),
     Disconnected,
 }
@@ -52,7 +53,7 @@ enum ConnectionState {
 impl ConnectionState {
     fn addr(&self) -> Option<SocketAddr> {
         match self {
-            ConnectionState::Auth(addr) => Some(addr.clone()),
+            ConnectionState::Auth(addr, _) => Some(addr.clone()),
             ConnectionState::Connected(addr) => Some(addr.clone()),
             _ => None,
         }
@@ -65,6 +66,8 @@ struct Network {
 
     event_tx: Sender<Event>,
     event_rx: Receiver<Event>,
+
+    timings: Instant,
 }
 
 impl Network {
@@ -78,6 +81,7 @@ impl Network {
 
         Some(Network {
             connection_state: ConnectionState::Disconnected,
+            timings: Instant::now(),
             socket,
             event_tx,
             event_rx,
@@ -89,8 +93,13 @@ impl Network {
 
         match packet.packet_id {
             OPEN_CONNECTION => {
-                if let ConnectionState::Auth(addr) = self.connection_state {
-                    self.net_connect(addr);
+                if let ConnectionState::Auth(addr, _) = &self.connection_state {
+                    self.net_connect(*addr);
+                } else {
+                    println!(
+                        "CEF Network: Got OpenConnection from server, but connection_state is {:?}",
+                        self.connection_state
+                    );
                 }
             }
 
@@ -159,13 +168,22 @@ impl Network {
     }
 
     fn handle_join_response(&mut self, packet: packets::JoinResponse) {
-        if let ConnectionState::Auth(addr) = self.connection_state {
+        if let ConnectionState::Auth(addr, _) = self.connection_state {
             if packet.success {
                 self.connection_state = ConnectionState::Connected(addr);
             } else {
                 self.connection_state = ConnectionState::Disconnected;
                 handle_result(self.event_tx.send(Event::BadVersion));
             }
+
+            println!("CEF Network: JoinResponse OK. {:?}", self.connection_state);
+
+            handle_result(self.event_tx.send(Event::NetworkJoined));
+        } else {
+            println!(
+                "CEF Network: JoinResponse error. {:?}",
+                self.connection_state
+            );
         }
     }
 
@@ -246,12 +264,18 @@ impl Network {
     }
 
     fn net_open_connection(&mut self, address: SocketAddr) {
-        self.connection_state = ConnectionState::Auth(address);
+        self.connection_state = ConnectionState::Auth(address, Instant::now());
 
         let auth = packets::OpenConnection {};
 
         let packet = messages::try_into_packet(auth).unwrap();
         let packet = Packet::unreliable_sequenced(address, packet, Some(1));
+
+        println!("CEF Network: OpenConnection ({})", address);
+        println!(
+            "CEF Network: Elapsed since Network module created {:?}",
+            self.timings.elapsed()
+        );
 
         handle_result(self.socket.send(packet));
     }
@@ -263,6 +287,8 @@ impl Network {
 
         let packet = messages::try_into_packet(auth).unwrap();
         let packet = Packet::unreliable_sequenced(address, packet, Some(1));
+
+        println!("CEF Network: RequestJoin ({})", address);
 
         handle_result(self.socket.send(packet));
     }
@@ -298,8 +324,6 @@ impl Network {
 
     fn process_network(&mut self) {
         if let Some(addr) = self.connection_state.addr() {
-            self.socket.manual_poll(Instant::now());
-
             while let Some(event) = self.socket.recv() {
                 match event {
                     SocketEvent::Packet(packet) => {
@@ -316,12 +340,22 @@ impl Network {
 
                     SocketEvent::Timeout(timeout_addr) => {
                         if timeout_addr == addr {
+                            println!("CEF Network: Timeout");
                             handle_result(self.event_tx.send(Event::Timeout));
                         }
                     }
                 }
             }
         }
+
+        if let ConnectionState::Auth(addr, time) = &self.connection_state {
+            if time.elapsed() >= Duration::from_millis(2500) {
+                println!("CEF Network: CEF didn't connect. Retrying ...");
+                self.net_open_connection(addr.clone());
+            }
+        }
+
+        self.socket.manual_poll(Instant::now());
     }
 
     fn process_event(&mut self, event: Event) {

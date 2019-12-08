@@ -7,7 +7,7 @@ use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc, Mutex,
 };
-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant};
 
 pub const MAX_DISTANCE: f32 = 30.0;
 
@@ -190,7 +190,7 @@ impl Audio {
             return;
         }
 
-        let current_time = current_time();
+        let current_time = crate::utils::current_time();
 
         if current_time - pts as i128 > 0 {
             return;
@@ -400,7 +400,7 @@ fn audio_thread(audio: Arc<Audio>) {
                 for stream in streams {
                     stream.unqueue_buffers();
 
-                    let current_time = current_time();
+                    let current_time = crate::utils::current_time();
 
                     for (pts, pending) in stream.pending_pcm.iter() {
                         let pts_big = *pts as i128;
@@ -456,11 +456,4 @@ fn audio_thread(audio: Arc<Audio>) {
 
         std::thread::sleep(std::time::Duration::from_micros(500));
     }
-}
-
-fn current_time() -> i128 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_else(|_| Duration::from_secs(0))
-        .as_millis() as i128
 }

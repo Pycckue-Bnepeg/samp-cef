@@ -34,12 +34,8 @@ struct Render {
 }
 
 impl Render {
-    fn get<'a>() -> &'a mut Render {
-        unsafe {
-            RENDER
-                .as_mut()
-                .expect("Unexpected null pointer to client::render::RENDER")
-        }
+    fn get<'a>() -> Option<&'a mut Render> {
+        unsafe { RENDER.as_mut() }
     }
 
     fn calc_frames(&mut self) -> Option<u64> {
@@ -63,9 +59,11 @@ impl Render {
     }
 }
 
-pub fn initialize(manager: Arc<Mutex<Manager>>) {
+pub fn preinitialize() {
     client_api::gta::d9_proxy::set_proxy(on_create, on_render, on_reset);
+}
 
+pub fn initialize(manager: Arc<Mutex<Manager>>) {
     let centity_render = unsafe {
         let render_func: extern "thiscall" fn(*mut CEntity) = std::mem::transmute(0x00534310);
         let centity_render = GenericDetour::new(render_func, centity_render).unwrap();
@@ -99,43 +97,46 @@ pub fn uninitialize() {
 }
 
 fn on_create() {
-    println!("device created!");
+    println!("GTA: Device is created!");
 }
 
 fn on_render(_: &mut IDirect3DDevice9) {
-    let render = Render::get();
-    let fps = render.calc_frames();
+    if let Some(render) = Render::get() {
+        let fps = render.calc_frames();
 
-    {
-        let mut manager = render.manager.lock().unwrap();
+        {
+            let mut manager = render.manager.lock().unwrap();
 
-        if let Some(fps) = fps {
-            manager.update_fps(fps);
+            if let Some(fps) = fps {
+                manager.update_fps(fps);
+            }
+
+            manager.do_not_draw(CMenuManager::is_menu_active());
+            manager.draw();
         }
-
-        manager.do_not_draw(CMenuManager::is_menu_active());
-        manager.draw();
     }
 
     crate::app::mainloop();
 }
 
 fn on_reset(_: &mut IDirect3DDevice9, reset_flag: u8) {
-    let render = Render::get();
-    let mut manager = render.manager.lock().unwrap();
+    if let Some(render) = Render::get() {
+        let mut manager = render.manager.lock().unwrap();
 
-    match reset_flag {
-        RESET_FLAG_PRE => {
-            manager.on_lost_device();
-            crate::external::call_dxreset();
-        }
+        match reset_flag {
+            RESET_FLAG_PRE => {
+                manager.on_lost_device();
+                drop(manager);
+                crate::external::call_dxreset();
+            }
 
-        RESET_FLAG_POST => {
-            manager.on_reset_device();
-            let rect = crate::utils::client_rect();
-            manager.resize(rect[0], rect[1]);
+            RESET_FLAG_POST => {
+                manager.on_reset_device();
+                let rect = crate::utils::client_rect();
+                manager.resize(rect[0], rect[1]);
+            }
+            _ => (),
         }
-        _ => (),
     }
 }
 
@@ -145,50 +146,51 @@ struct RenderState {
 }
 
 extern "thiscall" fn centity_render(obj: *mut CEntity) {
-    let render = Render::get();
-    let mut manager = render.manager.lock().unwrap();
-    let entity = unsafe { &mut *obj };
+    if let Some(render) = Render::get() {
+        let mut manager = render.manager.lock().unwrap();
+        let entity = unsafe { &mut *obj };
 
-    let browsers = manager.external_browsers();
+        let browsers = manager.external_browsers();
 
-    for browser in browsers {
-        let browser_ptr = browser as *mut _; // должно быть safe
-        for &object_id in &browser.object_ids {
-            if let Some(object) = Object::get(object_id) {
-                if let Some(obj_entity) = object.entity() {
-                    if obj == obj_entity as *mut _ as *mut CEntity {
-                        let rwobject = obj_entity._base._base.rw_entity as *mut RwObject;
+        for browser in browsers {
+            let browser_ptr = browser as *mut _; // должно быть safe
+            for &object_id in &browser.object_ids {
+                if let Some(object) = Object::get(object_id) {
+                    if let Some(obj_entity) = object.entity() {
+                        if obj == obj_entity as *mut _ as *mut CEntity {
+                            let rwobject = obj_entity._base._base.rw_entity as *mut RwObject;
 
-                        if !rwobject.is_null() {
-                            let render_state = Box::new(RenderState {
-                                client: browser_ptr,
-                                before: true,
-                            });
+                            if !rwobject.is_null() {
+                                let render_state = Box::new(RenderState {
+                                    client: browser_ptr,
+                                    before: true,
+                                });
 
-                            let render_state = Box::into_raw(render_state) as *mut c_void;
+                                let render_state = Box::into_raw(render_state) as *mut c_void;
 
-                            replace_texture(rwobject, render_state);
+                                replace_texture(rwobject, render_state);
 
-                            render.centity_render.call(obj);
+                                render.centity_render.call(obj);
 
-                            let mut render_state =
-                                unsafe { Box::from_raw(render_state as *mut RenderState) };
+                                let mut render_state =
+                                    unsafe { Box::from_raw(render_state as *mut RenderState) };
 
-                            render_state.before = false;
+                                render_state.before = false;
 
-                            let render_state = Box::into_raw(render_state) as *mut c_void;
+                                let render_state = Box::into_raw(render_state) as *mut c_void;
 
-                            replace_texture(rwobject, render_state);
+                                replace_texture(rwobject, render_state);
 
-                            return;
+                                return;
+                            }
                         }
                     }
                 }
             }
         }
-    }
 
-    render.centity_render.call(obj);
+        render.centity_render.call(obj);
+    }
 }
 
 fn replace_texture(rwobject: *mut RwObject, render_state: *mut c_void) {
