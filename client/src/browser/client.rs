@@ -1,9 +1,10 @@
-use std::collections::HashSet;
+use std::collections::{HashSet, VecDeque};
 use std::ffi::CString;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
-    Arc, Mutex,
+    Arc, Condvar, Mutex,
 };
+use std::time::{Duration, Instant};
 
 use crossbeam_channel::Sender;
 
@@ -28,21 +29,60 @@ use crate::audio::Audio;
 use crate::browser::view::View;
 use crate::external::{CallbackList, EXTERNAL_BREAK};
 
+//struct DrawData {
+//    buffer: Vec<u8>,
+//    width: usize,
+//    height: usize,
+//    popup_buffer: Vec<u8>,
+//    popup_rect: cef_rect_t,
+//    popup_show: bool,
+//    rects_to_update: Vec<cef_rect_t>,
+//    needs_clear: bool,
+//}
+//
+//impl DrawData {
+//    pub fn new() -> DrawData {
+//        DrawData {
+//            buffer: Vec::new(),
+//            width: 0,
+//            height: 0,
+//            popup_buffer: Vec::new(),
+//            popup_rect: cef_rect_t {
+//                x: 0,
+//                y: 0,
+//                width: 0,
+//                height: 0,
+//            },
+//            popup_show: false,
+//            rects_to_update: Vec::new(),
+//            needs_clear: false,
+//        }
+//    }
+//}
+
 struct DrawData {
-    buffer: Vec<u8>,
+    buffer: *const u8,
     width: usize,
     height: usize,
+    rects: DirtyRects,
     popup_buffer: Vec<u8>,
     popup_rect: cef_rect_t,
     popup_show: bool,
+    popup_was_before: bool,
+    changed: bool,
 }
 
 impl DrawData {
-    pub fn new() -> DrawData {
+    fn new() -> DrawData {
         DrawData {
-            buffer: Vec::new(),
+            buffer: std::ptr::null(),
             width: 0,
             height: 0,
+            rects: DirtyRects {
+                count: 0,
+                rects: Vec::new(),
+            },
+
             popup_buffer: Vec::new(),
             popup_rect: cef_rect_t {
                 x: 0,
@@ -50,7 +90,10 @@ impl DrawData {
                 width: 0,
                 height: 0,
             },
+
             popup_show: false,
+            popup_was_before: false,
+            changed: false,
         }
     }
 }
@@ -66,6 +109,8 @@ pub struct WebClient {
     event_tx: Sender<Event>,
     callbacks: CallbackList,
     object_list: Mutex<HashSet<i32>>,
+
+    rendered: (Mutex<bool>, Condvar),
 }
 
 impl LifespanHandler for WebClient {
@@ -249,6 +294,7 @@ impl RenderHandler for WebClient {
 
         if !show {
             draw_data.popup_buffer.clear();
+            draw_data.popup_was_before = true; // REMOVE
         }
     }
 
@@ -261,6 +307,53 @@ impl RenderHandler for WebClient {
             .popup_buffer
             .resize(rect.width as usize * rect.height as usize * 4, 0);
     }
+
+    //    fn on_paint(
+    //        self: &Arc<Self>, _: Browser, paint_type: PaintElement, mut dirty_rects: DirtyRects,
+    //        buffer: &[u8], width: usize, height: usize,
+    //    ) {
+    //        {
+    //            let mut draw_data = self.draw_data.lock().unwrap();
+    //
+    //            match paint_type {
+    //                PaintElement::Popup => {
+    //                    if draw_data.popup_buffer.len() == buffer.len() {
+    //                        draw_data.popup_buffer.copy_from_slice(buffer);
+    //                    }
+    //
+    //                    return;
+    //                }
+    //
+    //                PaintElement::View => {
+    //                    if buffer.len() != draw_data.buffer.len() {
+    //                        draw_data.buffer.resize(buffer.len(), 0x00);
+    //                        draw_data.buffer.copy_from_slice(buffer);
+    //                        return; // updated size?
+    //                    }
+    //
+    //                    for rect in &dirty_rects.rects {
+    //                        for y in rect.y..(rect.y + rect.height) {
+    //                            let y = y as usize;
+    //                            let x = rect.x as usize;
+    //                            let start = y * width * 4 + x * 4;
+    //                            let end = start + rect.width as usize * 4;
+    //
+    //                            draw_data.buffer[start..end].copy_from_slice(&buffer[start..end]);
+    //                        }
+    //                    }
+    //
+    //                    if draw_data.needs_clear {
+    //                        draw_data.rects_to_update.clear();
+    //                        draw_data.needs_clear = false;
+    //                    }
+    //
+    //                    draw_data.rects_to_update.append(&mut dirty_rects.rects);
+    //                    draw_data.height = height;
+    //                    draw_data.width = width;
+    //                }
+    //            }
+    //        }
+    //    }
 
     fn on_paint(
         self: &Arc<Self>, _: Browser, paint_type: PaintElement, mut dirty_rects: DirtyRects,
@@ -279,28 +372,33 @@ impl RenderHandler for WebClient {
                 }
 
                 PaintElement::View => {
-                    if buffer.len() != draw_data.buffer.len() {
-                        draw_data.buffer.resize(buffer.len(), 0x00);
-                        draw_data.buffer.copy_from_slice(buffer);
-                        return; // updated size?
+                    if draw_data.popup_was_before && !draw_data.popup_show {
+                        draw_data.popup_was_before = false;
+                        dirty_rects.count += 1;
+                        dirty_rects.rects.push(draw_data.popup_rect.clone());
                     }
 
-                    for rect in &dirty_rects.rects {
-                        for y in rect.y..(rect.y + rect.height) {
-                            let y = y as usize;
-                            let x = rect.x as usize;
-                            let start = y * width * 4 + x * 4;
-                            let end = start + rect.width as usize * 4;
-
-                            draw_data.buffer[start..end].copy_from_slice(&buffer[start..end]);
-                        }
-                    }
-
+                    draw_data.rects = dirty_rects;
+                    draw_data.buffer = buffer.as_ptr();
                     draw_data.height = height;
                     draw_data.width = width;
+                    draw_data.changed = true;
                 }
             }
         }
+
+        {
+            let (mutex, cv) = &self.rendered;
+            let mut rendered = mutex.lock().unwrap();
+
+            *rendered = false;
+
+            while !*rendered {
+                rendered = cv.wait(rendered).unwrap();
+            }
+        }
+
+        self.draw_data.lock().unwrap().changed = false;
     }
 }
 
@@ -348,7 +446,8 @@ impl WebClient {
     pub fn new(id: u32, cbs: CallbackList, event_tx: Sender<Event>) -> Arc<WebClient> {
         let rect = crate::utils::client_rect();
         let mut view = View::new();
-        view.make_directx(client_api::gta::d3d9::device(), rect[0], rect[1]);
+        //        view.make_directx(client_api::gta::d3d9::device(), rect[0], rect[1]);
+        view.make_gamesprite(rect[0], rect[1]);
 
         let client = WebClient {
             hidden: AtomicBool::new(false),
@@ -361,6 +460,8 @@ impl WebClient {
             audio: None,
             event_tx,
             id,
+
+            rendered: (Mutex::new(false), Condvar::new()), // REMOVE
         };
 
         Arc::new(client)
@@ -382,11 +483,14 @@ impl WebClient {
             audio: Some(audio),
             event_tx,
             id,
+
+            rendered: (Mutex::new(false), Condvar::new()), // REMOVE
         };
 
         Arc::new(client)
     }
 
+    #[inline]
     pub fn draw(&self) {
         let mut texture = self.view.lock().unwrap();
         texture.draw();
@@ -406,7 +510,8 @@ impl WebClient {
             if self.is_extern() {
             } else {
                 let rect = crate::utils::client_rect();
-                view.make_directx(client_api::gta::d3d9::device(), rect[0], rect[1]);
+                //                view.make_directx(client_api::gta::d3d9::device(), rect[0], rect[1]);
+                view.make_gamesprite(rect[0], rect[1]);
             }
         }
 
@@ -430,35 +535,140 @@ impl WebClient {
         }
     }
 
+    //    #[inline]
+    //    pub fn update_view(&self) {
+    //        if self.hidden.load(Ordering::SeqCst) {
+    //            return;
+    //        }
+    //
+    //        let mut texture = match self.view.try_lock() {
+    //            Ok(lock) => lock,
+    //            Err(_) => {
+    //                return;
+    //            }
+    //        };
+    //
+    //        //        let mut draw_data = self.draw_data.lock().unwrap();
+    //
+    //        let mut draw_data = match self.draw_data.try_lock() {
+    //            Ok(lock) => lock,
+    //            Err(_) => {
+    //                return;
+    //            }
+    //        };
+    //
+    //        let size = texture.rect();
+    //
+    //        if draw_data.height == 0 || draw_data.width == 0 {
+    //            return;
+    //        }
+    //
+    //        if size.height as usize != draw_data.height || size.width as usize != draw_data.width {
+    //            return;
+    //        }
+    //
+    //        //        if let Some(rect) = draw_data.rects_to_update.pop_front() {
+    //        if !draw_data.rects_to_update.is_empty() {
+    //            //            let rects = std::mem::replace(&mut draw_data.rects_to_update, Vec::new());
+    //
+    //            let count = draw_data
+    //                .rects_to_update
+    //                .iter()
+    //                .filter(|&rect| {
+    //                    rect.height == draw_data.height as _ && rect.width == draw_data.width as _
+    //                })
+    //                .count();
+    //
+    //            if count > 1 {
+    //                println!("WHAT THE SHIT COUNT IS {}", count);
+    //            }
+    //
+    //            texture.update_texture(&draw_data.buffer, &draw_data.rects_to_update);
+    //            //            draw_data.rects_to_update.clear();
+    //            draw_data.needs_clear = true;
+    //        }
+    //
+    //        if draw_data.popup_show {
+    //            if draw_data.popup_rect.x + draw_data.popup_rect.width >= size.width
+    //                || draw_data.popup_rect.y + draw_data.popup_rect.height >= size.height
+    //            {
+    //                return;
+    //            }
+    //
+    //            texture.update_popup(&draw_data.popup_buffer, &draw_data.popup_rect);
+    //        }
+    //    }
+
+    #[inline]
     pub fn update_view(&self) {
         if self.hidden.load(Ordering::SeqCst) {
+            self.unlock();
             return;
         }
 
-        let mut texture = self.view.lock().unwrap();
-        let draw_data = self.draw_data.lock().unwrap();
+        {
+            let mut texture = self.view.lock().unwrap();
+            let draw_data = self.draw_data.lock().unwrap();
 
-        let size = texture.rect();
+            let size = texture.rect();
 
-        if draw_data.height == 0 || draw_data.width == 0 {
-            return;
-        }
+            if draw_data.changed {
+                if draw_data.buffer.is_null() {
+                    self.unlock();
+                    return;
+                }
 
-        if size.height as usize != draw_data.height || size.width as usize != draw_data.width {
-            return;
-        }
+                if draw_data.height == 0 || draw_data.width == 0 {
+                    self.unlock();
+                    return;
+                }
 
-        texture.update_texture(&draw_data.buffer, &[size.clone()]);
+                if size.height as usize != draw_data.height
+                    || size.width as usize != draw_data.width
+                {
+                    self.unlock();
+                    return;
+                }
 
-        if draw_data.popup_show {
-            if draw_data.popup_rect.x + draw_data.popup_rect.width >= size.width
-                || draw_data.popup_rect.y + draw_data.popup_rect.height >= size.height
-            {
-                return;
+                let bytes = unsafe {
+                    std::slice::from_raw_parts(
+                        draw_data.buffer,
+                        draw_data.width * draw_data.height * 4,
+                    )
+                };
+
+                if draw_data.rects.count > 0 {
+                    let rect = &draw_data.rects.rects[0];
+                    if rect.width > size.width || rect.height > size.height {
+                        self.unlock();
+                        return;
+                    }
+                }
+
+                texture.update_texture(&bytes, draw_data.rects.as_slice());
             }
 
-            texture.update_popup(&draw_data.popup_buffer, &draw_data.popup_rect);
+            if draw_data.popup_show {
+                if draw_data.popup_rect.x + draw_data.popup_rect.width >= size.width
+                    || draw_data.popup_rect.y + draw_data.popup_rect.height >= size.height
+                {
+                    self.unlock();
+                    return;
+                }
+
+                texture.update_popup(&draw_data.popup_buffer, &draw_data.popup_rect);
+            }
         }
+
+        self.unlock();
+    }
+
+    #[inline(always)]
+    fn unlock(&self) {
+        let (mutex, cv) = &self.rendered;
+        let mut rendered = mutex.lock().unwrap();
+        *rendered = true;
+        cv.notify_all();
     }
 
     pub fn browser(&self) -> Option<Browser> {

@@ -9,7 +9,8 @@ use std::sync::{
 };
 use std::time::{Duration, Instant};
 
-pub const MAX_DISTANCE: f32 = 30.0;
+pub const MAX_DISTANCE: f32 = 50.0;
+pub const REFRENCE_DISTANCE: f32 = 15.0;
 
 pub struct Audio {
     alto: Alto,
@@ -272,12 +273,10 @@ impl Audio {
                     buffers.push(buffer);
                 }
 
-                source.set_distance_model(DistanceModel::InverseClamped);
+                source.set_distance_model(DistanceModel::ExponentClamped);
                 source.set_max_distance(MAX_DISTANCE);
-                source.set_reference_distance(1.0);
-                source.set_air_absorption_factor(10.0);
-                source.set_cone_inner_angle(120.0);
-                source.set_cone_outer_angle(180.0);
+                source.set_reference_distance(REFRENCE_DISTANCE);
+                source.set_rolloff_factor(7.0);
                 source.set_relative(false);
                 source.set_max_gain(0.0); //
 

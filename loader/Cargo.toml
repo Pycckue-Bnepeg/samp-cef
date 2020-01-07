@@ -9,3 +9,4 @@ crate-type = ["cdylib"]
 
 [dependencies]
 libloading = "0.5.2"
+winapi = { version = "0.3.8", features = ["winbase"] }

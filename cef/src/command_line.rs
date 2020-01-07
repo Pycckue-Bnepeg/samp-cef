@@ -27,4 +27,13 @@ impl CommandLine {
             );
         }
     }
+
+    pub fn append_switch(&self, switch: &str) {
+        let switch = CefString::new(switch);
+        let func = self.inner.append_switch.unwrap();
+
+        unsafe {
+            func(self.inner.get_mut(), switch.as_cef_string());
+        }
+    }
 }

@@ -52,6 +52,7 @@ pub struct Manager {
     mouse: Mouse,
     view_width: usize,
     view_height: usize,
+    prev_fps: u64,
 }
 
 impl Manager {
@@ -73,6 +74,7 @@ impl Manager {
             clients_on_txd: Vec::new(),
             view_height: 0,
             view_width: 0,
+            prev_fps: 60,
             input_corrupted: false,
             do_not_draw: false,
             focused: None,
@@ -106,6 +108,7 @@ impl Manager {
         self.clients_on_txd.push(ext_client);
     }
 
+    #[inline]
     pub fn browser_append_to_object(&mut self, id: u32, object_id: i32) {
         self.audio.add_source(id, object_id);
 
@@ -122,6 +125,7 @@ impl Manager {
             });
     }
 
+    #[inline]
     pub fn browser_remove_from_object(&mut self, id: u32, object_id: i32) {
         self.audio.remove_source(id, object_id);
 
@@ -146,12 +150,14 @@ impl Manager {
             });
     }
 
+    #[inline]
     fn append_client(&mut self, id: u32, client: Arc<WebClient>) {
         if let Some(client) = self.clients.insert(id, client) {
             self.internal_close(client, true);
         }
     }
 
+    #[inline]
     pub fn draw(&self) {
         if self.do_not_draw {
             return;
@@ -175,6 +181,7 @@ impl Manager {
         }
     }
 
+    #[inline]
     pub fn on_lost_device(&mut self) {
         for (_, browser) in &self.clients {
             browser.on_lost_device();
@@ -188,6 +195,7 @@ impl Manager {
         }
     }
 
+    #[inline]
     pub fn on_reset_device(&self) {
         for (_, client) in &self.clients {
             client.on_reset_device();
@@ -199,6 +207,7 @@ impl Manager {
         }
     }
 
+    #[inline]
     pub fn resize(&mut self, width: usize, height: usize) {
         if width == self.view_width && height == self.view_height {
             return;
@@ -214,6 +223,7 @@ impl Manager {
         }
     }
 
+    #[inline]
     pub fn send_mouse_move_event(&mut self, x: i32, y: i32) {
         if self.input_corrupted {
             return;
@@ -245,6 +255,7 @@ impl Manager {
         }
     }
 
+    #[inline]
     pub fn send_mouse_click_event(&mut self, button: MouseKey, is_down: bool) {
         if self.input_corrupted {
             return;
@@ -271,6 +282,7 @@ impl Manager {
         }
     }
 
+    #[inline]
     pub fn send_mouse_wheel(&self, delta: i32) {
         if self.input_corrupted {
             return;
@@ -283,6 +295,7 @@ impl Manager {
         }
     }
 
+    #[inline]
     pub fn send_keyboard_event(&self, event: cef_key_event_t) {
         if self.input_corrupted {
             return;
@@ -316,6 +329,7 @@ impl Manager {
         }
     }
 
+    #[inline]
     pub fn hide_browser(&self, id: u32, hide: bool) {
         if let Some(browser) = self.clients.get(&id) {
             browser.hide(hide);
@@ -345,10 +359,12 @@ impl Manager {
         }
     }
 
+    #[inline(always)]
     pub fn is_input_blocked(&self) -> bool {
         self.focused.is_some()
     }
 
+    #[inline(always)]
     pub fn is_input_available(&self, browser: u32) -> bool {
         if self.input_corrupted {
             return false;
@@ -361,10 +377,12 @@ impl Manager {
         }
     }
 
+    #[inline(always)]
     pub fn set_corrupted(&mut self, corrupted: bool) {
         self.input_corrupted = corrupted;
     }
 
+    #[inline(always)]
     pub fn do_not_draw(&mut self, donot: bool) {
         if self.do_not_draw != donot {
             self.do_not_draw = donot;
@@ -372,10 +390,12 @@ impl Manager {
         }
     }
 
+    #[inline(always)]
     pub fn browser_exists(&self, browser_id: u32) -> bool {
         self.clients.contains_key(&browser_id)
     }
 
+    #[inline(always)]
     pub fn browser_ready(&self, browser_id: u32) -> bool {
         self.clients
             .get(&browser_id)
@@ -402,19 +422,22 @@ impl Manager {
             .push(callback);
     }
 
+    #[inline(always)]
     pub fn external_browsers(&mut self) -> &mut [ExternalClient] {
         &mut self.clients_on_txd
     }
 
+    #[inline(always)]
     pub fn update_fps(&mut self, fps: u64) {
-        let fps = fps as i32;
-        let fps = std::cmp::max(15, std::cmp::min(60, fps));
+        let fps_small = fps as i32;
+        let fps_small = std::cmp::max(15, fps_small); // std::cmp::min(60, fps_small)
 
         for browser in self.clients.values().filter_map(|client| client.browser()) {
             let host = browser.host();
 
-            if host.windowless_frame_rate() != fps {
-                host.set_windowless_frame_rate(fps);
+            if self.prev_fps != fps {
+                host.set_windowless_frame_rate(fps_small);
+                self.prev_fps = fps;
             }
         }
     }
@@ -428,6 +451,7 @@ impl Manager {
             .for_each(|(_, client)| Self::internal_close_client(client, &audio, true));
     }
 
+    #[inline]
     fn temporary_hide(&self, hide: bool) {
         for client in self.clients.values() {
             if hide {

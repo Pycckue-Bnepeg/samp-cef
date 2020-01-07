@@ -9,7 +9,7 @@
     using BrowserReadyCallback = void(*)(uint32_t);
     using EventCallback = int(*)(const char*, cef_list_value_t*);
     
-    extern “C” {
+    extern "C" {
         // Проверка на существование браузера в игре.
         bool cef_browser_exists(uint32_t browser);
         // Создан ли браузер и загружен веб-сайт.

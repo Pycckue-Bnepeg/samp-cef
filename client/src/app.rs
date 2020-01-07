@@ -24,7 +24,6 @@ use client_api::wndproc;
 
 use crossbeam_channel::{Receiver, Sender};
 
-// TODO: nice shutdown
 use detour::GenericDetour;
 
 const CEF_SERVER_PORT: u16 = 7779;
@@ -81,7 +80,6 @@ pub struct App {
     network: Option<NetworkClient>,
     callbacks: CallbackList,
     keystate_hook: GenericDetour<extern "stdcall" fn(i32) -> u16>,
-
     event_tx: Sender<Event>,
     event_rx: Receiver<Event>,
 
@@ -138,9 +136,44 @@ impl App {
         }
     }
 
+    pub fn initialize_hooks() {
+        println!("CEF: Trying to hook WndProc.",);
+
+        // apply hook to WndProc
+        while !wndproc::initialize(&wndproc::WndProcSettings {
+            callback: shitty,
+            hwnd: client_api::gta::hwnd(),
+        }) {
+            std::thread::sleep(Duration::from_millis(10));
+        }
+
+        println!("CEF: Append WndProc callback.");
+
+        client_api::wndproc::append_callback(win_event);
+
+        println!("CEF: Hooking destroy functions.");
+
+        NetGame::on_destroy(|| {
+            uninitialize();
+        });
+
+        NetGame::on_reconnect(|| {
+            if let Some(app) = App::get() {
+                app.disconnect();
+            }
+        });
+
+        client_api::gta::game::on_shutdown(|| {
+            uninitialize();
+        });
+
+        println!("CEF: Initialize done.");
+    }
+
     pub fn connect(&mut self) {
         if let Some(mut addr) = NetGame::get().addr() {
             if !self.samp_ready {
+                App::initialize_hooks();
                 self.samp_ready = true;
             }
 
@@ -186,18 +219,13 @@ pub fn initialize() {
         winapi::um::consoleapi::AllocConsole();
     }
 
-    let start = Instant::now();
-
     println!("CEF: Allocate console.");
     println!("CEF: Create Application");
 
     let app = App::new();
     let manager = app.manager();
 
-    println!(
-        "CEF: Initialize render module. (elapsed: {:?})",
-        start.elapsed()
-    );
+    println!("CEF: Initialize render module.");
 
     crate::render::initialize(manager);
 
@@ -207,47 +235,12 @@ pub fn initialize() {
 
     if client_api::samp::version::is_unknown_version() {
         client_api::utils::error_message_box(
-            "Unsupported SA:MP",
-            "You have installed an unsupported SA:MP version.\nCurrently supported versions are 0.3.7 R1 and R3.",
-        );
+                "Unsupported SA:MP",
+                "You have installed an unsupported SA:MP version.\nCurrently supported versions are 0.3.7 R1 and R3.",
+            );
 
         return; // don't waste time
     }
-
-    println!(
-        "CEF: Trying to hook WndProc. (elapsed: {:?})",
-        start.elapsed()
-    );
-
-    // apply hook to WndProc
-    while !wndproc::initialize(&wndproc::WndProcSettings {
-        callback: shitty,
-        hwnd: client_api::gta::hwnd(),
-    }) {
-        std::thread::sleep(Duration::from_millis(10));
-    }
-
-    println!("CEF: Append WndProc callback.");
-
-    client_api::wndproc::append_callback(win_event);
-
-    println!("CEF: Hooking destroy functions.");
-
-    NetGame::on_destroy(|| {
-        uninitialize();
-    });
-
-    NetGame::on_reconnect(|| {
-        if let Some(app) = App::get() {
-            app.disconnect();
-        }
-    });
-
-    client_api::gta::game::on_shutdown(|| {
-        uninitialize();
-    });
-
-    println!("CEF: Initialize done. (elapsed: {:?})", start.elapsed());
 }
 
 pub fn uninitialize() {
@@ -300,6 +293,10 @@ pub fn mainloop() {
 
             let mut manager = app.manager.lock().unwrap();
             manager.set_corrupted(input_active || !app.window_focused);
+
+            if manager.is_input_blocked() {
+                client_api::samp::inputs::show_cursor(true);
+            }
         }
 
         while let Ok(event) = app.event_rx.try_recv() {
@@ -389,7 +386,7 @@ pub fn mainloop() {
                     );
 
                     app.cef_ready = true;
-                    //                    crate::external::call_initialize();
+                    crate::external::call_initialize();
                 }
 
                 Event::AppendToObject(browser, object) => {
@@ -431,7 +428,9 @@ pub fn mainloop() {
                             let velocity = object.velocity();
                             let heading = object.heading();
 
-                            if client_api::utils::distance(&position, &obj_position) <= 30.0 {
+                            if client_api::utils::distance(&position, &obj_position)
+                                <= crate::audio::MAX_DISTANCE
+                            {
                                 app.audio.set_object_settings(
                                     object_id,
                                     obj_position,

@@ -39,7 +39,6 @@ struct CefPlugin {
 
 impl CefPlugin {
     fn new() -> Self {
-        let pool = IdPool::new(10000);
         // открывает UDP сокет на 7779 порту для cef
 
         let ip: IpAddr = std::fs::read_to_string("./server.cfg")

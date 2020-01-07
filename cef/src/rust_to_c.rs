@@ -50,16 +50,7 @@ impl<T, I> Wrapper<T, I> {
 
 #[inline(never)]
 extern "stdcall" fn add_ref<T, I>(this: *mut cef_base_ref_counted_t) {
-    let obj: &mut Wrapper<T, I> = Wrapper::unwrap(this as *mut T);
-
-    // FUCK YOU RUST REALLY FUCK YOU
-    if unsafe { std::intrinsics::unlikely(this.is_null()) } {
-        println!(
-            "{} {}",
-            std::any::type_name::<T>(),
-            std::any::type_name::<I>()
-        );
-    }
+    let obj: &mut Wrapper<T, I> = Wrapper::<T, I>::unwrap(this as *mut T);
 
     obj.ref_count.fetch_add(1, Ordering::Relaxed);
 }
@@ -67,15 +58,6 @@ extern "stdcall" fn add_ref<T, I>(this: *mut cef_base_ref_counted_t) {
 #[inline(never)]
 extern "stdcall" fn has_one_ref<T, I>(this: *mut cef_base_ref_counted_t) -> i32 {
     let obj: &mut Wrapper<T, I> = Wrapper::unwrap(this as *mut T);
-
-    // FUCK YOU RUST REALLY FUCK YOU
-    if unsafe { std::intrinsics::unlikely(this.is_null()) } {
-        println!(
-            "{} {}",
-            std::any::type_name::<T>(),
-            std::any::type_name::<I>()
-        );
-    }
 
     if obj.ref_count.load(Ordering::Relaxed) == 1 {
         1
@@ -88,15 +70,6 @@ extern "stdcall" fn has_one_ref<T, I>(this: *mut cef_base_ref_counted_t) -> i32 
 extern "stdcall" fn has_at_least_one_ref<T, I>(this: *mut cef_base_ref_counted_t) -> i32 {
     let obj: &mut Wrapper<T, I> = Wrapper::unwrap(this as *mut T);
 
-    // FUCK YOU RUST REALLY FUCK YOU
-    if unsafe { std::intrinsics::unlikely(this.is_null()) } {
-        println!(
-            "{} {}",
-            std::any::type_name::<T>(),
-            std::any::type_name::<I>()
-        );
-    }
-
     if obj.ref_count.load(Ordering::Relaxed) >= 1 {
         1
     } else {
@@ -107,15 +80,6 @@ extern "stdcall" fn has_at_least_one_ref<T, I>(this: *mut cef_base_ref_counted_t
 #[inline(never)]
 pub extern "stdcall" fn release<T, I>(this: *mut cef_base_ref_counted_t) -> i32 {
     let obj: &mut Wrapper<T, I> = Wrapper::unwrap(this as *mut T);
-
-    // FUCK YOU RUST REALLY FUCK YOU
-    if unsafe { std::intrinsics::unlikely(this.is_null()) } {
-        println!(
-            "{} {}",
-            std::any::type_name::<T>(),
-            std::any::type_name::<I>()
-        );
-    }
 
     if obj.ref_count.fetch_sub(1, Ordering::Release) != 1 {
         0

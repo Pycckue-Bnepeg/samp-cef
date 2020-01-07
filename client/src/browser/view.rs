@@ -1,16 +1,42 @@
 use cef_sys::cef_rect_t;
+use client_api::gta::matrix::CRect;
 use client_api::gta::rw::rwcore::{RwRaster, RwTexture};
+use client_api::gta::rw::rwplcore::RwRGBA;
+use client_api::gta::sprite::Sprite;
 use d3dx9::d3dx9core::{D3DXCreateSprite, ID3DXSprite};
 use d3dx9::d3dx9math::D3DXVECTOR3;
 use std::ops::{Deref, DerefMut};
 use std::ptr::NonNull;
 use winapi::shared::d3d9::{IDirect3DDevice9, IDirect3DSurface9, IDirect3DTexture9};
 use winapi::shared::d3d9types::{
-    D3DFMT_A8R8G8B8, D3DLOCKED_RECT, D3DPOOL_MANAGED, D3DSURFACE_DESC,
+    D3DFMT_A8R8G8B8, D3DLOCKED_RECT, D3DLOCK_DISCARD, D3DPOOL_DEFAULT, D3DPOOL_MANAGED,
+    D3DSURFACE_DESC, D3DUSAGE_DYNAMIC, D3DUSAGE_WRITEONLY,
 };
 
 const D3D_OK: i32 = 0;
 const D3DXSPRITE_ALPHABLEND: u32 = 16;
+
+macro_rules! set_texture_bytes {
+    ($s:ident, $dest:ident, $pitch:ident, $body:block) => {
+        if let Some(mut $dest) = $s.directx.as_mut().and_then(|d3d9| d3d9.bytes()) {
+            let $pitch = $dest.pitch;
+            let $dest = &mut *$dest;
+            $body
+        }
+
+        if let Some(mut $dest) = $s.renderware.as_mut().and_then(|rw| rw.bytes()) {
+            let $pitch = $dest.pitch;
+            let $dest = &mut *$dest;
+            $body
+        }
+
+        if let Some(mut $dest) = $s.game_sprite.as_mut().and_then(|sprite| sprite.bytes()) {
+            let $pitch = $dest.pitch;
+            let $dest = &mut *$dest;
+            $body
+        }
+    };
+}
 
 pub struct D3LockGuard<'a> {
     bytes: &'a mut [u8],
@@ -19,6 +45,7 @@ pub struct D3LockGuard<'a> {
 }
 
 impl D3LockGuard<'_> {
+    #[inline(always)]
     pub fn bytes_as_mut_ptr(&mut self) -> *mut u8 {
         self.bytes.as_mut_ptr()
     }
@@ -27,12 +54,14 @@ impl D3LockGuard<'_> {
 impl Deref for D3LockGuard<'_> {
     type Target = [u8];
 
+    #[inline(always)]
     fn deref(&self) -> &[u8] {
         self.bytes
     }
 }
 
 impl DerefMut for D3LockGuard<'_> {
+    #[inline(always)]
     fn deref_mut(&mut self) -> &mut [u8] {
         self.bytes
     }
@@ -65,9 +94,9 @@ impl D3Container {
                 width as _,
                 height as _,
                 1,
-                0,
+                D3DUSAGE_DYNAMIC,
                 D3DFMT_A8R8G8B8,
-                D3DPOOL_MANAGED,
+                D3DPOOL_DEFAULT,
                 &mut texture,
                 std::ptr::null_mut(),
             );
@@ -82,6 +111,7 @@ impl D3Container {
         }
     }
 
+    #[inline]
     pub fn draw(&mut self) {
         unsafe {
             if let Some(sprite) = self.sprite.as_mut().map(|s| s.as_mut()) {
@@ -102,6 +132,7 @@ impl D3Container {
         }
     }
 
+    #[inline]
     pub fn bytes(&mut self) -> Option<D3LockGuard> {
         unsafe {
             self.surface.as_mut().and_then(|surface| {
@@ -114,7 +145,10 @@ impl D3Container {
 
                 surface.as_mut().GetDesc(&mut desc);
 
-                if surface.as_mut().LockRect(&mut rect, std::ptr::null(), 0) == D3D_OK
+                if surface
+                    .as_mut()
+                    .LockRect(&mut rect, std::ptr::null(), 0) // discard is a good choice
+                    == D3D_OK
                     && !rect.pBits.is_null()
                 {
                     let size = desc.Width * desc.Height * 4;
@@ -156,6 +190,7 @@ pub struct RwLockGuard<'a> {
 }
 
 impl RwLockGuard<'_> {
+    #[inline(always)]
     pub fn bytes_as_mut_ptr(&mut self) -> *mut u8 {
         self.bytes.as_mut_ptr()
     }
@@ -164,12 +199,14 @@ impl RwLockGuard<'_> {
 impl Deref for RwLockGuard<'_> {
     type Target = [u8];
 
+    #[inline(always)]
     fn deref(&self) -> &[u8] {
         self.bytes
     }
 }
 
 impl DerefMut for RwLockGuard<'_> {
+    #[inline(always)]
     fn deref_mut(&mut self) -> &mut [u8] {
         self.bytes
     }
@@ -199,6 +236,7 @@ impl RwContainer {
         }
     }
 
+    #[inline]
     pub fn bytes(&mut self) -> Option<RwLockGuard> {
         unsafe {
             self.raster.as_mut().map(|raster| {
@@ -232,9 +270,55 @@ impl Drop for RwContainer {
     }
 }
 
+pub struct SpriteContainer {
+    sprite: Option<Sprite>,
+    rw: RwContainer,
+}
+
+impl SpriteContainer {
+    pub fn new(width: usize, height: usize) -> SpriteContainer {
+        let rw = RwContainer::new(width, height);
+        let mut sprite = Sprite::new();
+        sprite.set_texture(rw.texture.unwrap().as_ptr());
+
+        SpriteContainer {
+            sprite: Some(sprite),
+            rw,
+        }
+    }
+
+    #[inline]
+    pub fn draw(&mut self) {
+        if let Some(sprite) = self.sprite.as_mut() {
+            let client = crate::utils::client_rect();
+            let rect = CRect {
+                top: 0.0,
+                left: 0.0,
+                right: client[0] as f32,
+                bottom: client[1] as f32,
+            };
+
+            let color = RwRGBA {
+                red: 0xFF,
+                green: 0xFF,
+                blue: 0xFF,
+                alpha: 0xFF,
+            };
+
+            sprite.draw(rect, color);
+        }
+    }
+
+    #[inline]
+    pub fn bytes(&mut self) -> Option<RwLockGuard> {
+        self.rw.bytes()
+    }
+}
+
 pub struct View {
     directx: Option<D3Container>,
     renderware: Option<RwContainer>,
+    game_sprite: Option<SpriteContainer>,
     width: usize,
     height: usize,
 }
@@ -244,6 +328,7 @@ impl View {
         View {
             directx: None,
             renderware: None,
+            game_sprite: None,
             width: 0,
             height: 0,
         }
@@ -270,28 +355,41 @@ impl View {
         self.set_size(width, height);
     }
 
-    pub fn draw(&mut self) {
-        self.directx.as_mut().map(|d3d9| d3d9.draw());
+    pub fn make_gamesprite(&mut self, width: usize, height: usize) {
+        self.destroy_previous();
+        let container = SpriteContainer::new(width, height);
+        self.game_sprite = Some(container);
+        self.set_size(width, height);
     }
 
+    #[inline]
+    pub fn draw(&mut self) {
+        self.directx.as_mut().map(|d3d9| d3d9.draw());
+        self.game_sprite.as_mut().map(|sprite| sprite.draw());
+    }
+
+    #[inline(always)]
     pub fn update_texture(&mut self, bytes: &[u8], rects: &[cef_rect_t]) {
-        let set_pixels = |dest: &mut [u8], pitch: usize| {
+        let height = self.height;
+        let width = self.width;
+
+        let timings = std::time::Instant::now();
+
+        set_texture_bytes!(self, dest, pitch, {
             let dest = dest.as_mut_ptr();
+            let pixels_origin = bytes.as_ptr();
 
             for cef_rect in rects {
                 for y in cef_rect.y as usize..(cef_rect.y as usize + cef_rect.height as usize) {
                     unsafe {
                         let index = pitch * y + cef_rect.x as usize * 4;
                         let ptr = dest.add(index);
-                        let pixels = bytes.as_ptr();
-                        let pixels = pixels.add(index);
+                        let pixels = pixels_origin.add(index);
                         std::ptr::copy(pixels, ptr, cef_rect.width as usize * 4);
                     }
                 }
             }
-        };
-
-        self.set_texture_bytes(set_pixels);
+        });
     }
 
     pub fn update_popup(&mut self, bytes: &[u8], popup_rect: &cef_rect_t) {
@@ -348,8 +446,10 @@ impl View {
 
         if let Some(device) = device {
             self.directx = Some(D3Container::new(device, width, height));
-        } else {
+        } else if let Some(_) = self.renderware.as_ref() {
             self.renderware = Some(RwContainer::new(width, height));
+        } else {
+            self.game_sprite = Some(SpriteContainer::new(width, height));
         }
     }
 
@@ -381,6 +481,7 @@ impl View {
     fn destroy_previous(&mut self) {
         self.directx.take();
         self.renderware.take();
+        self.game_sprite.take();
     }
 
     fn set_size(&mut self, width: usize, height: usize) {
@@ -388,6 +489,7 @@ impl View {
         self.height = height;
     }
 
+    #[inline(always)]
     fn set_texture_bytes<F>(&mut self, mut func: F)
     where
         F: FnMut(&mut [u8], usize),
@@ -398,6 +500,11 @@ impl View {
         }
 
         if let Some(mut bytes) = self.renderware.as_mut().and_then(|rw| rw.bytes()) {
+            let pitch = bytes.pitch;
+            func(&mut *bytes, pitch);
+        }
+
+        if let Some(mut bytes) = self.game_sprite.as_mut().and_then(|sprite| sprite.bytes()) {
             let pitch = bytes.pitch;
             func(&mut *bytes, pitch);
         }

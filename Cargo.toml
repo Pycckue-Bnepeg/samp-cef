@@ -11,13 +11,14 @@ members = [
     "cef-interface",
 ]
 
-default-members = [
-    "loader",
-    "client",
-    "renderer",
-    "server",
-    "cef-interface",
-]
+#default-members = [
+#    "loader",
+#    "client",
+#    "renderer",
+#    "server",
+#    "cef-interface",
+#]
 
 [profile.release]
-lto = true
+opt-level = "z"
+#lto = true

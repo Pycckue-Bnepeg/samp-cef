@@ -107,7 +107,7 @@ fn on_render(_: &mut IDirect3DDevice9) {
         {
             let mut manager = render.manager.lock().unwrap();
 
-            if let Some(fps) = fps {
+            if let Some(&fps) = fps.as_ref() {
                 manager.update_fps(fps);
             }
 
