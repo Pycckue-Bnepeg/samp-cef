@@ -10,4 +10,4 @@ crate-type = ["cdylib"]
 [dependencies]
 cef = { path = "../cef" }
 cef-api = { path = "../cef-api" }
-client-api = { path = "../../client-api" }
+client-api = { git = "https://github.com/zottce/samp-client-api.git" }
