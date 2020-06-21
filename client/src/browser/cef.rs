@@ -52,13 +52,18 @@ pub fn initialize(event_tx: Sender<Event>) {
 
     let mut settings = unsafe { std::mem::zeroed::<cef_sys::cef_settings_t>() };
 
+    let cache_path = crate::utils::documents_path();
+
     let path = CefString::new("./cef/renderer.exe");
+    let cache_path = CefString::new(&cache_path.to_string_lossy());
 
     settings.size = std::mem::size_of::<cef_sys::cef_settings_t>();
     settings.no_sandbox = 1;
     settings.browser_subprocess_path = path.to_cef_string();
     settings.windowless_rendering_enabled = 1;
     settings.multi_threaded_message_loop = 1;
+    settings.log_severity = 0;
+    settings.cache_path = cache_path.to_cef_string();
 
     let app = Arc::new(DefaultApp { event_tx });
 

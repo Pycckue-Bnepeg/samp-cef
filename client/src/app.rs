@@ -215,9 +215,9 @@ impl App {
 }
 
 pub fn initialize() {
-    unsafe {
-        winapi::um::consoleapi::AllocConsole();
-    }
+    // unsafe {
+    //     winapi::um::consoleapi::AllocConsole();
+    // }
 
     println!("CEF: Allocate console.");
     println!("CEF: Create Application");

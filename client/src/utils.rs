@@ -1,10 +1,17 @@
+use std::ffi::OsString;
+use std::os::windows::ffi::OsStringExt;
+use std::path::PathBuf;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+use winapi::shared::minwindef::MAX_PATH;
 use winapi::shared::minwindef::{LPARAM, WPARAM};
 use winapi::shared::windef::RECT;
+use winapi::um::shlobj::{SHGetFolderPathW, CSIDL_MYDOCUMENTS};
 use winapi::um::winuser::*;
 
 use cef_sys::cef_event_flags_t::*;
+
+const CACHE_PATH: &str = "./GTA San Andreas User Files/CEF/";
 
 pub fn is_key_pressed(key: i32) -> bool {
     let key_state = unsafe { GetKeyState(key) as u16 };
@@ -121,4 +128,28 @@ pub fn current_time() -> i128 {
         .duration_since(UNIX_EPOCH)
         .unwrap_or_else(|_| Duration::from_secs(0))
         .as_millis() as i128
+}
+
+pub fn documents_path() -> PathBuf {
+    let mut buffer = vec![0; MAX_PATH];
+    let mut path = PathBuf::new();
+
+    let result = unsafe {
+        SHGetFolderPathW(
+            std::ptr::null_mut(),
+            CSIDL_MYDOCUMENTS,
+            std::ptr::null_mut(),
+            0,
+            buffer.as_mut_ptr(),
+        )
+    };
+
+    if result == 0 {
+        let null_idx = buffer.iter().position(|&ch| ch == 0).unwrap_or(0);
+        let docs = OsString::from_wide(&buffer[0..null_idx]);
+
+        path = path.join(docs).join(CACHE_PATH);
+    }
+
+    path
 }

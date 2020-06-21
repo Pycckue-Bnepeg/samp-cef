@@ -29,37 +29,6 @@ use crate::audio::Audio;
 use crate::browser::view::View;
 use crate::external::{CallbackList, EXTERNAL_BREAK};
 
-//struct DrawData {
-//    buffer: Vec<u8>,
-//    width: usize,
-//    height: usize,
-//    popup_buffer: Vec<u8>,
-//    popup_rect: cef_rect_t,
-//    popup_show: bool,
-//    rects_to_update: Vec<cef_rect_t>,
-//    needs_clear: bool,
-//}
-//
-//impl DrawData {
-//    pub fn new() -> DrawData {
-//        DrawData {
-//            buffer: Vec::new(),
-//            width: 0,
-//            height: 0,
-//            popup_buffer: Vec::new(),
-//            popup_rect: cef_rect_t {
-//                x: 0,
-//                y: 0,
-//                width: 0,
-//                height: 0,
-//            },
-//            popup_show: false,
-//            rects_to_update: Vec::new(),
-//            needs_clear: false,
-//        }
-//    }
-//}
-
 struct DrawData {
     buffer: *const u8,
     width: usize,
@@ -102,6 +71,7 @@ pub struct WebClient {
     id: u32, // static
     is_extern: bool,
     hidden: AtomicBool,
+    closing: AtomicBool,
     pub view: Mutex<View>,
     draw_data: Mutex<DrawData>,
     browser: Mutex<Option<Browser>>,
@@ -109,7 +79,6 @@ pub struct WebClient {
     event_tx: Sender<Event>,
     callbacks: CallbackList,
     object_list: Mutex<HashSet<i32>>,
-
     rendered: (Mutex<bool>, Condvar),
 }
 
@@ -140,8 +109,7 @@ impl LifespanHandler for WebClient {
             settings.size = std::mem::size_of::<cef_sys::cef_browser_settings_t>();
 
             // todo: enable in debug mode
-            //            browser.host().open_dev_tools(&window_info, &settings);
-
+            browser.host().open_dev_tools(&window_info, &settings);
             *br = Some(browser);
         }
 
@@ -155,6 +123,7 @@ impl LifespanHandler for WebClient {
 
     fn on_before_close(self: &Arc<Self>, _: Browser) {
         let mut browser = self.browser.lock().unwrap();
+
         if let Some(browser) = browser.take() {
             browser.host().close_dev_tools();
         }
@@ -308,57 +277,14 @@ impl RenderHandler for WebClient {
             .resize(rect.width as usize * rect.height as usize * 4, 0);
     }
 
-    //    fn on_paint(
-    //        self: &Arc<Self>, _: Browser, paint_type: PaintElement, mut dirty_rects: DirtyRects,
-    //        buffer: &[u8], width: usize, height: usize,
-    //    ) {
-    //        {
-    //            let mut draw_data = self.draw_data.lock().unwrap();
-    //
-    //            match paint_type {
-    //                PaintElement::Popup => {
-    //                    if draw_data.popup_buffer.len() == buffer.len() {
-    //                        draw_data.popup_buffer.copy_from_slice(buffer);
-    //                    }
-    //
-    //                    return;
-    //                }
-    //
-    //                PaintElement::View => {
-    //                    if buffer.len() != draw_data.buffer.len() {
-    //                        draw_data.buffer.resize(buffer.len(), 0x00);
-    //                        draw_data.buffer.copy_from_slice(buffer);
-    //                        return; // updated size?
-    //                    }
-    //
-    //                    for rect in &dirty_rects.rects {
-    //                        for y in rect.y..(rect.y + rect.height) {
-    //                            let y = y as usize;
-    //                            let x = rect.x as usize;
-    //                            let start = y * width * 4 + x * 4;
-    //                            let end = start + rect.width as usize * 4;
-    //
-    //                            draw_data.buffer[start..end].copy_from_slice(&buffer[start..end]);
-    //                        }
-    //                    }
-    //
-    //                    if draw_data.needs_clear {
-    //                        draw_data.rects_to_update.clear();
-    //                        draw_data.needs_clear = false;
-    //                    }
-    //
-    //                    draw_data.rects_to_update.append(&mut dirty_rects.rects);
-    //                    draw_data.height = height;
-    //                    draw_data.width = width;
-    //                }
-    //            }
-    //        }
-    //    }
-
     fn on_paint(
         self: &Arc<Self>, _: Browser, paint_type: PaintElement, mut dirty_rects: DirtyRects,
         buffer: &[u8], width: usize, height: usize,
     ) {
+        if self.closing.load(Ordering::SeqCst) {
+            return;
+        }
+
         {
             let mut draw_data = self.draw_data.lock().unwrap();
 
@@ -446,11 +372,11 @@ impl WebClient {
     pub fn new(id: u32, cbs: CallbackList, event_tx: Sender<Event>) -> Arc<WebClient> {
         let rect = crate::utils::client_rect();
         let mut view = View::new();
-        //        view.make_directx(client_api::gta::d3d9::device(), rect[0], rect[1]);
-        view.make_gamesprite(rect[0], rect[1]);
+        view.make_directx(client_api::gta::d3d9::device(), rect[0], rect[1]);
 
         let client = WebClient {
             hidden: AtomicBool::new(false),
+            closing: AtomicBool::new(false),
             view: Mutex::new(view),
             draw_data: Mutex::new(DrawData::new()),
             browser: Mutex::new(None),
@@ -460,8 +386,7 @@ impl WebClient {
             audio: None,
             event_tx,
             id,
-
-            rendered: (Mutex::new(false), Condvar::new()), // REMOVE
+            rendered: (Mutex::new(false), Condvar::new()),
         };
 
         Arc::new(client)
@@ -474,6 +399,7 @@ impl WebClient {
 
         let client = WebClient {
             hidden: AtomicBool::new(false),
+            closing: AtomicBool::new(false),
             view: Mutex::new(view),
             draw_data: Mutex::new(DrawData::new()),
             browser: Mutex::new(None),
@@ -483,8 +409,7 @@ impl WebClient {
             audio: Some(audio),
             event_tx,
             id,
-
-            rendered: (Mutex::new(false), Condvar::new()), // REMOVE
+            rendered: (Mutex::new(false), Condvar::new()),
         };
 
         Arc::new(client)
@@ -510,8 +435,8 @@ impl WebClient {
             if self.is_extern() {
             } else {
                 let rect = crate::utils::client_rect();
-                //                view.make_directx(client_api::gta::d3d9::device(), rect[0], rect[1]);
-                view.make_gamesprite(rect[0], rect[1]);
+                view.make_directx(client_api::gta::d3d9::device(), rect[0], rect[1]);
+                self.notify_was_resized();
             }
         }
 
@@ -527,7 +452,10 @@ impl WebClient {
 
         let mut view = self.view.lock().unwrap();
         view.resize(device, width, height);
+        self.notify_was_resized();
+    }
 
+    fn notify_was_resized(&self) {
         let browser = self.browser.lock().unwrap();
 
         if let Some(host) = browser.as_ref().map(|brw| brw.host()) {
@@ -535,73 +463,9 @@ impl WebClient {
         }
     }
 
-    //    #[inline]
-    //    pub fn update_view(&self) {
-    //        if self.hidden.load(Ordering::SeqCst) {
-    //            return;
-    //        }
-    //
-    //        let mut texture = match self.view.try_lock() {
-    //            Ok(lock) => lock,
-    //            Err(_) => {
-    //                return;
-    //            }
-    //        };
-    //
-    //        //        let mut draw_data = self.draw_data.lock().unwrap();
-    //
-    //        let mut draw_data = match self.draw_data.try_lock() {
-    //            Ok(lock) => lock,
-    //            Err(_) => {
-    //                return;
-    //            }
-    //        };
-    //
-    //        let size = texture.rect();
-    //
-    //        if draw_data.height == 0 || draw_data.width == 0 {
-    //            return;
-    //        }
-    //
-    //        if size.height as usize != draw_data.height || size.width as usize != draw_data.width {
-    //            return;
-    //        }
-    //
-    //        //        if let Some(rect) = draw_data.rects_to_update.pop_front() {
-    //        if !draw_data.rects_to_update.is_empty() {
-    //            //            let rects = std::mem::replace(&mut draw_data.rects_to_update, Vec::new());
-    //
-    //            let count = draw_data
-    //                .rects_to_update
-    //                .iter()
-    //                .filter(|&rect| {
-    //                    rect.height == draw_data.height as _ && rect.width == draw_data.width as _
-    //                })
-    //                .count();
-    //
-    //            if count > 1 {
-    //                println!("WHAT THE SHIT COUNT IS {}", count);
-    //            }
-    //
-    //            texture.update_texture(&draw_data.buffer, &draw_data.rects_to_update);
-    //            //            draw_data.rects_to_update.clear();
-    //            draw_data.needs_clear = true;
-    //        }
-    //
-    //        if draw_data.popup_show {
-    //            if draw_data.popup_rect.x + draw_data.popup_rect.width >= size.width
-    //                || draw_data.popup_rect.y + draw_data.popup_rect.height >= size.height
-    //            {
-    //                return;
-    //            }
-    //
-    //            texture.update_popup(&draw_data.popup_buffer, &draw_data.popup_rect);
-    //        }
-    //    }
-
     #[inline]
     pub fn update_view(&self) {
-        if self.hidden.load(Ordering::SeqCst) {
+        if self.hidden.load(Ordering::SeqCst) || self.closing.load(Ordering::SeqCst) {
             self.unlock();
             return;
         }
@@ -609,7 +473,6 @@ impl WebClient {
         {
             let mut texture = self.view.lock().unwrap();
             let draw_data = self.draw_data.lock().unwrap();
-
             let size = texture.rect();
 
             if draw_data.changed {
@@ -733,5 +596,14 @@ impl WebClient {
 
     pub fn is_extern(&self) -> bool {
         self.is_extern
+    }
+
+    pub fn close(&self, force_close: bool) {
+        self.closing.store(true, Ordering::SeqCst);
+        self.unlock();
+
+        self.browser()
+            .map(|br| br.host())
+            .map(|host| host.close_browser(force_close));
     }
 }

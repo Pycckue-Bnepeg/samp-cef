@@ -477,13 +477,10 @@ impl Manager {
     }
 
     fn internal_close_client(client: Arc<WebClient>, audio: &Arc<Audio>, force_close: bool) {
+        // println!("internal_close_client");
         client.remove_view();
-
-        client
-            .browser()
-            .map(|br| br.host())
-            .map(|host| host.close_browser(force_close));
-
+        client.close(force_close);
         audio.remove_all_streams(client.id());
+        // println!("internal_close_client end");
     }
 }

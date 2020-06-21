@@ -1,7 +1,9 @@
 #![feature(arbitrary_self_types)]
+#![windows_subsystem = "windows"]
 
 use winapi::um::libloaderapi::GetModuleHandleA;
-use winapi::um::winuser::MessageBoxA;
+use winapi::um::wincon::GetConsoleWindow;
+use winapi::um::winuser::{MessageBoxA, ShowWindow};
 
 use cef::app::App;
 use cef::browser::{Browser, Frame};
@@ -229,6 +231,10 @@ impl RenderProcessHandler for Application {
 }
 
 fn main() {
+    unsafe {
+        ShowWindow(GetConsoleWindow(), 0);
+    }
+
     let instance = unsafe { GetModuleHandleA(std::ptr::null()) };
 
     let main_args = cef_sys::cef_main_args_t { instance };

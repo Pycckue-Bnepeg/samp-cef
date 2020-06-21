@@ -29,12 +29,6 @@ macro_rules! set_texture_bytes {
             let $dest = &mut *$dest;
             $body
         }
-
-        if let Some(mut $dest) = $s.game_sprite.as_mut().and_then(|sprite| sprite.bytes()) {
-            let $pitch = $dest.pitch;
-            let $dest = &mut *$dest;
-            $body
-        }
     };
 }
 
@@ -316,9 +310,9 @@ impl SpriteContainer {
 }
 
 pub struct View {
-    directx: Option<D3Container>,
+    // directx: Option<D3Container>,
+    directx: Option<SpriteContainer>,
     renderware: Option<RwContainer>,
-    game_sprite: Option<SpriteContainer>,
     width: usize,
     height: usize,
 }
@@ -328,7 +322,6 @@ impl View {
         View {
             directx: None,
             renderware: None,
-            game_sprite: None,
             width: 0,
             height: 0,
         }
@@ -339,7 +332,8 @@ impl View {
         let height = std::cmp::max(1, height);
 
         self.destroy_previous();
-        self.directx = Some(D3Container::new(device, width, height));
+        // self.directx = Some(D3Container::new(device, width, height));
+        self.directx = Some(SpriteContainer::new(width, height));
         self.set_size(width, height);
     }
 
@@ -355,17 +349,9 @@ impl View {
         self.set_size(width, height);
     }
 
-    pub fn make_gamesprite(&mut self, width: usize, height: usize) {
-        self.destroy_previous();
-        let container = SpriteContainer::new(width, height);
-        self.game_sprite = Some(container);
-        self.set_size(width, height);
-    }
-
     #[inline]
     pub fn draw(&mut self) {
         self.directx.as_mut().map(|d3d9| d3d9.draw());
-        self.game_sprite.as_mut().map(|sprite| sprite.draw());
     }
 
     #[inline(always)]
@@ -445,11 +431,10 @@ impl View {
         self.set_size(width, height);
 
         if let Some(device) = device {
-            self.directx = Some(D3Container::new(device, width, height));
-        } else if let Some(_) = self.renderware.as_ref() {
-            self.renderware = Some(RwContainer::new(width, height));
+            // self.directx = Some(D3Container::new(device, width, height));
+            self.directx = Some(SpriteContainer::new(width, height));
         } else {
-            self.game_sprite = Some(SpriteContainer::new(width, height));
+            self.renderware = Some(RwContainer::new(width, height));
         }
     }
 
@@ -481,7 +466,6 @@ impl View {
     fn destroy_previous(&mut self) {
         self.directx.take();
         self.renderware.take();
-        self.game_sprite.take();
     }
 
     fn set_size(&mut self, width: usize, height: usize) {
@@ -500,11 +484,6 @@ impl View {
         }
 
         if let Some(mut bytes) = self.renderware.as_mut().and_then(|rw| rw.bytes()) {
-            let pitch = bytes.pitch;
-            func(&mut *bytes, pitch);
-        }
-
-        if let Some(mut bytes) = self.game_sprite.as_mut().and_then(|sprite| sprite.bytes()) {
             let pitch = bytes.pitch;
             func(&mut *bytes, pitch);
         }
