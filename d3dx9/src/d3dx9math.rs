@@ -24,11 +24,7 @@ pub struct D3DXVECTOR3 {
 impl D3DXVECTOR3 {
     pub fn new(x: f32, y: f32, z: f32) -> D3DXVECTOR3 {
         D3DXVECTOR3 {
-            base: D3DVECTOR {
-                x,
-                y,
-                z
-            }
+            base: D3DVECTOR { x, y, z },
         }
     }
 }
