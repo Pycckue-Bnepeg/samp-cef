@@ -404,6 +404,12 @@ impl Manager {
             .unwrap_or(false)
     }
 
+    pub fn toggle_dev_tools(&self, browser_id: u32, enabled: bool) {
+        self.clients
+            .get(&browser_id)
+            .and_then(|client| client.toggle_dev_tools(enabled));
+    }
+
     pub fn call_browser_ready(&self, browser_id: u32) {
         self.ready_callbacks
             .get(&browser_id)

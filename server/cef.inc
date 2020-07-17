@@ -22,7 +22,7 @@ native cef_create_ext_browser(player_id, browser_id, const texture[], const url[
 native cef_append_to_object(player_id, browser_id, object_id);
 native cef_remove_from_object(player_id, browser_id, object_id);
 native cef_player_has_plugin(player_id);
-
+native cef_toggle_dev_tools(player_id, browser_id, enabled);
 
 // internal callbacks hooks
 

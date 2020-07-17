@@ -386,6 +386,27 @@ impl Server {
         }
     }
 
+    pub fn toggle_dev_tools(&mut self, player_id: i32, browser_id: i32, enabled: bool) {
+        if let Some(addr) = self.addr_by_id(player_id) {
+            let Server {
+                ref mut clients,
+                ref mut sender,
+                ..
+            } = self;
+
+            clients.get_mut(&addr).map(|client| {
+                let packet = packets::ToggleDevTools {
+                    browser_id: browser_id as u32,
+                    enabled,
+                };
+
+                let bytes = try_into_packet(packet).unwrap();
+                let packet = Packet::unreliable_sequenced(client.addr(), bytes.clone(), Some(1));
+                sender.send(packet);
+            });
+        }
+    }
+
     pub fn receiver(&self) -> Receiver<Event> {
         self.event_rx.clone()
     }

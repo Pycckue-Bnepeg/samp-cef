@@ -163,6 +163,12 @@ impl Network {
                     .ok();
             }
 
+            TOGGLE_DEV_TOOLS => {
+                deserialize_from_slice(&packet.bytes)
+                    .map(|packet| self.handle_toggle_dev_tools(packet))
+                    .ok();
+            }
+
             _ => (),
         }
     }
@@ -260,6 +266,11 @@ impl Network {
 
     fn handle_remove_from_object(&mut self, packet: packets::RemoveFromObject) {
         let event = Event::RemoveFromObject(packet.browser_id, packet.object_id);
+        handle_result(self.event_tx.send(event));
+    }
+
+    fn handle_toggle_dev_tools(&mut self, packet: packets::ToggleDevTools) {
+        let event = Event::ToggleDevTools(packet.browser_id, packet.enabled);
         handle_result(self.event_tx.send(event));
     }
 

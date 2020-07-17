@@ -13,6 +13,7 @@ enum PacketId {
     CREATE_EXTERNAL_BROWSER = 11;
     APPEND_TO_OBJECT = 12;
     REMOVE_FROM_OBJECT = 13;
+    TOGGLE_DEV_TOOLS = 14;
 
     // client/server side
     EMIT_EVENT = 8;
@@ -97,4 +98,9 @@ message AppendToObject {
 message RemoveFromObject {
     required uint32 browser_id = 1;
     required int32 object_id = 2;
+}
+
+message ToggleDevTools {
+    required uint32 browser_id = 1;
+    required bool enabled = 2;
 }

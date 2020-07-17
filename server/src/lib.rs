@@ -255,6 +255,15 @@ impl CefPlugin {
         Ok(true)
     }
 
+    #[native(name = "cef_toggle_dev_tools")]
+    fn toggle_dev_tools(
+        &mut self, _: &Amx, player_id: i32, browser_id: i32, enabled: bool,
+    ) -> AmxResult<bool> {
+        let mut server = self.server.lock().unwrap();
+        server.toggle_dev_tools(player_id, browser_id, enabled);
+        Ok(true)
+    }
+
     // utils
     fn notify_timeout(&mut self) {
         let mut i = 0;
@@ -356,6 +365,7 @@ initialize_plugin!(
         CefPlugin::create_external_browser,
         CefPlugin::append_to_object,
         CefPlugin::remove_from_object,
+        CefPlugin::toggle_dev_tools,
     ],
     {
         samp::plugin::enable_process_tick();

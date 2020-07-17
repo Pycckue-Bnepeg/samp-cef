@@ -18,7 +18,7 @@ d3dx9 = { path = "../d3dx9" }
 winapi = { version = "0.3.8", features = ["d3d9", "winuser", "libloaderapi", "winver", "consoleapi", "memoryapi", "shlobj"] }
 laminar = "0.3.2"
 messages = { path = "../messages" }
-quick-protobuf = "0.6.3"
+quick-protobuf = "0.7.0"
 detour = "0.7.1"
 libloading = "0.5.2"
 alto = "3.0.4"

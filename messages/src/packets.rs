@@ -15,3 +15,4 @@ impl_into_packet!(OpenConnection, PacketId::OPEN_CONNECTION);
 impl_into_packet!(CreateExternalBrowser<'a>, PacketId::CREATE_EXTERNAL_BROWSER);
 impl_into_packet!(AppendToObject, PacketId::APPEND_TO_OBJECT);
 impl_into_packet!(RemoveFromObject, PacketId::REMOVE_FROM_OBJECT);
+impl_into_packet!(ToggleDevTools, PacketId::TOGGLE_DEV_TOOLS);

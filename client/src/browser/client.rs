@@ -84,32 +84,8 @@ pub struct WebClient {
 
 impl LifespanHandler for WebClient {
     fn on_after_created(self: &Arc<Self>, browser: Browser) {
-        use winapi::um::winuser::*; // debug
-
         {
             let mut br = self.browser.lock().unwrap();
-
-            // debug
-            let window_name = cef::types::string::CefString::new("dev tools");
-
-            let mut window_info = unsafe { std::mem::zeroed::<cef_sys::cef_window_info_t>() };
-
-            window_info.style =
-                WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN | WS_CLIPSIBLINGS | WS_VISIBLE;
-            window_info.parent_window = std::ptr::null_mut();
-            window_info.x = CW_USEDEFAULT;
-            window_info.y = CW_USEDEFAULT;
-            window_info.width = CW_USEDEFAULT;
-            window_info.height = CW_USEDEFAULT;
-            window_info.window_name = window_name.to_cef_string();
-            window_info.windowless_rendering_enabled = 0;
-
-            let mut settings = unsafe { std::mem::zeroed::<cef_sys::cef_browser_settings_t>() };
-
-            settings.size = std::mem::size_of::<cef_sys::cef_browser_settings_t>();
-
-            // todo: enable in debug mode
-            browser.host().open_dev_tools(&window_info, &settings);
             *br = Some(browser);
         }
 
@@ -588,6 +564,37 @@ impl WebClient {
     pub fn remove_view(&self) {
         let view = View::new();
         *self.view.lock().unwrap() = view;
+    }
+
+    pub fn toggle_dev_tools(&self, enabled: bool) {
+        use winapi::um::winuser::*;
+
+        self.browser().map(|br| br.host()).map(|host| {
+            if enabled {
+                let window_name = cef::types::string::CefString::new("dev tools");
+
+                let mut window_info = unsafe { std::mem::zeroed::<cef_sys::cef_window_info_t>() };
+
+                window_info.style =
+                    WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN | WS_CLIPSIBLINGS | WS_VISIBLE;
+                window_info.parent_window = std::ptr::null_mut();
+                window_info.x = CW_USEDEFAULT;
+                window_info.y = CW_USEDEFAULT;
+                window_info.width = CW_USEDEFAULT;
+                window_info.height = CW_USEDEFAULT;
+                window_info.window_name = window_name.to_cef_string();
+                window_info.windowless_rendering_enabled = 0;
+
+                let mut settings = unsafe { std::mem::zeroed::<cef_sys::cef_browser_settings_t>() };
+
+                settings.size = std::mem::size_of::<cef_sys::cef_browser_settings_t>();
+
+                // todo: enable in debug mode
+                host.open_dev_tools(&window_info, &settings);
+            } else {
+                host.close_dev_tools();
+            }
+        });
     }
 
     pub fn id(&self) -> u32 {

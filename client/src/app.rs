@@ -55,6 +55,7 @@ pub enum Event {
     BrowserCreated(u32, i32),
     AppendToObject(u32, i32),
     RemoveFromObject(u32, i32),
+    ToggleDevTools(u32, bool),
 
     CefInitialize,
 
@@ -397,6 +398,11 @@ pub fn mainloop() {
                 Event::RemoveFromObject(browser, object) => {
                     let mut manager = app.manager.lock().unwrap();
                     manager.browser_remove_from_object(browser, object);
+                }
+
+                Event::ToggleDevTools(browser, en, abled) => {
+                    let mut manager = app.manager.lock().unwrap();
+                    manager.toggle_dev_tools(browser, enabled);
                 }
 
                 Event::NetworkJoined => {
