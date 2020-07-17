@@ -569,9 +569,12 @@ impl WebClient {
     pub fn toggle_dev_tools(&self, enabled: bool) {
         use winapi::um::winuser::*;
 
+        let id = self.id();
+        
         self.browser().map(|br| br.host()).map(|host| {
             if enabled {
-                let window_name = cef::types::string::CefString::new("dev tools");
+                let caption = format!("Dev Tools for {} browser", id);
+                let window_name = cef::types::string::CefString::new(&caption);
 
                 let mut window_info = unsafe { std::mem::zeroed::<cef_sys::cef_window_info_t>() };
 
@@ -589,7 +592,6 @@ impl WebClient {
 
                 settings.size = std::mem::size_of::<cef_sys::cef_browser_settings_t>();
 
-                // todo: enable in debug mode
                 host.open_dev_tools(&window_info, &settings);
             } else {
                 host.close_dev_tools();

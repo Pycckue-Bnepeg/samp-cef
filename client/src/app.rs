@@ -400,7 +400,7 @@ pub fn mainloop() {
                     manager.browser_remove_from_object(browser, object);
                 }
 
-                Event::ToggleDevTools(browser, en, abled) => {
+                Event::ToggleDevTools(browser, enabled) => {
                     let mut manager = app.manager.lock().unwrap();
                     manager.toggle_dev_tools(browser, enabled);
                 }
