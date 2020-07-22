@@ -80,7 +80,7 @@ impl V8Handler for Handler {
                 let subs = events.entry(name).or_insert_with(|| Vec::new());
 
                 let ctx = V8Context::current_context();
-                subs.push((func, ctx));
+                subs.push((func, ctx.clone()));
 
                 return true;
             }
@@ -105,6 +105,8 @@ impl V8Handler for Handler {
                         subs.remove(idx);
                     }
                 }
+
+                return true;
             }
 
             "emit" => {
@@ -121,6 +123,8 @@ impl V8Handler for Handler {
                     .browser()
                     .main_frame()
                     .send_process_message(ProcessId::Browser, msg);
+
+                return true;
             }
 
             _ => (),

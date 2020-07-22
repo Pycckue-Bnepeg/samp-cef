@@ -26,6 +26,17 @@ impl<T: RefCounted> RefGuard<T> {
         }
     }
 
+    pub(crate) fn from_raw_add_ref(ptr: *mut T) -> RefGuard<T> {
+        let guard = RefGuard {
+            object: ptr,
+            marker: PhantomData,
+        };
+
+        guard.add_ref();
+
+        guard
+    }
+
     /// clone value
     pub fn into_cef(self) -> *mut T {
         let ptr = unsafe { self.get_mut() };

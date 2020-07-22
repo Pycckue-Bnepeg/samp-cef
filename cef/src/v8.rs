@@ -20,6 +20,16 @@ impl V8Context {
         }
     }
 
+    pub(crate) fn from_raw_add_ref(raw: *mut cef_v8context_t) -> V8Context {
+        if raw.is_null() {
+            panic!("V8Context::from_raw_add_ref null pointer");
+        }
+
+        V8Context {
+            inner: RefGuard::from_raw_add_ref(raw),
+        }
+    }
+
     pub fn global(&self) -> V8Value {
         let ptr = self
             .inner
@@ -53,7 +63,7 @@ impl V8Context {
     pub fn current_context() -> V8Context {
         let ptr = unsafe { cef_sys::cef_v8context_get_current_context() };
 
-        V8Context::from_raw(ptr)
+        V8Context::from_raw_add_ref(ptr)
     }
 }
 

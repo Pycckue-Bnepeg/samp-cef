@@ -84,6 +84,9 @@ pub struct App {
     event_tx: Sender<Event>,
     event_rx: Receiver<Event>,
 
+    //
+    key_state: [bool; 512],
+
     // debug
     initialization: Instant,
 }
@@ -134,6 +137,9 @@ impl App {
             event_rx,
             callbacks,
             audio,
+
+            //
+            key_state: [false; 512],
         }
     }
 
@@ -282,9 +288,9 @@ pub fn mainloop() {
         }
 
         {
-            let input_active = inputs::Input::is_active()
-                || inputs::Dialog::is_input_focused()
-                || CMenuManager::is_menu_active();
+            // let input_active = inputs::Input::is_active()
+            //     || inputs::Dialog::is_input_focused()
+            //     || CMenuManager::is_menu_active();
 
             let menu = CMenuManager::get();
             let paused = menu.is_active() || !app.window_focused;
@@ -292,10 +298,14 @@ pub fn mainloop() {
             app.audio.set_paused(paused);
             app.audio.set_gain(menu.sfx_volume());
 
-            let mut manager = app.manager.lock().unwrap();
-            manager.set_corrupted(input_active || !app.window_focused);
+            let show_cursor = {
+                let mut manager = app.manager.lock().unwrap();
+                manager.set_corrupted(paused);
+                manager.is_input_blocked() && !menu.is_active()
+            };
 
-            if manager.is_input_blocked() {
+            // do not redraw default cursor
+            if show_cursor {
                 client_api::samp::inputs::show_cursor(true);
             }
         }
@@ -315,13 +325,15 @@ pub fn mainloop() {
                         id, url
                     );
 
-                    let mut manager = app.manager.lock().unwrap();
-                    manager.create_browser(id, app.callbacks.clone(), &url);
-                    manager.hide_browser(id, hidden);
-                    manager.browser_focus(id, focused);
+                    let show_cursor = {
+                        let mut manager = app.manager.lock().unwrap();
+                        manager.create_browser(id, app.callbacks.clone(), &url);
+                        manager.hide_browser(id, hidden);
+                        manager.browser_focus(id, focused);
 
-                    let show_cursor = manager.is_input_blocked();
-                    drop(manager);
+                        manager.is_input_blocked() && !CMenuManager::is_menu_active()
+                    };
+
                     client_api::samp::inputs::show_cursor(show_cursor);
                 }
 
@@ -343,11 +355,12 @@ pub fn mainloop() {
                 }
 
                 Event::FocusBrowser(id, focus) => {
-                    let mut manager = app.manager.lock().unwrap();
-                    manager.browser_focus(id, focus);
-                    let show_cursor = manager.is_input_blocked();
+                    let show_cursor = {
+                        let mut manager = app.manager.lock().unwrap();
+                        manager.browser_focus(id, focus);
+                        manager.is_input_blocked() && !CMenuManager::is_menu_active()
+                    };
 
-                    drop(manager);
                     client_api::samp::inputs::show_cursor(show_cursor);
                 }
 
@@ -401,7 +414,7 @@ pub fn mainloop() {
                 }
 
                 Event::ToggleDevTools(browser, enabled) => {
-                    let mut manager = app.manager.lock().unwrap();
+                    let manager = app.manager.lock().unwrap();
                     manager.toggle_dev_tools(browser, enabled);
                 }
 
@@ -456,9 +469,11 @@ pub fn mainloop() {
     }
 }
 
+// TODO: Save key state. Mouse too?
 fn win_event(msg: UINT, wparam: WPARAM, lparam: LPARAM) -> bool {
     if let Some(app) = App::get() {
         let mut manager = app.manager.lock().unwrap();
+        let mut notify_key_down = false;
 
         match msg {
             WM_MOUSEMOVE => {
@@ -505,6 +520,28 @@ fn win_event(msg: UINT, wparam: WPARAM, lparam: LPARAM) -> bool {
                     }
                 }
 
+                // notify GTA. should be notified only once
+                let key_index = wparam as usize;
+                if key_index < 512 {
+                    if manager.is_input_blocked() {
+                        // allowed keys (screenshot and chat cycle)
+                        let is_allowed_key = wparam == VK_F8 as _ || wparam == VK_F7 as _;
+
+                        if (app.key_state[key_index]
+                            && event.type_ == cef_key_event_type_t::KEYEVENT_KEYUP)
+                            || is_allowed_key
+                        {
+                            app.key_state[key_index] = false;
+                            notify_key_down = true;
+                        }
+                    } else {
+                        if event.type_ != cef_key_event_type_t::KEYEVENT_CHAR {
+                            app.key_state[key_index] =
+                                event.type_ == cef_key_event_type_t::KEYEVENT_RAWKEYDOWN;
+                        }
+                    }
+                }
+
                 manager.send_keyboard_event(event);
             }
 
@@ -522,12 +559,19 @@ fn win_event(msg: UINT, wparam: WPARAM, lparam: LPARAM) -> bool {
             _ => return false,
         }
 
-        return manager.is_input_blocked();
+        // game on pause or the window isn't active
+        // allow user to use menu ...
+        if manager.is_input_corrupted() {
+            return false;
+        }
+
+        return manager.is_input_blocked() && !notify_key_down;
     }
 
     return false;
 }
 
+// TODO: Add ability to return the right AsyncKeyState result
 extern "stdcall" fn async_key_state(key: i32) -> u16 {
     if let Some(app) = App::get() {
         let result = app.keystate_hook.call(key);

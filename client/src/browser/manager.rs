@@ -383,6 +383,11 @@ impl Manager {
     }
 
     #[inline(always)]
+    pub fn is_input_corrupted(&self) -> bool {
+        self.input_corrupted
+    }
+
+    #[inline(always)]
     pub fn do_not_draw(&mut self, donot: bool) {
         if self.do_not_draw != donot {
             self.do_not_draw = donot;
