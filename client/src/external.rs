@@ -65,7 +65,9 @@ pub fn initialize(event_tx: Sender<Event>, manager: Arc<Mutex<Manager>>) -> Call
         PLUGINS.as_mut().unwrap()
     };
 
-    if let Ok(rd) = std::fs::read_dir("./cef/plugins") {
+    let plugins_path = crate::utils::cef_dir().join("plugins");
+
+    if let Ok(rd) = std::fs::read_dir(plugins_path) {
         for dir in rd.filter_map(|dir| dir.ok()) {
             if let Some(ext) = dir.path().extension() {
                 if ext.to_string_lossy() == "dll" {

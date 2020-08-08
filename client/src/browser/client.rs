@@ -570,7 +570,7 @@ impl WebClient {
         use winapi::um::winuser::*;
 
         let id = self.id();
-        
+
         self.browser().map(|br| br.host()).map(|host| {
             if enabled {
                 let caption = format!("Dev Tools for {} browser", id);
