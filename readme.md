@@ -28,3 +28,10 @@
 
 
 основная документация валяется в [docs/main_ru.md](/docs/main_ru.md)
+
+видеоприколы на основе разработки:
+- https://www.youtube.com/watch?v=Jh9IBlOKoVM (гоблин на весь дом)
+- https://www.youtube.com/watch?v=jU-O8_t1AfI (простые интерфейсы)
+- https://www.youtube.com/watch?v=qs7n8LoVYs4 (кастомный интерфейс гта)
+- https://www.youtube.com/watch?v=vcyTjn3RJhs (голосовой чят)
+- https://www.youtube.com/watch?v=6OnCSHKcOGU (кухня по телеку)
