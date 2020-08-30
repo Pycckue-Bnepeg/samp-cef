@@ -53,9 +53,12 @@ pub fn initialize(event_tx: Sender<Event>) {
     let mut settings = unsafe { std::mem::zeroed::<cef_sys::cef_settings_t>() };
 
     let cache_path = crate::utils::documents_path();
+    let cef_dir = crate::utils::cef_dir();
 
-    let path = CefString::new("./cef/renderer.exe");
+    let path = CefString::new(&cef_dir.join("./renderer.exe").to_string_lossy());
     let cache_path = CefString::new(&cache_path.to_string_lossy());
+    let locales_dir_path = CefString::new(&cef_dir.join("./locales").to_string_lossy());
+    let resources_dir_path = CefString::new(&cef_dir.to_string_lossy());
 
     settings.size = std::mem::size_of::<cef_sys::cef_settings_t>();
     settings.no_sandbox = 1;
@@ -64,6 +67,8 @@ pub fn initialize(event_tx: Sender<Event>) {
     settings.multi_threaded_message_loop = 1;
     settings.log_severity = 0;
     settings.cache_path = cache_path.to_cef_string();
+    settings.locales_dir_path = locales_dir_path.to_cef_string();
+    settings.resources_dir_path = resources_dir_path.to_cef_string();
 
     let app = Arc::new(DefaultApp { event_tx });
 

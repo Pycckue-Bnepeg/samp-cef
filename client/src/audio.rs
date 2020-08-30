@@ -111,13 +111,7 @@ impl AudioSource {
 
 impl Audio {
     pub fn new() -> Arc<Audio> {
-        let exe = std::env::current_exe().ok();
-
-        let path = exe
-            .as_ref()
-            .and_then(|exe| exe.parent())
-            .map(|parent| parent.join("./cef/sound.dll"))
-            .unwrap_or_else(|| PathBuf::from("./cef/sound.dll"));
+        let path = crate::utils::cef_dir().join("sound.dll");
 
         let alto = match Alto::load(path) {
             Ok(alto) => alto,
