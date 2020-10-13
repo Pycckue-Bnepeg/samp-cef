@@ -257,6 +257,12 @@ unsafe fn before_entity_render(materials: &mut [*mut RpMaterial], client: &mut E
             }
 
             if let Some(replace) = view.rwtexture() {
+                client.origin_surface_props = (**material).surface_props.clone();
+
+                (**material).surface_props.ambient = 16.0;
+                (**material).surface_props.diffuse = 0.0;
+                (**material).surface_props.specular = 0.0;
+
                 client.origin_texture = (**material).texture;
                 client.prev_replacement = replace.as_ptr();
                 (**material).set_texture(replace.as_ptr());
@@ -275,6 +281,7 @@ unsafe fn after_entity_render(materials: &mut [*mut RpMaterial], client: &mut Ex
             }
 
             (**material).set_texture(client.origin_texture);
+            (**material).surface_props = client.origin_surface_props.clone();
         }
     }
 }

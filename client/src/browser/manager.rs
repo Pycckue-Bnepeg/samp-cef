@@ -12,6 +12,7 @@ use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, MutexGuard};
 
 use client_api::gta::rw::rwcore::{RwRaster, RwTexture};
+use client_api::gta::rw::rwplcore::RwSurfaceProperties;
 
 use crossbeam_channel::Sender;
 
@@ -36,6 +37,7 @@ pub struct ExternalClient {
     pub texture: String,
     pub scale: i32,
     pub origin_texture: *mut RwTexture,
+    pub origin_surface_props: RwSurfaceProperties,
     pub prev_replacement: *mut RwTexture,
 }
 
@@ -102,6 +104,11 @@ impl Manager {
             object_ids: Vec::new(),
             scale: ext.scale,
             origin_texture: std::ptr::null_mut(),
+            origin_surface_props: RwSurfaceProperties {
+                ambient: 0.0,
+                diffuse: 0.0,
+                specular: 0.0,
+            },
             prev_replacement: std::ptr::null_mut(),
         };
 
