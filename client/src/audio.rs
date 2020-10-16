@@ -12,6 +12,12 @@ use std::time::{Duration, Instant};
 pub const MAX_DISTANCE: f32 = 50.0;
 pub const REFRENCE_DISTANCE: f32 = 15.0;
 
+#[derive(Copy, Clone)]
+pub struct BrowserAudioSettings {
+    pub max_distance: f32,
+    pub reference_distance: f32,
+}
+
 pub struct Audio {
     alto: Alto,
     context: Context,
@@ -320,6 +326,7 @@ impl Audio {
 
     pub fn set_object_settings(
         &self, object_id: i32, pos: CVector, velo: CVector, direction: CVector,
+        settings: BrowserAudioSettings,
     ) {
         self.for_object(object_id, |source| {
             source.source.set_position([pos.x, pos.y, pos.z]);
@@ -328,6 +335,11 @@ impl Audio {
             source
                 .source
                 .set_direction([direction.x, direction.y, direction.z]);
+
+            source.source.set_max_distance(settings.max_distance);
+            source
+                .source
+                .set_reference_distance(settings.reference_distance);
 
             if source.muted {
                 source.source.set_max_gain(1.0);

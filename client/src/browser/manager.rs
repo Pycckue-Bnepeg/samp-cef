@@ -1,5 +1,5 @@
 use crate::app::{Event, ExternalBrowser};
-use crate::audio::Audio;
+use crate::audio::{Audio, BrowserAudioSettings};
 use crate::browser::client::WebClient;
 use crate::external::{BrowserReadyCallback, CallbackList};
 
@@ -38,6 +38,7 @@ pub struct ExternalClient {
     pub scale: i32,
     pub origin_texture: *mut RwTexture,
     pub origin_surface_props: RwSurfaceProperties,
+    pub audio_settings: BrowserAudioSettings,
     pub prev_replacement: *mut RwTexture,
 }
 
@@ -108,6 +109,10 @@ impl Manager {
                 ambient: 0.0,
                 diffuse: 0.0,
                 specular: 0.0,
+            },
+            audio_settings: BrowserAudioSettings {
+                max_distance: crate::audio::MAX_DISTANCE,
+                reference_distance: crate::audio::REFRENCE_DISTANCE,
             },
             prev_replacement: std::ptr::null_mut(),
         };
@@ -420,6 +425,15 @@ impl Manager {
         self.clients
             .get(&browser_id)
             .map(|client| client.toggle_dev_tools(enabled));
+    }
+
+    pub fn set_audio_settings(&mut self, browser_id: u32, audio_settings: BrowserAudioSettings) {
+        self.clients_on_txd
+            .iter_mut()
+            .filter(|cl| cl.browser.id() == browser_id)
+            .for_each(|cl| {
+                cl.audio_settings = audio_settings;
+            });
     }
 
     pub fn call_browser_ready(&self, browser_id: u32) {

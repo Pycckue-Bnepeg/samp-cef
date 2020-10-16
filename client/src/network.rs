@@ -169,6 +169,12 @@ impl Network {
                     .ok();
             }
 
+            SET_AUDIO_SETTINGS => {
+                deserialize_from_slice(&packet.bytes)
+                    .map(|packet| self.handle_set_audio_settings(packet))
+                    .ok();
+            }
+
             _ => (),
         }
     }
@@ -271,6 +277,18 @@ impl Network {
 
     fn handle_toggle_dev_tools(&mut self, packet: packets::ToggleDevTools) {
         let event = Event::ToggleDevTools(packet.browser_id, packet.enabled);
+        handle_result(self.event_tx.send(event));
+    }
+
+    fn handle_set_audio_settings(&mut self, packet: packets::SetAudioSettings) {
+        let event = Event::SetAudioSettings(
+            packet.browser_id,
+            crate::audio::BrowserAudioSettings {
+                max_distance: packet.max_distance,
+                reference_distance: packet.reference_distance,
+            },
+        );
+
         handle_result(self.event_tx.send(event));
     }
 

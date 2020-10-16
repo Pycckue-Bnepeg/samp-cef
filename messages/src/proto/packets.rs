@@ -28,6 +28,7 @@ pub enum PacketId {
     APPEND_TO_OBJECT = 12,
     REMOVE_FROM_OBJECT = 13,
     TOGGLE_DEV_TOOLS = 14,
+    SET_AUDIO_SETTINGS = 15,
     EMIT_EVENT = 8,
     BROWSER_CREATED = 9,
     GOT = 10,
@@ -54,6 +55,7 @@ impl From<i32> for PacketId {
             12 => PacketId::APPEND_TO_OBJECT,
             13 => PacketId::REMOVE_FROM_OBJECT,
             14 => PacketId::TOGGLE_DEV_TOOLS,
+            15 => PacketId::SET_AUDIO_SETTINGS,
             8 => PacketId::EMIT_EVENT,
             9 => PacketId::BROWSER_CREATED,
             10 => PacketId::GOT,
@@ -77,6 +79,7 @@ impl<'a> From<&'a str> for PacketId {
             "APPEND_TO_OBJECT" => PacketId::APPEND_TO_OBJECT,
             "REMOVE_FROM_OBJECT" => PacketId::REMOVE_FROM_OBJECT,
             "TOGGLE_DEV_TOOLS" => PacketId::TOGGLE_DEV_TOOLS,
+            "SET_AUDIO_SETTINGS" => PacketId::SET_AUDIO_SETTINGS,
             "EMIT_EVENT" => PacketId::EMIT_EVENT,
             "BROWSER_CREATED" => PacketId::BROWSER_CREATED,
             "GOT" => PacketId::GOT,
@@ -642,6 +645,45 @@ impl MessageWrite for ToggleDevTools {
     fn write_message<W: WriterBackend>(&self, w: &mut Writer<W>) -> Result<()> {
         w.write_with_tag(8, |w| w.write_uint32(*&self.browser_id))?;
         w.write_with_tag(16, |w| w.write_bool(*&self.enabled))?;
+        Ok(())
+    }
+}
+
+#[derive(Debug, Default, PartialEq, Clone)]
+pub struct SetAudioSettings {
+    pub browser_id: u32,
+    pub max_distance: f32,
+    pub reference_distance: f32,
+}
+
+impl<'a> MessageRead<'a> for SetAudioSettings {
+    fn from_reader(r: &mut BytesReader, bytes: &'a [u8]) -> Result<Self> {
+        let mut msg = Self::default();
+        while !r.is_eof() {
+            match r.next_tag(bytes) {
+                Ok(8) => msg.browser_id = r.read_uint32(bytes)?,
+                Ok(21) => msg.max_distance = r.read_float(bytes)?,
+                Ok(29) => msg.reference_distance = r.read_float(bytes)?,
+                Ok(t) => { r.read_unknown(bytes, t)?; }
+                Err(e) => return Err(e),
+            }
+        }
+        Ok(msg)
+    }
+}
+
+impl MessageWrite for SetAudioSettings {
+    fn get_size(&self) -> usize {
+        0
+        + 1 + sizeof_varint(*(&self.browser_id) as u64)
+        + 1 + 4
+        + 1 + 4
+    }
+
+    fn write_message<W: WriterBackend>(&self, w: &mut Writer<W>) -> Result<()> {
+        w.write_with_tag(8, |w| w.write_uint32(*&self.browser_id))?;
+        w.write_with_tag(21, |w| w.write_float(*&self.max_distance))?;
+        w.write_with_tag(29, |w| w.write_float(*&self.reference_distance))?;
         Ok(())
     }
 }

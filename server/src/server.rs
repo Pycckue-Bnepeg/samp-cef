@@ -407,6 +407,30 @@ impl Server {
         }
     }
 
+    pub fn set_audio_settings(
+        &mut self, player_id: i32, browser_id: u32, max_distance: f32, reference_distance: f32,
+    ) {
+        if let Some(addr) = self.addr_by_id(player_id) {
+            let Server {
+                ref mut clients,
+                ref mut sender,
+                ..
+            } = self;
+
+            clients.get_mut(&addr).map(|client| {
+                let packet = packets::SetAudioSettings {
+                    browser_id,
+                    max_distance,
+                    reference_distance,
+                };
+
+                let bytes = try_into_packet(packet).unwrap();
+                let packet = Packet::unreliable_sequenced(client.addr(), bytes.clone(), Some(1));
+                sender.send(packet);
+            });
+        }
+    }
+
     pub fn receiver(&self) -> Receiver<Event> {
         self.event_rx.clone()
     }

@@ -264,6 +264,16 @@ impl CefPlugin {
         Ok(true)
     }
 
+    #[native(name = "cef_set_audio_settings")]
+    fn set_audio_settings(
+        &mut self, _: &Amx, player_id: i32, browser_id: u32, max_distance: f32,
+        reference_distance: f32,
+    ) -> AmxResult<bool> {
+        let mut server = self.server.lock().unwrap();
+        server.set_audio_settings(player_id, browser_id, max_distance, reference_distance);
+        Ok(true)
+    }
+
     // utils
     fn notify_timeout(&mut self) {
         let mut i = 0;
@@ -366,6 +376,7 @@ initialize_plugin!(
         CefPlugin::append_to_object,
         CefPlugin::remove_from_object,
         CefPlugin::toggle_dev_tools,
+        CefPlugin::set_audio_settings,
     ],
     {
         samp::plugin::enable_process_tick();

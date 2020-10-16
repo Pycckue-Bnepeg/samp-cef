@@ -56,6 +56,7 @@ pub enum Event {
     AppendToObject(u32, i32),
     RemoveFromObject(u32, i32),
     ToggleDevTools(u32, bool),
+    SetAudioSettings(u32, crate::audio::BrowserAudioSettings),
 
     CefInitialize,
 
@@ -422,6 +423,11 @@ pub fn mainloop() {
                     crate::external::call_connect();
                 }
 
+                Event::SetAudioSettings(browser, audio_settings) => {
+                    let mut manager = app.manager.lock().unwrap();
+                    manager.set_audio_settings(browser, audio_settings);
+                }
+
                 _ => (),
             }
         }
@@ -448,13 +454,14 @@ pub fn mainloop() {
                             let heading = object.heading();
 
                             if client_api::utils::distance(&position, &obj_position)
-                                <= crate::audio::MAX_DISTANCE
+                                <= browser.audio_settings.max_distance
                             {
                                 app.audio.set_object_settings(
                                     object_id,
                                     obj_position,
                                     velocity,
                                     heading,
+                                    browser.audio_settings,
                                 );
                             } else {
                                 app.audio.object_mute(object_id);

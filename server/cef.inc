@@ -11,6 +11,9 @@ enum CEF_Value {
 #define CEFINT(%0) CEF_INTEGER, %0
 #define CEFFLOAT(%0) CEF_FLOAT, %0
 
+#define CEF_DEFAULT_MAX_DIST 50.0
+#define CEF_DEFAULT_REF_DIST 15.0
+
 native cef_create_browser(player_id, browser_id, const url[], hidden, focused);
 native cef_destroy_browser(player_id, browser_id);
 native cef_on_player_connect(player_id, const ip[]);
@@ -23,6 +26,7 @@ native cef_append_to_object(player_id, browser_id, object_id);
 native cef_remove_from_object(player_id, browser_id, object_id);
 native cef_player_has_plugin(player_id);
 native cef_toggle_dev_tools(player_id, browser_id, enabled);
+native cef_set_audio_settings(player_id, browser_id, Float:max_distance, Float:reference_distance);
 
 // internal callbacks hooks
 
