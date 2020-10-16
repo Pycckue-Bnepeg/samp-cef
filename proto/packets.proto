@@ -14,6 +14,7 @@ enum PacketId {
     APPEND_TO_OBJECT = 12;
     REMOVE_FROM_OBJECT = 13;
     TOGGLE_DEV_TOOLS = 14;
+    SET_AUDIO_SETTINGS = 15;
 
     // client/server side
     EMIT_EVENT = 8;
@@ -103,4 +104,10 @@ message RemoveFromObject {
 message ToggleDevTools {
     required uint32 browser_id = 1;
     required bool enabled = 2;
+}
+
+message SetAudioSettings {
+    required uint32 browser_id = 1;
+    required float max_distance = 2;
+    required float reference_distance = 3;
 }
