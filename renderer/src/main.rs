@@ -216,13 +216,15 @@ impl RenderProcessHandler for Application {
                     drop(events); // drop lock
 
                     for (func, ctx) in subs_clone {
-                        ctx.enter();
+                        // ctx.enter();
 
-                        let mut params = Vec::with_capacity(list.len());
-                        convert_to_v8(&list, 0, &mut params);
-                        func.execute_function(None, &params);
+                        ctx.with_in(|| {
+                            let mut params = Vec::with_capacity(list.len());
+                            convert_to_v8(&list, 0, &mut params);
+                            func.execute_function(None, &params);
+                        });
 
-                        ctx.exit();
+                        // ctx.exit();
                     }
                 }
             }

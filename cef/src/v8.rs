@@ -57,13 +57,24 @@ impl V8Context {
     pub fn is_same(&self, another: &V8Context) -> bool {
         let is_same = self.inner.is_same.unwrap();
 
-        unsafe { is_same(self.inner.get_mut(), another.clone().inner.get_mut()) == 1 }
+        unsafe { is_same(self.inner.get_mut(), another.clone().inner.into_cef()) == 1 }
+    }
+
+    pub fn with_in<F: Fn()>(&self, function: F) {
+        self.enter();
+
+        {
+            function();
+        }
+
+        self.exit();
     }
 
     pub fn current_context() -> V8Context {
         let ptr = unsafe { cef_sys::cef_v8context_get_current_context() };
 
-        V8Context::from_raw_add_ref(ptr)
+        // V8Context::from_raw_add_ref(ptr)
+        V8Context::from_raw(ptr)
     }
 }
 
@@ -324,7 +335,7 @@ impl V8Value {
     pub fn is_same(&self, other: &V8Value) -> bool {
         let is_same = self.inner.is_same.unwrap();
 
-        unsafe { is_same(self.inner.get_mut(), other.inner.get_mut()) == 1 }
+        unsafe { is_same(self.inner.get_mut(), other.clone().inner.into_cef()) == 1 }
     }
 }
 
