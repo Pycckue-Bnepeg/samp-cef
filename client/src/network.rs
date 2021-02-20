@@ -21,7 +21,7 @@ impl NetworkClient {
             if let Some(network) = Network::new(net_tx.clone(), client_rx) {
                 network.run();
             } else {
-                println!("network error ...");
+                log::trace!("network error ...");
                 std::thread::sleep(Duration::from_secs(2));
                 handle_result(net_tx.send(Event::NetworkError));
             }
@@ -96,7 +96,7 @@ impl Network {
                 if let ConnectionState::Auth(addr, _) = &self.connection_state {
                     self.net_connect(*addr);
                 } else {
-                    println!(
+                    log::trace!(
                         "CEF Network: Got OpenConnection from server, but connection_state is {:?}",
                         self.connection_state
                     );
@@ -188,11 +188,11 @@ impl Network {
                 handle_result(self.event_tx.send(Event::BadVersion));
             }
 
-            println!("CEF Network: JoinResponse OK. {:?}", self.connection_state);
+            log::trace!("CEF Network: JoinResponse OK. {:?}", self.connection_state);
 
             handle_result(self.event_tx.send(Event::NetworkJoined));
         } else {
-            println!(
+            log::trace!(
                 "CEF Network: JoinResponse error. {:?}",
                 self.connection_state
             );
@@ -300,8 +300,8 @@ impl Network {
         let packet = messages::try_into_packet(auth).unwrap();
         let packet = Packet::unreliable_sequenced(address, packet, Some(1));
 
-        println!("CEF Network: OpenConnection ({})", address);
-        println!(
+        log::trace!("CEF Network: OpenConnection ({})", address);
+        log::trace!(
             "CEF Network: Elapsed since Network module created {:?}",
             self.timings.elapsed()
         );
@@ -317,7 +317,7 @@ impl Network {
         let packet = messages::try_into_packet(auth).unwrap();
         let packet = Packet::unreliable_sequenced(address, packet, Some(1));
 
-        println!("CEF Network: RequestJoin ({})", address);
+        log::trace!("CEF Network: RequestJoin ({})", address);
 
         handle_result(self.socket.send(packet));
     }
@@ -360,16 +360,16 @@ impl Network {
                             if let Err(e) = deserialize_from_slice(packet.payload())
                                 .map(|packet| self.handle_packet(packet))
                             {
-                                println!("malformed packet from the server: {}", e);
+                                log::trace!("malformed packet from the server: {}", e);
                             }
                         }
                     }
 
-                    SocketEvent::Connect(addr) => println!("connect? {}", addr), // what?
+                    SocketEvent::Connect(addr) => log::trace!("connect? {}", addr), // what?
 
                     SocketEvent::Timeout(timeout_addr) => {
                         if timeout_addr == addr {
-                            println!("CEF Network: Timeout");
+                            log::trace!("CEF Network: Timeout");
                             handle_result(self.event_tx.send(Event::Timeout));
                         }
                     }
@@ -379,7 +379,7 @@ impl Network {
 
         if let ConnectionState::Auth(addr, time) = &self.connection_state {
             if time.elapsed() >= Duration::from_millis(2500) {
-                println!("CEF Network: CEF didn't connect. Retrying ...");
+                log::trace!("CEF Network: CEF didn't connect. Retrying ...");
                 self.net_open_connection(addr.clone());
             }
         }

@@ -97,7 +97,7 @@ pub fn uninitialize() {
 }
 
 fn on_create() {
-    println!("GTA: Device is created!");
+    log::trace!("GTA: Device is created!");
 }
 
 fn on_render(_: &mut IDirect3DDevice9) {

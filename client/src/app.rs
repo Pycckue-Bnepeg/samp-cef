@@ -64,6 +64,7 @@ pub enum Event {
     Terminate,
 }
 
+#[derive(Debug)]
 pub struct ExternalBrowser {
     pub id: u32,
     pub texture: String,
@@ -94,9 +95,12 @@ pub struct App {
 
 impl Drop for App {
     fn drop(&mut self) {
+        log::trace!("App::drop");
+
         {
             let mut manager = self.manager.lock().unwrap();
             manager.close_all_browsers();
+            manager.shutdown_cef();
         }
 
         self.network.take();
@@ -108,9 +112,19 @@ impl Drop for App {
 
 impl App {
     pub fn new() -> App {
+        log::trace!("App::new()");
+
         let (event_tx, event_rx) = crossbeam_channel::unbounded();
+
+        log::trace!("Audio::new()");
+
         let audio = Audio::new();
+
+        log::trace!("Manager::new()");
+
         let manager = Arc::new(Mutex::new(Manager::new(event_tx.clone(), audio.clone())));
+
+        log::trace!("crate::external::initialize");
 
         let callbacks = crate::external::initialize(event_tx.clone(), manager.clone());
 
@@ -145,7 +159,8 @@ impl App {
     }
 
     pub fn initialize_hooks() {
-        println!("CEF: Trying to hook WndProc.",);
+        log::trace!("App::initialize_hooks()");
+        log::trace!("Trying to hook WndProc.");
 
         // apply hook to WndProc
         while !wndproc::initialize(&wndproc::WndProcSettings {
@@ -155,11 +170,11 @@ impl App {
             std::thread::sleep(Duration::from_millis(10));
         }
 
-        println!("CEF: Append WndProc callback.");
+        log::trace!("Append WndProc callback.");
 
         client_api::wndproc::append_callback(win_event);
 
-        println!("CEF: Hooking destroy functions.");
+        log::trace!("Hooking destroy functions.");
 
         NetGame::on_destroy(|| {
             uninitialize();
@@ -175,7 +190,7 @@ impl App {
             uninitialize();
         });
 
-        println!("CEF: Initialize done.");
+        log::trace!("Initialize done.");
     }
 
     pub fn connect(&mut self) {
@@ -183,17 +198,20 @@ impl App {
             if !self.samp_ready {
                 App::initialize_hooks();
                 self.samp_ready = true;
+                self.manager.lock().unwrap().initialize_cef();
             }
 
-            println!("SAMP: CNetGame address: {}", addr);
+            log::trace!("SAMP: CNetGame address: {}", addr);
 
             addr.set_port(CEF_SERVER_PORT);
 
-            println!(
-                "CEF: Event::Connect({}). Elapsed {:?}",
+            log::trace!(
+                "Event::Connect({}). Elapsed {:?}",
                 addr,
                 self.initialization.elapsed()
             );
+
+            log::trace!("NetworkClient::new");
 
             let network = NetworkClient::new(self.event_tx.clone());
             network.send(Event::Connect(addr));
@@ -205,6 +223,8 @@ impl App {
 
     pub fn disconnect(&mut self) {
         // disconnected
+        log::trace!("App::disconnect");
+
         crate::external::call_disconnect();
 
         let mut manager = self.manager.lock().unwrap();
@@ -227,13 +247,13 @@ pub fn initialize() {
     //     winapi::um::consoleapi::AllocConsole();
     // }
 
-    println!("CEF: Allocate console.");
-    println!("CEF: Create Application");
+    log::trace!("app::initialize()");
+    log::trace!("App::new()");
 
     let app = App::new();
     let manager = app.manager();
 
-    println!("CEF: Initialize render module.");
+    log::trace!("CEF: crate::render::initalize()");
 
     crate::render::initialize(manager);
 
@@ -242,6 +262,8 @@ pub fn initialize() {
     }
 
     if client_api::samp::version::is_unknown_version() {
+        log::error!("unknown samp version");
+
         client_api::utils::error_message_box(
                 "Unsupported SA:MP",
                 "You have installed an unsupported SA:MP version.\nCurrently supported versions are 0.3.7 R1 and R3.",
@@ -252,12 +274,16 @@ pub fn initialize() {
 }
 
 pub fn uninitialize() {
+    log::trace!("app::uninitialize()");
+
     unsafe {
         APP.take();
     }
 }
 
 fn quit() {
+    log::trace!("app::quit()");
+
     crate::render::uninitialize();
     crate::external::quit();
 
@@ -267,8 +293,9 @@ fn quit() {
 fn shitty() {
     if let Some(app) = App::get() {
         if !app.samp_ready {
-            println!("CEF: SAMP init within {:?}", app.initialization.elapsed());
+            log::trace!("SAMP init within {:?}", app.initialization.elapsed());
             app.samp_ready = true;
+            app.manager.lock().unwrap().initialize_cef();
         } else {
             if !app.window_focused {
                 mainloop(); //
@@ -321,9 +348,10 @@ pub fn mainloop() {
                     hidden,
                     focused,
                 } => {
-                    println!(
-                        "CEF: Request to create browser view with id: {}. URL: {}",
-                        id, url
+                    log::trace!(
+                        "Request to create browser view with id: {}. URL: {}",
+                        id,
+                        url
                     );
 
                     let show_cursor = {
@@ -339,7 +367,7 @@ pub fn mainloop() {
                 }
 
                 Event::CreateExternBrowser(ext) => {
-                    println!("CEF: Request from server to create external browser with id {}. Texture name: {}", ext.id, ext.texture);
+                    log::trace!("Request from server to create external browser with id {}. Texture name: {}", ext.id, ext.texture);
                     let mut manager = app.manager.lock().unwrap();
 
                     manager.create_browser_on_texture(&ext, app.callbacks.clone());
@@ -378,8 +406,8 @@ pub fn mainloop() {
                 }
 
                 Event::BrowserCreated(id, code) => {
-                    println!(
-                        "CEF: Browser {} created. Status code: {}. Network available? {}",
+                    log::trace!(
+                        "Browser {} created. Status code: {}. Network available? {}",
                         id,
                         code,
                         app.network.is_some()
@@ -395,10 +423,7 @@ pub fn mainloop() {
                 }
 
                 Event::CefInitialize => {
-                    println!(
-                        "CEF: Initialized. Elapsed: {:?}",
-                        app.initialization.elapsed()
-                    );
+                    log::trace!("Initialized. Elapsed: {:?}", app.initialization.elapsed());
 
                     app.cef_ready = true;
                     crate::external::call_initialize();

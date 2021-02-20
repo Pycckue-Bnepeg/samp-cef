@@ -29,8 +29,12 @@ pub fn execute_process<T: App>(args: &cef_main_args_t, app: Option<Arc<T>>) -> i
 }
 
 pub fn initialize<T: App>(
-    args: &cef_main_args_t, settings: &cef_settings_t, app: Option<Arc<T>>,
+    args: Option<&cef_main_args_t>, settings: &cef_settings_t, app: Option<Arc<T>>,
 ) -> i32 {
+    let args = args
+        .map(|args| args as *const _)
+        .unwrap_or(std::ptr::null());
+
     let app_ptr = app
         .map(|app| self::rust_to_c::app::wrap(app))
         .unwrap_or(std::ptr::null_mut());

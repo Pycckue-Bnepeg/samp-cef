@@ -56,12 +56,13 @@ pub struct Manager {
     view_width: usize,
     view_height: usize,
     prev_fps: u64,
+    cef_running: bool,
 }
 
 impl Manager {
     pub fn new(event_tx: Sender<Event>, audio: Arc<Audio>) -> Manager {
         // init cef
-        crate::browser::cef::initialize(event_tx.clone());
+        // crate::browser::cef::initialize(event_tx.clone());
 
         let mut keys = HashMap::new();
 
@@ -80,6 +81,7 @@ impl Manager {
             prev_fps: 60,
             input_corrupted: false,
             do_not_draw: false,
+            cef_running: false,
             focused: None,
             focused_queue: VecDeque::new(),
             audio,
@@ -89,13 +91,23 @@ impl Manager {
     }
 
     pub fn create_browser(&mut self, id: u32, cbs: CallbackList, url: &str) {
+        log::trace!("manager::create_browser({}, {:?})", id, url);
+
         let client = WebClient::new(id, cbs, self.event_tx.clone());
+
+        log::trace!("crate::browser::cef::create_browser");
+
         crate::browser::cef::create_browser(client.clone(), url);
         self.append_client(id, client);
     }
 
     pub fn create_browser_on_texture(&mut self, ext: &ExternalBrowser, cbs: CallbackList) {
+        log::trace!("manager::create_browser_on_texture({:?})", ext);
+
         let client = WebClient::new_extern(ext.id, cbs, self.event_tx.clone(), self.audio.clone());
+
+        log::trace!("crate::browser::cef::create_browser");
+
         crate::browser::cef::create_browser(client.clone(), &ext.url);
         self.append_client(ext.id, client.clone());
 
@@ -195,6 +207,8 @@ impl Manager {
 
     #[inline]
     pub fn on_lost_device(&mut self) {
+        log::trace!("manager::on_lost_device");
+
         for (_, browser) in &self.clients {
             browser.on_lost_device();
 
@@ -209,6 +223,8 @@ impl Manager {
 
     #[inline]
     pub fn on_reset_device(&self) {
+        log::trace!("manager::on_reset_device");
+
         for (_, client) in &self.clients {
             client.on_reset_device();
 
@@ -221,6 +237,14 @@ impl Manager {
 
     #[inline]
     pub fn resize(&mut self, width: usize, height: usize) {
+        log::trace!(
+            "manager::resize(width: {}, height: {}) current values: {} {}",
+            width,
+            height,
+            self.view_width,
+            self.view_height
+        );
+
         if width == self.view_width && height == self.view_height {
             return;
         }
@@ -483,6 +507,32 @@ impl Manager {
             .for_each(|(_, client)| Self::internal_close_client(client, &audio, true));
     }
 
+    pub fn initialize_cef(&mut self) {
+        log::trace!("manager::intialize_cef() cef_running: {}", self.cef_running);
+
+        if self.cef_running {
+            return;
+        }
+
+        log::trace!("PRE cef::initalize()");
+        crate::browser::cef::initialize(self.event_tx.clone());
+        log::trace!("POST cef::initalize()");
+
+        self.cef_running = true;
+    }
+
+    pub fn shutdown_cef(&mut self) {
+        log::trace!("manager::shutdown_cef() cef_running: {}", self.cef_running);
+
+        if !self.cef_running {
+            return;
+        }
+
+        log::trace!("PRE cef::shutdown()");
+        cef::shutdown();
+        log::trace!("POST cef::shutdown()");
+    }
+
     #[inline]
     fn temporary_hide(&self, hide: bool) {
         for client in self.clients.values() {
@@ -509,10 +559,12 @@ impl Manager {
     }
 
     fn internal_close_client(client: Arc<WebClient>, audio: &Arc<Audio>, force_close: bool) {
-        // println!("internal_close_client");
+        log::trace!("internal_close_client");
+
         client.remove_view();
         client.close(force_close);
         audio.remove_all_streams(client.id());
-        // println!("internal_close_client end");
+
+        log::trace!("internal_close_client end");
     }
 }

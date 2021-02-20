@@ -160,14 +160,14 @@ pub fn cef_dir() -> PathBuf {
         .skip(1)
         .next()
     {
-        PathBuf::from(path).join("./cef")
+        PathBuf::from(path).join("cef")
     } else {
         // в случае если игра запущена из другого места, а не с поомщью лаунчера
         let exe = std::env::current_exe().ok();
 
         exe.as_ref()
             .and_then(|exe| exe.parent())
-            .map(|parent| parent.join("./cef"))
+            .map(|parent| parent.join("cef"))
             .unwrap_or_else(|| PathBuf::from("./cef"))
     }
 }

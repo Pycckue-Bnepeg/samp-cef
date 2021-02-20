@@ -20,5 +20,5 @@ members = [
 #]
 
 [profile.release]
-opt-level = "z"
-#lto = true
+# opt-level = "z"
+lto = true

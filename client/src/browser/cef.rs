@@ -20,6 +20,7 @@ struct DefaultApp {
 impl RenderProcessHandler for DefaultApp {}
 impl BrowserProcessHandler for DefaultApp {
     fn on_context_initialized(self: &Arc<Self>) {
+        log::trace!("BrowserProcessHandler::on_context_initialized");
         self.event_tx.send(Event::CefInitialize);
     }
 }
@@ -47,17 +48,21 @@ impl App for DefaultApp {
 
 pub fn initialize(event_tx: Sender<Event>) {
     let instance = unsafe { GetModuleHandleA(std::ptr::null()) };
-
     let main_args = cef_sys::cef_main_args_t { instance };
+
+    log::trace!("browser::cef::initialize");
 
     let mut settings = unsafe { std::mem::zeroed::<cef_sys::cef_settings_t>() };
 
     let cache_path = crate::utils::documents_path();
     let cef_dir = crate::utils::cef_dir();
 
-    let path = CefString::new(&cef_dir.join("./renderer.exe").to_string_lossy());
+    log::trace!("cache_path: {:?}", cache_path);
+    log::trace!("cef_dir: {:?}", cef_dir);
+
+    let path = CefString::new(&cef_dir.join("renderer.exe").to_string_lossy());
     let cache_path = CefString::new(&cache_path.to_string_lossy());
-    let locales_dir_path = CefString::new(&cef_dir.join("./locales").to_string_lossy());
+    let locales_dir_path = CefString::new(&cef_dir.join("locales").to_string_lossy());
     let resources_dir_path = CefString::new(&cef_dir.to_string_lossy());
 
     settings.size = std::mem::size_of::<cef_sys::cef_settings_t>();
@@ -72,7 +77,10 @@ pub fn initialize(event_tx: Sender<Event>) {
 
     let app = Arc::new(DefaultApp { event_tx });
 
-    cef::initialize(&main_args, &settings, Some(app));
+    log::trace!("PRE cef::initialize");
+    // cef::initialize(None, &settings, Some(app));
+    cef::initialize(Some(&main_args), &settings, Some(app));
+    log::trace!("POST cef::initialize");
 }
 
 pub fn create_browser<T: Client>(client: Arc<T>, url: &str) {
@@ -93,5 +101,10 @@ pub fn create_browser<T: Client>(client: Arc<T>, url: &str) {
     settings.webgl = cef_sys::cef_state_t::STATE_ENABLED;
     settings.javascript = cef_sys::cef_state_t::STATE_ENABLED;
 
-    cef::browser::BrowserHost::create_browser(&window_info, Some(client), &url, &settings);
+    log::trace!("PRE BrowserHost::create_browser");
+
+    let result =
+        cef::browser::BrowserHost::create_browser(&window_info, Some(client), &url, &settings);
+
+    log::trace!("POST BrowserHost::create_browser result {}", result);
 }

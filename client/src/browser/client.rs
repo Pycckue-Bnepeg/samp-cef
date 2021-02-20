@@ -90,6 +90,9 @@ impl LifespanHandler for WebClient {
         }
 
         let hidden = self.hidden.load(Ordering::SeqCst);
+
+        log::trace!("LifespanHandler::on_after_created. hidden: {}", hidden);
+
         self.hide(hidden);
 
         if self.is_extern() {
@@ -98,6 +101,8 @@ impl LifespanHandler for WebClient {
     }
 
     fn on_before_close(self: &Arc<Self>, _: Browser) {
+        log::trace!("LifespanHandler::on_before_close");
+
         let mut browser = self.browser.lock().unwrap();
 
         if let Some(browser) = browser.take() {
@@ -141,6 +146,12 @@ impl Client for WebClient {
         self: &Arc<Self>, _browser: Browser, _frame: Frame, _source: ProcessId, msg: ProcessMessage,
     ) -> bool {
         let name = msg.name().to_string();
+
+        log::trace!(
+            "WebClient::on_process_message. browser_id: {}, message: {:?}",
+            self.id,
+            name
+        );
 
         match name.as_str() {
             "set_focus" => {
@@ -205,7 +216,10 @@ impl Client for WebClient {
                     };
 
                     arguments.push_str(&arg);
-                    arguments.push(' ');
+
+                    if idx != args.len() - 1 {
+                        arguments.push(' ');
+                    }
                 }
 
                 let event = Event::EmitEventOnServer(event_name, arguments);
@@ -306,6 +320,12 @@ impl RenderHandler for WebClient {
 
 impl LoadHandler for WebClient {
     fn on_load_end(self: &Arc<Self>, browser: Browser, frame: Frame, status_code: i32) {
+        log::trace!(
+            "LoadHandler::on_load_end. id: {} status: {}",
+            self.id,
+            status_code
+        );
+
         if frame.is_main() {
             let event = Event::BrowserCreated(self.id, status_code);
             handle_result(self.event_tx.send(event));
@@ -347,6 +367,9 @@ impl AudioHandler for WebClient {
 impl WebClient {
     pub fn new(id: u32, cbs: CallbackList, event_tx: Sender<Event>) -> Arc<WebClient> {
         let rect = crate::utils::client_rect();
+
+        log::trace!("crate::utils::client_rect: {:?}", rect);
+
         let mut view = View::new();
         view.make_directx(client_api::gta::d3d9::device(), rect[0], rect[1]);
 

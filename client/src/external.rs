@@ -97,7 +97,7 @@ pub fn initialize(event_tx: Sender<Event>, manager: Arc<Mutex<Manager>>) -> Call
                             external.plugins.push(plugin);
                         },
 
-                        Err(e) => println!("{:?}", e),
+                        Err(e) => log::trace!("error loading library {:?}", e),
                     }
                 }
             }
