@@ -8,6 +8,10 @@ build = "build.rs"
 [lib]
 crate-type = ["cdylib"]
 
+[features]
+default = ["rodio_audio"]
+rodio_audio = []
+
 [dependencies]
 encoding_rs = "0.8.20"
 client-api = { git = "https://github.com/zottce/samp-client-api.git", rev = "b2f1737" }
@@ -24,3 +28,5 @@ libloading = "0.5.2"
 alto = "3.0.4"
 log = "0.4.14"
 simplelog = "0.9.0"
+ambisonic = "0.4.1"
+nalgebra = "0.24.1"

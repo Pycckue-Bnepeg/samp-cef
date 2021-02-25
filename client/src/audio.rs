@@ -119,22 +119,33 @@ impl Audio {
     pub fn new() -> Arc<Audio> {
         let path = crate::utils::cef_dir().join("sound.dll");
 
+        log::trace!("audio path: {:?}", path);
+
         let alto = match Alto::load(path) {
             Ok(alto) => alto,
-            Err(_) => {
+            Err(err) => {
+                log::trace!("Alto::load error: {:?}", err);
+
                 client_api::utils::error_message_box("CEF error", "There is no OpenAL library (sound.dll) in the CEF folder.\nPlease reinstall the plugin and try again.");
+
+                std::thread::sleep(std::time::Duration::from_secs(10));
                 std::process::exit(0);
             }
         };
 
+        log::trace!("openaal loaded opening device and creating context");
+
         let context = match alto.open(None).and_then(|device| device.new_context(None)) {
             Ok(ctx) => ctx,
-            Err(_) => {
+            Err(err) => {
+                log::trace!("openal new_context error: {:?}", err);
+
                 client_api::utils::error_message_box(
                     "CEF error",
                     "There is no default output device.",
                 );
 
+                std::thread::sleep(std::time::Duration::from_secs(10));
                 std::process::exit(0);
             }
         };
@@ -152,6 +163,8 @@ impl Audio {
 
         let audio = Arc::new(audio);
         let another_audio = audio.clone();
+
+        log::trace!("spawning audio thread");
 
         std::thread::spawn(move || audio_thread(another_audio));
 

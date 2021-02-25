@@ -10,12 +10,22 @@ use simplelog::{CombinedLogger, Config, LevelFilter, TermLogger, TerminalMode, W
 use std::fs::File;
 
 pub mod app;
-pub mod audio;
 pub mod browser;
 pub mod external;
 pub mod network;
 pub mod render;
+pub mod rodio_audio;
 pub mod utils;
+
+// TODO: Сделать человеческие модули звука
+
+#[cfg(not(feature = "rodio_audio"))]
+pub mod audio;
+
+#[cfg(feature = "rodio_audio")]
+pub mod audio {
+    pub use crate::rodio_audio::*;
+}
 
 #[no_mangle]
 pub extern "stdcall" fn DllMain(instance: HMODULE, reason: u32, _reserved: u32) -> bool {

@@ -64,6 +64,8 @@ pub fn preinitialize() {
 }
 
 pub fn initialize(manager: Arc<Mutex<Manager>>) {
+    log::trace!("hooking CEntity::render");
+
     let centity_render = unsafe {
         let render_func: extern "thiscall" fn(*mut CEntity) = std::mem::transmute(0x00534310);
         let centity_render = GenericDetour::new(render_func, centity_render).unwrap();
@@ -71,6 +73,8 @@ pub fn initialize(manager: Arc<Mutex<Manager>>) {
 
         centity_render
     };
+
+    log::trace!("hooking ok ...");
 
     let counter = FrameCounter {
         start_at: Instant::now(),

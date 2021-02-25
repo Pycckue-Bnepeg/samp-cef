@@ -248,7 +248,7 @@ pub fn initialize() {
     // }
 
     log::trace!("app::initialize()");
-    log::trace!("App::new()");
+    log::trace!("App::new() ->");
 
     let app = App::new();
     let manager = app.manager();
