@@ -43,7 +43,7 @@ pub extern "stdcall" fn DllMain(_instance: u32, reason: u32, _reserved: u32) -> 
                 winapi::um::winbase::SetDllDirectoryW(search_dir.as_ptr());
             }
 
-            if let Ok(lib) = Library::new("client.dll") {
+            if let Ok(lib) = Library::new(path.join("cef\\client.dll")) {
                 unsafe {
                     LIBRARY = Some(lib);
                 }

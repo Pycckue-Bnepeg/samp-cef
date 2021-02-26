@@ -271,7 +271,10 @@ impl RenderHandler for WebClient {
         self: &Arc<Self>, _: Browser, paint_type: PaintElement, mut dirty_rects: DirtyRects,
         buffer: &[u8], width: usize, height: usize,
     ) {
-        if self.closing.load(Ordering::SeqCst) {
+        // TODO: тест hidden
+        if
+        /*self.hidden.load(Ordering::SeqCst) ||*/
+        self.closing.load(Ordering::SeqCst) {
             return;
         }
 

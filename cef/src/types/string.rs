@@ -1,4 +1,4 @@
-use cef_sys::cef_string_userfree_t;
+use cef_sys::{_cef_string_utf16_t, cef_string_userfree_t};
 pub use cef_sys::{
     cef_string_t, cef_string_utf16_clear, cef_string_utf16_to_utf8, cef_string_utf8_to_utf16,
 };
@@ -96,5 +96,25 @@ impl From<cef_string_userfree_t> for CefString {
         }
 
         cefstr
+    }
+}
+
+pub fn into_cef_string(string: &str) -> cef_string_t {
+    extern "C" fn free(ptr: *mut u16) {
+        if ptr.is_null() {
+            return;
+        }
+
+        unsafe {
+            widestring::U16CString::from_raw(ptr);
+        }
+    }
+
+    let wide = widestring::U16CString::from_str(string).unwrap();
+
+    _cef_string_utf16_t {
+        length: wide.len(),
+        str: wide.into_raw(),
+        dtor: Some(free),
     }
 }

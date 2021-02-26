@@ -489,10 +489,11 @@ impl AudioInner {
     fn set_sinks_gain(&mut self, gain: f32) {
         self.streams.values_mut().for_each(|stream| {
             stream.iter_mut().for_each(|stream| {
-                stream
-                    .sources
-                    .values()
-                    .for_each(|source| source.sink.set_volume(gain));
+                stream.sources.values().for_each(|source| {
+                    if !source.muted {
+                        source.sink.set_volume(gain);
+                    }
+                });
             });
         });
     }

@@ -54,32 +54,52 @@ pub fn initialize(event_tx: Sender<Event>) {
 
     let mut settings = unsafe { std::mem::zeroed::<cef_sys::cef_settings_t>() };
 
-    let cache_path = crate::utils::documents_path();
+    // let cache_path = crate::utils::documents_path();
     let cef_dir = crate::utils::cef_dir();
+    let cache_path = cef_dir.join("cache");
 
-    log::trace!("cache_path: {:?}", cache_path);
+    // log::trace!("cache_path: {:?}", cache_path);
     log::trace!("cef_dir: {:?}", cef_dir);
 
-    let path = CefString::new(&cef_dir.join("renderer.exe").to_string_lossy());
-    let cache_path = CefString::new(&cache_path.to_string_lossy());
-    let locales_dir_path = CefString::new(&cef_dir.join("locales").to_string_lossy());
-    let resources_dir_path = CefString::new(&cef_dir.to_string_lossy());
+    // let path = CefString::new(&cef_dir.join("renderer.exe").to_string_lossy());
+    // let cache_path = CefString::new(&cache_path.to_string_lossy());
+    // let locales_dir_path = CefString::new(&cef_dir.join("locales").to_string_lossy());
+    // let resources_dir_path = CefString::new(&cef_dir.to_string_lossy());
+    // let root_cache_path = CefString::new(&cef_dir.to_string_lossy());
+    // let log_file = CefString::new(&cef_dir.join("cef.log").to_string_lossy());
+
+    let path = cef::types::string::into_cef_string(&cef_dir.join("renderer.exe").to_string_lossy());
+    let cache_path = cef::types::string::into_cef_string(&cache_path.to_string_lossy());
+    let locales_dir_path =
+        cef::types::string::into_cef_string(&cef_dir.join("locales").to_string_lossy());
+    let resources_dir_path = cef::types::string::into_cef_string(&cef_dir.to_string_lossy());
+    let root_cache_path = cef::types::string::into_cef_string(&cef_dir.to_string_lossy());
+    let log_file = cef::types::string::into_cef_string(&cef_dir.join("cef.log").to_string_lossy());
+    let user_data =
+        cef::types::string::into_cef_string(&cef_dir.join("user_data").to_string_lossy());
+
+    log::trace!("{:?}", cef_dir.join("cef.log"));
 
     settings.size = std::mem::size_of::<cef_sys::cef_settings_t>();
     settings.no_sandbox = 1;
-    settings.browser_subprocess_path = path.to_cef_string();
+    settings.browser_subprocess_path = path;
     settings.windowless_rendering_enabled = 1;
     settings.multi_threaded_message_loop = 1;
     settings.log_severity = 0;
-    settings.cache_path = cache_path.to_cef_string();
-    settings.locales_dir_path = locales_dir_path.to_cef_string();
-    settings.resources_dir_path = resources_dir_path.to_cef_string();
+    settings.cache_path = cache_path;
+    settings.locales_dir_path = locales_dir_path;
+    settings.resources_dir_path = resources_dir_path;
+    settings.ignore_certificate_errors = 1;
+    settings.command_line_args_disabled = 1;
+    settings.log_file = log_file;
+    settings.user_data_path = user_data;
 
     let app = Arc::new(DefaultApp { event_tx });
 
     log::trace!("PRE cef::initialize");
-    // cef::initialize(None, &settings, Some(app));
+
     cef::initialize(Some(&main_args), &settings, Some(app));
+
     log::trace!("POST cef::initialize");
 }
 

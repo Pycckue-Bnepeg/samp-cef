@@ -6,6 +6,7 @@ edition = "2018"
 
 [dependencies]
 cef-sys = { path = "../cef-sys" }
+widestring = "0.4.3"
 
 [dev-dependencies]
 testdrop = "0.1.2"
