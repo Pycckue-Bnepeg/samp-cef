@@ -36,7 +36,7 @@ impl CefString {
     pub fn to_cef_string(&self) -> cef_string_t {
         let inner = unsafe { &*self.inner };
         cef_string_t {
-            str: inner.str,
+            str_: inner.str_,
             length: inner.length,
             dtor: inner.dtor,
         }
@@ -49,7 +49,7 @@ impl CefString {
     pub fn to_string(&self) -> String {
         unsafe {
             let utf16 = &*self.inner;
-            let bytes = std::slice::from_raw_parts(utf16.str, utf16.length);
+            let bytes = std::slice::from_raw_parts(utf16.str_, utf16.length);
             String::from_utf16_lossy(bytes)
         }
     }
@@ -58,7 +58,7 @@ impl CefString {
 impl Drop for CefString {
     fn drop(&mut self) {
         unsafe {
-            if (*self.inner).str.is_null() || !self.owned {
+            if (*self.inner).str_.is_null() || !self.owned {
                 return;
             }
         }
@@ -87,7 +87,7 @@ impl From<cef_string_userfree_t> for CefString {
             let dst = &mut *cefstr.inner;
 
             dst.length = src.length;
-            dst.str = src.str;
+            dst.str_ = src.str_;
             dst.dtor = src.dtor;
 
             *src = std::mem::zeroed();
@@ -114,7 +114,7 @@ pub fn into_cef_string(string: &str) -> cef_string_t {
 
     _cef_string_utf16_t {
         length: wide.len(),
-        str: wide.into_raw(),
+        str_: wide.into_raw(),
         dtor: Some(free),
     }
 }

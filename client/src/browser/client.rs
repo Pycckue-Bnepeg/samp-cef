@@ -19,7 +19,7 @@ use cef::process_message::ProcessMessage;
 use cef::types::list::ValueType;
 use cef::ProcessId;
 
-use cef_sys::cef_rect_t;
+use cef_sys::{cef_audio_parameters_t, cef_rect_t};
 
 use client_api::gta::rw::rwcore::{RwRaster, RwTexture};
 use client_api::utils::handle_result;
@@ -94,10 +94,6 @@ impl LifespanHandler for WebClient {
         log::trace!("LifespanHandler::on_after_created. hidden: {}", hidden);
 
         self.hide(hidden);
-
-        if self.is_extern() {
-            self.set_audio_muted(true);
-        }
     }
 
     fn on_before_close(self: &Arc<Self>, _: Browser) {
@@ -312,8 +308,20 @@ impl RenderHandler for WebClient {
 
             *rendered = false;
 
-            while !*rendered {
-                rendered = cv.wait(rendered).unwrap();
+            // while !*rendered {
+            //     rendered = cv.wait(rendered).unwrap();
+            // }
+
+            match cv.wait_timeout_while(rendered, Duration::from_secs(2), |&mut done| !done) {
+                Ok((_, timeout_result)) => {
+                    if timeout_result.timed_out() {
+                        log::trace!("timed_out ... fuckit");
+                    }
+                }
+
+                Err(_) => {
+                    log::trace!("on_paint -> maybe main thread crashed ...");
+                }
             }
         }
 
@@ -337,6 +345,19 @@ impl LoadHandler for WebClient {
 }
 
 impl AudioHandler for WebClient {
+    fn get_audio_parameters(
+        self: &Arc<Self>, browser: Browser, params: &mut cef_audio_parameters_t,
+    ) -> bool {
+        log::trace!(
+            "get_audio_parameters: {} {} {}",
+            params.sample_rate,
+            params.channel_layout,
+            params.frames_per_buffer
+        );
+
+        true
+    }
+
     fn on_audio_stream_packet(
         self: &Arc<Self>, browser: Browser, stream_id: i32, data: *mut *const f32, frames: i32,
         pts: i64,
@@ -364,6 +385,10 @@ impl AudioHandler for WebClient {
         if let Some(audio) = self.audio.as_ref() {
             audio.remove_stream(self.id, stream_id);
         }
+    }
+
+    fn on_audio_stream_error(self: &Arc<Self>, browser: Browser, error: String) {
+        log::trace!("on_audio_stream_error: {:?}", error);
     }
 }
 

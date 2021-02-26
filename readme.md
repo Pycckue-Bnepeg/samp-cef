@@ -26,6 +26,20 @@
 ну а дальше 
 > `cargo +nightly build --target i686-windows-pc-msvc --release`
 
+текущая версия CEF и Chromium:
+`89.0.5+gc1f90d8+chromium-89.0.4389.40` `release branch 4389`
+
+```
+Date:             February 26, 2021
+
+CEF Version:      89.0.5+gc1f90d8+chromium-89.0.4389.40
+CEF URL:          https://bitbucket.org/chromiumembedded/cef.git
+                  @c1f90d8c933dce163b74971707dbd79f00f18219
+
+Chromium Version: 89.0.4389.40
+Chromium URL:     https://chromium.googlesource.com/chromium/src.git
+                  @2c3400a2b467aa3cf67b4942740db29e60feecb8
+```
 
 основная документация валяется в [docs/main_ru.md](/docs/main_ru.md)
 

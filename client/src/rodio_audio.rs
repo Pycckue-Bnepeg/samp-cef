@@ -212,7 +212,9 @@ impl Audio {
 
         let current_time = crate::utils::current_time();
 
-        if current_time - pts as i128 > 0 {
+        // пакеты могут отставать на ~20-30мс, что НЕ критично
+        // дропаем все, что хотя бы на 1с отстают (паузы / лаги еще какая херня)
+        if current_time - pts as i128 >= 1000 {
             return;
         }
 
@@ -576,32 +578,30 @@ fn audio_thread(mut audio: AudioInner) {
             }
         }
 
-        if !audio.paused {
-            let mut browsers = &mut audio.streams;
+        let mut browsers = &mut audio.streams;
 
-            for streams in browsers.values_mut() {
-                for stream in streams {
-                    for (pts, pending) in stream.pending_pcm.iter() {
-                        let sample_rate = stream.sample_rate;
+        for streams in browsers.values_mut() {
+            for stream in streams {
+                for (pts, pending) in stream.pending_pcm.iter() {
+                    let sample_rate = stream.sample_rate;
 
-                        stream
-                            .sources
-                            .values_mut()
-                            .for_each(|source| source.queue(sample_rate, pending));
+                    stream
+                        .sources
+                        .values_mut()
+                        .for_each(|source| source.queue(sample_rate, pending));
 
-                        stream.last_pts = *pts;
-                        stream.last_frame_len = pending.len();
-                    }
+                    stream.last_pts = *pts;
+                    stream.last_frame_len = pending.len();
+                }
 
-                    let keys: Vec<u64> = stream
-                        .pending_pcm
-                        .range(0..=stream.last_pts)
-                        .map(|(pts, _)| *pts)
-                        .collect();
+                let keys: Vec<u64> = stream
+                    .pending_pcm
+                    .range(0..=stream.last_pts)
+                    .map(|(pts, _)| *pts)
+                    .collect();
 
-                    for key in keys {
-                        stream.pending_pcm.remove(&key);
-                    }
+                for key in keys {
+                    stream.pending_pcm.remove(&key);
                 }
             }
         }

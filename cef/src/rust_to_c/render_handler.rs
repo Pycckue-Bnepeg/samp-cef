@@ -131,8 +131,7 @@ unsafe extern "stdcall" fn on_cursor_change<I: RenderHandler>(
 
 unsafe extern "stdcall" fn start_dragging<I: RenderHandler>(
     this: *mut cef_render_handler_t, browser: *mut cef_browser_t, drag_data: *mut cef_drag_data_t,
-    allowed_ops: cef_drag_operations_mask_t::Type, x: ::std::os::raw::c_int,
-    y: ::std::os::raw::c_int,
+    allowed_ops: cef_drag_operations_mask_t, x: ::std::os::raw::c_int, y: ::std::os::raw::c_int,
 ) -> ::std::os::raw::c_int {
     (*browser).base.release.unwrap()(&mut (*browser).base);
     (*drag_data).base.release.unwrap()(&mut (*drag_data).base);
@@ -143,11 +142,11 @@ unsafe extern "stdcall" fn start_dragging<I: RenderHandler>(
 
 unsafe extern "stdcall" fn update_drag_cursor<I: RenderHandler>(
     this: *mut cef_render_handler_t, browser: *mut cef_browser_t,
-    operation: cef_drag_operations_mask_t::Type,
+    operation: cef_drag_operations_mask_t,
 ) {
     let obj: &mut Wrapper<_, I> = Wrapper::unwrap(this);
     (*browser).base.release.unwrap()(&mut (*browser).base);
-    let _a = operation * 4;
+    let _a = operation.0 * 4;
     // let _ = obj.interface.update_drag_cursor();
 }
 
@@ -199,7 +198,7 @@ pub fn wrap<T: RenderHandler>(object: Arc<T>) -> *mut cef_render_handler_t {
     cef_object.on_popup_size = Some(on_popup_size::<T>);
     cef_object.on_paint = Some(on_paint::<T>);
     cef_object.on_accelerated_paint = Some(on_accelerated_paint::<T>);
-    cef_object.on_cursor_change = Some(on_cursor_change::<T>);
+    // cef_object.on_cursor_change = Some(on_cursor_change::<T>);
     cef_object.start_dragging = Some(start_dragging::<T>);
     cef_object.update_drag_cursor = Some(update_drag_cursor::<T>);
     cef_object.on_scroll_offset_changed = Some(on_scroll_offset_changed::<T>);
