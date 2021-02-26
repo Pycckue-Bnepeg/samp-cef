@@ -165,25 +165,20 @@ extern "thiscall" fn centity_render(obj: *mut CEntity) {
                             let rwobject = obj_entity._base._base.rw_entity as *mut RwObject;
 
                             if !rwobject.is_null() {
-                                let render_state = Box::new(RenderState {
+                                let mut render_state = RenderState {
                                     client: browser_ptr,
                                     before: true,
-                                });
+                                };
 
-                                let render_state = Box::into_raw(render_state) as *mut c_void;
+                                let render_ptr = &mut render_state as *mut _ as *mut c_void;
 
-                                replace_texture(rwobject, render_state);
+                                replace_texture(rwobject, render_ptr);
 
                                 render.centity_render.call(obj);
 
-                                let mut render_state =
-                                    unsafe { Box::from_raw(render_state as *mut RenderState) };
-
                                 render_state.before = false;
 
-                                let render_state = Box::into_raw(render_state) as *mut c_void;
-
-                                replace_texture(rwobject, render_state);
+                                replace_texture(rwobject, render_ptr);
 
                                 return;
                             }
@@ -210,7 +205,7 @@ fn replace_texture(rwobject: *mut RwObject, render_state: *mut c_void) {
 extern "C" fn atomic_callback(atomic: *mut RpAtomic, data: *mut c_void) -> *mut RpAtomic {
     unsafe {
         if !atomic.is_null() && !(*atomic).geometry.is_null() {
-            let render = Box::from_raw(data as *mut RenderState);
+            let render = &mut *(data as *mut RenderState);
 
             if render.before {
                 before_entity_render(
@@ -223,8 +218,6 @@ extern "C" fn atomic_callback(atomic: *mut RpAtomic, data: *mut c_void) -> *mut 
                     &mut *render.client,
                 );
             }
-
-            Box::into_raw(render);
         }
     }
 
@@ -232,8 +225,6 @@ extern "C" fn atomic_callback(atomic: *mut RpAtomic, data: *mut c_void) -> *mut 
 }
 
 unsafe fn before_entity_render(materials: &mut [*mut RpMaterial], client: &mut ExternalClient) {
-    let mut view = client.browser.view.lock().unwrap();
-
     for material in materials {
         if !(*material).is_null() {
             let texture = (**material).texture;
@@ -245,6 +236,8 @@ unsafe fn before_entity_render(materials: &mut [*mut RpMaterial], client: &mut E
             if !(*texture).name().contains(&client.texture) {
                 continue;
             }
+
+            let mut view = client.browser.view.lock().unwrap();
 
             if view.rwtexture().is_none() {
                 if !(*texture).raster.is_null() {
@@ -269,7 +262,9 @@ unsafe fn before_entity_render(materials: &mut [*mut RpMaterial], client: &mut E
 
                 client.origin_texture = (**material).texture;
                 client.prev_replacement = replace.as_ptr();
-                (**material).set_texture(replace.as_ptr());
+                (**material).texture = replace.as_ptr();
+
+                break; // replaced. do not replace another
             }
         }
     }
@@ -284,8 +279,10 @@ unsafe fn after_entity_render(materials: &mut [*mut RpMaterial], client: &mut Ex
                 continue;
             }
 
-            (**material).set_texture(client.origin_texture);
+            (**material).texture = client.origin_texture;
             (**material).surface_props = client.origin_surface_props.clone();
+
+            break; //
         }
     }
 }
