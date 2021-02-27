@@ -91,7 +91,13 @@ impl Manager {
     }
 
     pub fn create_browser(&mut self, id: u32, cbs: CallbackList, url: &str) {
-        log::trace!("manager::create_browser({}, {:?})", id, url);
+        let render_mode = crate::utils::current_render_mode();
+        log::trace!(
+            "manager::create_browser({}, {:?}) render_mode: {:?}",
+            id,
+            url,
+            render_mode
+        );
 
         let client = WebClient::new(id, cbs, self.event_tx.clone());
 

@@ -28,6 +28,7 @@ use crate::app::Event;
 use crate::audio::Audio;
 use crate::browser::view::View;
 use crate::external::{CallbackList, EXTERNAL_BREAK};
+use crate::utils::RenderMode;
 
 struct DrawData {
     buffer: *const u8,
@@ -398,7 +399,7 @@ impl WebClient {
 
         log::trace!("crate::utils::client_rect: {:?}", rect);
 
-        let mut view = View::new();
+        let mut view = View::new(crate::utils::current_render_mode());
         view.make_directx(client_api::gta::d3d9::device(), rect[0], rect[1]);
 
         let client = WebClient {
@@ -422,7 +423,7 @@ impl WebClient {
     pub fn new_extern(
         id: u32, cbs: CallbackList, event_tx: Sender<Event>, audio: Arc<Audio>,
     ) -> Arc<WebClient> {
-        let view = View::new();
+        let view = View::new(crate::utils::current_render_mode());
 
         let client = WebClient {
             hidden: AtomicBool::new(false),
@@ -613,7 +614,7 @@ impl WebClient {
     }
 
     pub fn remove_view(&self) {
-        let view = View::new();
+        let view = View::new(crate::utils::current_render_mode());
         *self.view.lock().unwrap() = view;
     }
 
