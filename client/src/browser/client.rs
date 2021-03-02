@@ -19,7 +19,7 @@ use cef::process_message::ProcessMessage;
 use cef::types::list::ValueType;
 use cef::ProcessId;
 
-use cef_sys::cef_rect_t;
+use cef_sys::{cef_audio_parameters_t, cef_rect_t};
 
 use client_api::gta::rw::rwcore::{RwRaster, RwTexture};
 use client_api::utils::handle_result;
@@ -28,6 +28,7 @@ use crate::app::Event;
 use crate::audio::Audio;
 use crate::browser::view::View;
 use crate::external::{CallbackList, EXTERNAL_BREAK};
+use crate::utils::RenderMode;
 
 struct DrawData {
     buffer: *const u8,
@@ -72,6 +73,7 @@ pub struct WebClient {
     is_extern: bool,
     hidden: AtomicBool,
     closing: AtomicBool,
+    listen_keys: AtomicBool,
     pub view: Mutex<View>,
     draw_data: Mutex<DrawData>,
     browser: Mutex<Option<Browser>>,
@@ -94,10 +96,6 @@ impl LifespanHandler for WebClient {
         log::trace!("LifespanHandler::on_after_created. hidden: {}", hidden);
 
         self.hide(hidden);
-
-        if self.is_extern() {
-            self.set_audio_muted(true);
-        }
     }
 
     fn on_before_close(self: &Arc<Self>, _: Browser) {
@@ -312,8 +310,20 @@ impl RenderHandler for WebClient {
 
             *rendered = false;
 
-            while !*rendered {
-                rendered = cv.wait(rendered).unwrap();
+            // while !*rendered {
+            //     rendered = cv.wait(rendered).unwrap();
+            // }
+
+            match cv.wait_timeout_while(rendered, Duration::from_secs(2), |&mut done| !done) {
+                Ok((_, timeout_result)) => {
+                    if timeout_result.timed_out() {
+                        log::trace!("timed_out ... fuckit");
+                    }
+                }
+
+                Err(_) => {
+                    log::trace!("on_paint -> maybe main thread crashed ...");
+                }
             }
         }
 
@@ -337,6 +347,19 @@ impl LoadHandler for WebClient {
 }
 
 impl AudioHandler for WebClient {
+    fn get_audio_parameters(
+        self: &Arc<Self>, browser: Browser, params: &mut cef_audio_parameters_t,
+    ) -> bool {
+        log::trace!(
+            "get_audio_parameters: {} {} {}",
+            params.sample_rate,
+            params.channel_layout,
+            params.frames_per_buffer
+        );
+
+        true
+    }
+
     fn on_audio_stream_packet(
         self: &Arc<Self>, browser: Browser, stream_id: i32, data: *mut *const f32, frames: i32,
         pts: i64,
@@ -365,6 +388,10 @@ impl AudioHandler for WebClient {
             audio.remove_stream(self.id, stream_id);
         }
     }
+
+    fn on_audio_stream_error(self: &Arc<Self>, browser: Browser, error: String) {
+        log::trace!("on_audio_stream_error: {:?}", error);
+    }
 }
 
 impl WebClient {
@@ -373,12 +400,13 @@ impl WebClient {
 
         log::trace!("crate::utils::client_rect: {:?}", rect);
 
-        let mut view = View::new();
+        let mut view = View::new(crate::utils::current_render_mode());
         view.make_directx(client_api::gta::d3d9::device(), rect[0], rect[1]);
 
         let client = WebClient {
             hidden: AtomicBool::new(false),
             closing: AtomicBool::new(false),
+            listen_keys: AtomicBool::new(false),
             view: Mutex::new(view),
             draw_data: Mutex::new(DrawData::new()),
             browser: Mutex::new(None),
@@ -397,11 +425,12 @@ impl WebClient {
     pub fn new_extern(
         id: u32, cbs: CallbackList, event_tx: Sender<Event>, audio: Arc<Audio>,
     ) -> Arc<WebClient> {
-        let view = View::new();
+        let view = View::new(crate::utils::current_render_mode());
 
         let client = WebClient {
             hidden: AtomicBool::new(false),
             closing: AtomicBool::new(false),
+            listen_keys: AtomicBool::new(false),
             view: Mutex::new(view),
             draw_data: Mutex::new(DrawData::new()),
             browser: Mutex::new(None),
@@ -588,7 +617,7 @@ impl WebClient {
     }
 
     pub fn remove_view(&self) {
-        let view = View::new();
+        let view = View::new(crate::utils::current_render_mode());
         *self.view.lock().unwrap() = view;
     }
 
@@ -640,5 +669,13 @@ impl WebClient {
         self.browser()
             .map(|br| br.host())
             .map(|host| host.close_browser(force_close));
+    }
+
+    pub fn always_listen_keys(&self) -> bool {
+        self.listen_keys.load(Ordering::SeqCst)
+    }
+
+    pub fn set_always_listen_keys(&self, listen: bool) {
+        self.listen_keys.store(listen, Ordering::SeqCst);
     }
 }

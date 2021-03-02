@@ -1,3 +1,4 @@
+use crate::utils::RenderMode;
 use cef_sys::cef_rect_t;
 use client_api::gta::matrix::CRect;
 use client_api::gta::rw::rwcore::{RwRaster, RwTexture};
@@ -18,6 +19,12 @@ const D3DXSPRITE_ALPHABLEND: u32 = 16;
 
 macro_rules! set_texture_bytes {
     ($s:ident, $dest:ident, $pitch:ident, $body:block) => {
+        if let Some(mut $dest) = $s.rw_sprite.as_mut().and_then(|rw| rw.bytes()) {
+            let $pitch = $dest.pitch;
+            let $dest = &mut *$dest;
+            $body
+        }
+
         if let Some(mut $dest) = $s.directx.as_mut().and_then(|d3d9| d3d9.bytes()) {
             let $pitch = $dest.pitch;
             let $dest = &mut *$dest;
@@ -310,20 +317,23 @@ impl SpriteContainer {
 }
 
 pub struct View {
-    // directx: Option<D3Container>,
-    directx: Option<SpriteContainer>,
+    directx: Option<D3Container>,
+    rw_sprite: Option<SpriteContainer>,
     renderware: Option<RwContainer>,
     width: usize,
     height: usize,
+    render_mode: RenderMode,
 }
 
 impl View {
-    pub fn new() -> View {
+    pub fn new(render_mode: RenderMode) -> View {
         View {
             directx: None,
+            rw_sprite: None,
             renderware: None,
             width: 0,
             height: 0,
+            render_mode,
         }
     }
 
@@ -332,8 +342,12 @@ impl View {
         let height = std::cmp::max(1, height);
 
         self.destroy_previous();
-        // self.directx = Some(D3Container::new(device, width, height));
-        self.directx = Some(SpriteContainer::new(width, height));
+
+        match self.render_mode {
+            RenderMode::Renderware => self.rw_sprite = Some(SpriteContainer::new(width, height)),
+            RenderMode::DirectX => self.directx = Some(D3Container::new(device, width, height)),
+        }
+
         self.set_size(width, height);
     }
 
@@ -351,16 +365,12 @@ impl View {
 
     #[inline]
     pub fn draw(&mut self) {
+        self.rw_sprite.as_mut().map(|rw| rw.draw());
         self.directx.as_mut().map(|d3d9| d3d9.draw());
     }
 
     #[inline(always)]
     pub fn update_texture(&mut self, bytes: &[u8], rects: &[cef_rect_t]) {
-        let height = self.height;
-        let width = self.width;
-
-        let timings = std::time::Instant::now();
-
         set_texture_bytes!(self, dest, pitch, {
             let dest = dest.as_mut_ptr();
             let pixels_origin = bytes.as_ptr();
@@ -417,8 +427,9 @@ impl View {
     }
 
     pub fn resize(&mut self, device: Option<&mut IDirect3DDevice9>, width: usize, height: usize) {
-        let should_replace = (device.is_some() && self.directx.is_none())
-            || (device.is_none() && self.renderware.is_none());
+        let should_replace =
+            (device.is_some() && self.directx.is_none() && self.rw_sprite.is_none())
+                || (device.is_none() && self.renderware.is_none());
 
         if self.width == width && self.height == height && !should_replace {
             return;
@@ -431,8 +442,12 @@ impl View {
         self.set_size(width, height);
 
         if let Some(device) = device {
-            // self.directx = Some(D3Container::new(device, width, height));
-            self.directx = Some(SpriteContainer::new(width, height));
+            match self.render_mode {
+                RenderMode::DirectX => self.directx = Some(D3Container::new(device, width, height)),
+                RenderMode::Renderware => {
+                    self.rw_sprite = Some(SpriteContainer::new(width, height))
+                }
+            }
         } else {
             self.renderware = Some(RwContainer::new(width, height));
         }
@@ -464,6 +479,7 @@ impl View {
     }
 
     fn destroy_previous(&mut self) {
+        self.rw_sprite.take();
         self.directx.take();
         self.renderware.take();
     }
@@ -478,6 +494,11 @@ impl View {
     where
         F: FnMut(&mut [u8], usize),
     {
+        if let Some(mut bytes) = self.rw_sprite.as_mut().and_then(|rw| rw.bytes()) {
+            let pitch = bytes.pitch;
+            func(&mut *bytes, pitch);
+        }
+
         if let Some(mut bytes) = self.directx.as_mut().and_then(|d3d9| d3d9.bytes()) {
             let pitch = bytes.pitch;
             func(&mut *bytes, pitch);

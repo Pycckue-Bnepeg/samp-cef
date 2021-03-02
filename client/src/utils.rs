@@ -171,3 +171,23 @@ pub fn cef_dir() -> PathBuf {
             .unwrap_or_else(|| PathBuf::from("./cef"))
     }
 }
+
+#[derive(Debug, Copy, Clone)]
+pub enum RenderMode {
+    DirectX,
+    Renderware,
+}
+
+pub fn current_render_mode() -> RenderMode {
+    let file = std::env::current_exe()
+        .ok()
+        .and_then(|exe| exe.parent().map(|par| par.to_owned()))
+        .map(|parent| parent.join("cef_render_directx.set"))
+        .unwrap_or_else(|| PathBuf::from("./cef_render_directx.set"));
+
+    if std::fs::metadata(file).is_ok() {
+        RenderMode::DirectX
+    } else {
+        RenderMode::Renderware
+    }
+}

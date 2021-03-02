@@ -48,7 +48,9 @@ impl App for DefaultApp {
 
 pub fn initialize(event_tx: Sender<Event>) {
     let instance = unsafe { GetModuleHandleA(std::ptr::null()) };
-    let main_args = cef_sys::cef_main_args_t { instance };
+    let main_args = cef_sys::cef_main_args_t {
+        instance: instance as *mut _,
+    };
 
     log::trace!("browser::cef::initialize");
 
@@ -106,7 +108,7 @@ pub fn initialize(event_tx: Sender<Event>) {
 pub fn create_browser<T: Client>(client: Arc<T>, url: &str) {
     let mut window_info = unsafe { std::mem::zeroed::<cef_sys::cef_window_info_t>() };
 
-    window_info.parent_window = client_api::gta::hwnd();
+    window_info.parent_window = client_api::gta::hwnd() as *mut _;
     window_info.windowless_rendering_enabled = 1;
 
     let url = CefString::new(url);

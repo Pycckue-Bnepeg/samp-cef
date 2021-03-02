@@ -21,9 +21,9 @@ pub enum PacketId {
     JOIN_RESPONSE = 2,
     CREATE_BROWSER = 3,
     DESTROY_BROWSER = 4,
-    BLOCK_INPUT = 5,
+    ALWAYS_LISTEN_KEYS = 5,
     HIDE_BROWSER = 6,
-    BROWSER_LISTEN_EVENTS = 7,
+    FOCUS_BROWSER = 7,
     CREATE_EXTERNAL_BROWSER = 11,
     APPEND_TO_OBJECT = 12,
     REMOVE_FROM_OBJECT = 13,
@@ -48,9 +48,9 @@ impl From<i32> for PacketId {
             2 => PacketId::JOIN_RESPONSE,
             3 => PacketId::CREATE_BROWSER,
             4 => PacketId::DESTROY_BROWSER,
-            5 => PacketId::BLOCK_INPUT,
+            5 => PacketId::ALWAYS_LISTEN_KEYS,
             6 => PacketId::HIDE_BROWSER,
-            7 => PacketId::BROWSER_LISTEN_EVENTS,
+            7 => PacketId::FOCUS_BROWSER,
             11 => PacketId::CREATE_EXTERNAL_BROWSER,
             12 => PacketId::APPEND_TO_OBJECT,
             13 => PacketId::REMOVE_FROM_OBJECT,
@@ -72,9 +72,9 @@ impl<'a> From<&'a str> for PacketId {
             "JOIN_RESPONSE" => PacketId::JOIN_RESPONSE,
             "CREATE_BROWSER" => PacketId::CREATE_BROWSER,
             "DESTROY_BROWSER" => PacketId::DESTROY_BROWSER,
-            "BLOCK_INPUT" => PacketId::BLOCK_INPUT,
+            "ALWAYS_LISTEN_KEYS" => PacketId::ALWAYS_LISTEN_KEYS,
             "HIDE_BROWSER" => PacketId::HIDE_BROWSER,
-            "BROWSER_LISTEN_EVENTS" => PacketId::BROWSER_LISTEN_EVENTS,
+            "FOCUS_BROWSER" => PacketId::FOCUS_BROWSER,
             "CREATE_EXTERNAL_BROWSER" => PacketId::CREATE_EXTERNAL_BROWSER,
             "APPEND_TO_OBJECT" => PacketId::APPEND_TO_OBJECT,
             "REMOVE_FROM_OBJECT" => PacketId::REMOVE_FROM_OBJECT,
@@ -264,16 +264,18 @@ impl MessageWrite for DestroyBrowser {
 }
 
 #[derive(Debug, Default, PartialEq, Clone)]
-pub struct BlockInput {
-    pub block: bool,
+pub struct AlwaysListenKeys {
+    pub browser_id: u32,
+    pub listen: bool,
 }
 
-impl<'a> MessageRead<'a> for BlockInput {
+impl<'a> MessageRead<'a> for AlwaysListenKeys {
     fn from_reader(r: &mut BytesReader, bytes: &'a [u8]) -> Result<Self> {
         let mut msg = Self::default();
         while !r.is_eof() {
             match r.next_tag(bytes) {
-                Ok(8) => msg.block = r.read_bool(bytes)?,
+                Ok(8) => msg.browser_id = r.read_uint32(bytes)?,
+                Ok(16) => msg.listen = r.read_bool(bytes)?,
                 Ok(t) => { r.read_unknown(bytes, t)?; }
                 Err(e) => return Err(e),
             }
@@ -282,14 +284,16 @@ impl<'a> MessageRead<'a> for BlockInput {
     }
 }
 
-impl MessageWrite for BlockInput {
+impl MessageWrite for AlwaysListenKeys {
     fn get_size(&self) -> usize {
         0
-        + 1 + sizeof_varint(*(&self.block) as u64)
+        + 1 + sizeof_varint(*(&self.browser_id) as u64)
+        + 1 + sizeof_varint(*(&self.listen) as u64)
     }
 
     fn write_message<W: WriterBackend>(&self, w: &mut Writer<W>) -> Result<()> {
-        w.write_with_tag(8, |w| w.write_bool(*&self.block))?;
+        w.write_with_tag(8, |w| w.write_uint32(*&self.browser_id))?;
+        w.write_with_tag(16, |w| w.write_bool(*&self.listen))?;
         Ok(())
     }
 }
@@ -369,18 +373,18 @@ impl MessageWrite for HideBrowser {
 }
 
 #[derive(Debug, Default, PartialEq, Clone)]
-pub struct BrowserListenEvents {
+pub struct FocusBrowser {
     pub browser_id: u32,
-    pub listen: bool,
+    pub focused: bool,
 }
 
-impl<'a> MessageRead<'a> for BrowserListenEvents {
+impl<'a> MessageRead<'a> for FocusBrowser {
     fn from_reader(r: &mut BytesReader, bytes: &'a [u8]) -> Result<Self> {
         let mut msg = Self::default();
         while !r.is_eof() {
             match r.next_tag(bytes) {
                 Ok(8) => msg.browser_id = r.read_uint32(bytes)?,
-                Ok(16) => msg.listen = r.read_bool(bytes)?,
+                Ok(16) => msg.focused = r.read_bool(bytes)?,
                 Ok(t) => { r.read_unknown(bytes, t)?; }
                 Err(e) => return Err(e),
             }
@@ -389,16 +393,16 @@ impl<'a> MessageRead<'a> for BrowserListenEvents {
     }
 }
 
-impl MessageWrite for BrowserListenEvents {
+impl MessageWrite for FocusBrowser {
     fn get_size(&self) -> usize {
         0
         + 1 + sizeof_varint(*(&self.browser_id) as u64)
-        + 1 + sizeof_varint(*(&self.listen) as u64)
+        + 1 + sizeof_varint(*(&self.focused) as u64)
     }
 
     fn write_message<W: WriterBackend>(&self, w: &mut Writer<W>) -> Result<()> {
         w.write_with_tag(8, |w| w.write_uint32(*&self.browser_id))?;
-        w.write_with_tag(16, |w| w.write_bool(*&self.listen))?;
+        w.write_with_tag(16, |w| w.write_bool(*&self.focused))?;
         Ok(())
     }
 }
