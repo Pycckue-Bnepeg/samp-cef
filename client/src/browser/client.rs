@@ -73,6 +73,7 @@ pub struct WebClient {
     is_extern: bool,
     hidden: AtomicBool,
     closing: AtomicBool,
+    listen_keys: AtomicBool,
     pub view: Mutex<View>,
     draw_data: Mutex<DrawData>,
     browser: Mutex<Option<Browser>>,
@@ -405,6 +406,7 @@ impl WebClient {
         let client = WebClient {
             hidden: AtomicBool::new(false),
             closing: AtomicBool::new(false),
+            listen_keys: AtomicBool::new(false),
             view: Mutex::new(view),
             draw_data: Mutex::new(DrawData::new()),
             browser: Mutex::new(None),
@@ -428,6 +430,7 @@ impl WebClient {
         let client = WebClient {
             hidden: AtomicBool::new(false),
             closing: AtomicBool::new(false),
+            listen_keys: AtomicBool::new(false),
             view: Mutex::new(view),
             draw_data: Mutex::new(DrawData::new()),
             browser: Mutex::new(None),
@@ -666,5 +669,13 @@ impl WebClient {
         self.browser()
             .map(|br| br.host())
             .map(|host| host.close_browser(force_close));
+    }
+
+    pub fn always_listen_keys(&self) -> bool {
+        self.listen_keys.load(Ordering::SeqCst)
+    }
+
+    pub fn set_always_listen_keys(&self, listen: bool) {
+        self.listen_keys.store(listen, Ordering::SeqCst);
     }
 }

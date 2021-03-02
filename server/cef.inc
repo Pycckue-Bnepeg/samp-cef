@@ -27,6 +27,8 @@ native cef_remove_from_object(player_id, browser_id, object_id);
 native cef_player_has_plugin(player_id);
 native cef_toggle_dev_tools(player_id, browser_id, enabled);
 native cef_set_audio_settings(player_id, browser_id, Float:max_distance, Float:reference_distance);
+native cef_focus_browser(player_id, browser_id, focused);
+native cef_always_listen_keys(player_id, browser_id, listen);
 
 // internal callbacks hooks
 

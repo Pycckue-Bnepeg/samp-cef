@@ -343,8 +343,19 @@ impl Manager {
             return;
         }
 
+        // отправлять события клавиш ТОЛЬКО сфокусированному браузеру. иначе можно и другим запросившим
         if let Some(client) = self.focused.as_ref().and_then(|id| self.clients.get(id)) {
             if let Some(host) = client.browser().map(|browser| browser.host()) {
+                host.send_keyboard_event(event.clone());
+            }
+        } else {
+            for host in self
+                .clients
+                .values()
+                .filter(|client| client.always_listen_keys())
+                .map(|client| client.browser().map(|browser| browser.host()))
+                .flatten()
+            {
                 host.send_keyboard_event(event.clone());
             }
         }
@@ -455,6 +466,12 @@ impl Manager {
         self.clients
             .get(&browser_id)
             .map(|client| client.toggle_dev_tools(enabled));
+    }
+
+    pub fn always_listen_keys(&self, browser_id: u32, listen: bool) {
+        self.clients
+            .get(&browser_id)
+            .map(|client| client.set_always_listen_keys(listen));
     }
 
     pub fn set_audio_settings(&mut self, browser_id: u32, audio_settings: BrowserAudioSettings) {

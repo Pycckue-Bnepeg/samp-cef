@@ -127,12 +127,12 @@ impl CefPlugin {
         Ok(true)
     }
 
-    #[native(name = "cef_listen_client_events")]
+    #[native(name = "cef_focus_browser")]
     fn browser_listen_events(
-        &mut self, _: &Amx, player_id: i32, browser_id: i32, listen: bool,
+        &mut self, _: &Amx, player_id: i32, browser_id: i32, focused: bool,
     ) -> AmxResult<bool> {
         let mut server = self.server.lock().unwrap();
-        server.browser_listen_events(player_id, browser_id, listen);
+        server.focus_browser(player_id, browser_id, focused);
 
         Ok(true)
     }
@@ -195,10 +195,12 @@ impl CefPlugin {
         Ok(true)
     }
 
-    #[native(name = "cef_block_input")]
-    fn block_input(&mut self, _: &Amx, player_id: i32, block: bool) -> AmxResult<bool> {
+    #[native(name = "cef_always_listen_keys")]
+    fn block_input(
+        &mut self, _: &Amx, player_id: i32, browser_id: i32, listen: bool,
+    ) -> AmxResult<bool> {
         let mut server = self.server.lock().unwrap();
-        server.block_input(player_id, block);
+        server.always_listen_keys(player_id, browser_id, listen);
 
         Ok(true)
     }

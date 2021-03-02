@@ -60,7 +60,7 @@ pub enum Event {
 
     CefInitialize,
 
-    BlockInput(bool),
+    AlwaysListenKeys(u32, bool),
     Terminate,
 }
 
@@ -316,10 +316,6 @@ pub fn mainloop() {
         }
 
         {
-            // let input_active = inputs::Input::is_active()
-            //     || inputs::Dialog::is_input_focused()
-            //     || CMenuManager::is_menu_active();
-
             let menu = CMenuManager::get();
             let paused = menu.is_active() || !app.window_focused;
 
@@ -340,7 +336,10 @@ pub fn mainloop() {
 
         while let Ok(event) = app.event_rx.try_recv() {
             match event {
-                Event::BlockInput(_) => {}
+                Event::AlwaysListenKeys(browser_id, listen) => {
+                    let manager = app.manager.lock().unwrap();
+                    manager.always_listen_keys(browser_id, listen);
+                }
 
                 Event::CreateBrowser {
                     id,
@@ -574,7 +573,13 @@ fn win_event(msg: UINT, wparam: WPARAM, lparam: LPARAM) -> bool {
                     }
                 }
 
-                manager.send_keyboard_event(event);
+                let input_active = inputs::Input::is_active()
+                    || inputs::Dialog::is_input_focused()
+                    || CMenuManager::is_menu_active();
+
+                if !input_active {
+                    manager.send_keyboard_event(event);
+                }
             }
 
             WM_ACTIVATE => {

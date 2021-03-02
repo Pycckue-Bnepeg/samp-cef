@@ -252,7 +252,7 @@ impl Server {
         }
     }
 
-    pub fn browser_listen_events(&mut self, player_id: i32, browser_id: i32, listen: bool) {
+    pub fn focus_browser(&mut self, player_id: i32, browser_id: i32, focused: bool) {
         if let Some(addr) = self.addr_by_id(player_id) {
             let Server {
                 ref mut clients,
@@ -261,9 +261,9 @@ impl Server {
             } = self;
 
             clients.get_mut(&addr).map(|client| {
-                let packet = packets::BrowserListenEvents {
+                let packet = packets::FocusBrowser {
                     browser_id: browser_id as u32,
-                    listen,
+                    focused,
                 };
 
                 let bytes = try_into_packet(packet).unwrap();
@@ -295,7 +295,7 @@ impl Server {
         }
     }
 
-    pub fn block_input(&mut self, player_id: i32, block: bool) {
+    pub fn always_listen_keys(&mut self, player_id: i32, browser_id: i32, listen: bool) {
         if let Some(addr) = self.addr_by_id(player_id) {
             let Server {
                 ref mut clients,
@@ -304,7 +304,10 @@ impl Server {
             } = self;
 
             clients.get_mut(&addr).map(|client| {
-                let packet = packets::BlockInput { block };
+                let packet = packets::AlwaysListenKeys {
+                    browser_id: browser_id as u32,
+                    listen,
+                };
 
                 let bytes = try_into_packet(packet).unwrap();
                 let packet = Packet::unreliable_sequenced(client.addr(), bytes.clone(), Some(1));

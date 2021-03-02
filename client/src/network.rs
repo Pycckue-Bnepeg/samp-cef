@@ -127,15 +127,15 @@ impl Network {
                     .ok();
             }
 
-            BLOCK_INPUT => {
+            ALWAYS_LISTEN_KEYS => {
                 deserialize_from_slice(&packet.bytes)
-                    .map(|packet| self.handle_block_input(packet))
+                    .map(|packet| self.handle_always_listen_keys(packet))
                     .ok();
             }
 
-            BROWSER_LISTEN_EVENTS => {
+            FOCUS_BROWSER => {
                 deserialize_from_slice(&packet.bytes)
-                    .map(|packet| self.handle_listen_events(packet))
+                    .map(|packet| self.handle_focus_browser(packet))
                     .ok();
             }
 
@@ -243,13 +243,13 @@ impl Network {
         handle_result(self.event_tx.send(event));
     }
 
-    fn handle_block_input(&mut self, packet: packets::BlockInput) {
-        let event = Event::BlockInput(packet.block);
+    fn handle_always_listen_keys(&mut self, packet: packets::AlwaysListenKeys) {
+        let event = Event::AlwaysListenKeys(packet.browser_id, packet.listen);
         handle_result(self.event_tx.send(event));
     }
 
-    fn handle_listen_events(&mut self, packet: packets::BrowserListenEvents) {
-        let event = Event::FocusBrowser(packet.browser_id, packet.listen);
+    fn handle_focus_browser(&mut self, packet: packets::FocusBrowser) {
+        let event = Event::FocusBrowser(packet.browser_id, packet.focused);
         handle_result(self.event_tx.send(event));
     }
 

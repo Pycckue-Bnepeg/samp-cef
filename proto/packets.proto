@@ -7,9 +7,9 @@ enum PacketId {
     JOIN_RESPONSE = 2;
     CREATE_BROWSER = 3;
     DESTROY_BROWSER = 4;
-    BLOCK_INPUT = 5;
+    ALWAYS_LISTEN_KEYS = 5;
     HIDE_BROWSER = 6;
-    BROWSER_LISTEN_EVENTS = 7;
+    FOCUS_BROWSER = 7;
     CREATE_EXTERNAL_BROWSER = 11;
     APPEND_TO_OBJECT = 12;
     REMOVE_FROM_OBJECT = 13;
@@ -47,8 +47,9 @@ message DestroyBrowser {
     required uint32 browser_id = 1;
 }
 
-message BlockInput {
-    required bool block = 1;
+message AlwaysListenKeys {
+    required uint32 browser_id = 1;
+    required bool listen = 2;
 }
 
 message EmitEvent {
@@ -62,9 +63,9 @@ message HideBrowser {
     required bool hide = 2;
 }
 
-message BrowserListenEvents {
+message FocusBrowser {
     required uint32 browser_id = 1;
-    required bool listen = 2;
+    required bool focused = 2;
 }
 
 message EventValue {
