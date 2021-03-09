@@ -289,7 +289,7 @@ impl Server {
                 };
 
                 let bytes = try_into_packet(packet).unwrap();
-                let packet = Packet::unreliable_sequenced(client.addr(), bytes.clone(), Some(1));
+                let packet = Packet::reliable_ordered(client.addr(), bytes.clone(), Some(1));
                 sender.send(packet);
             });
         }

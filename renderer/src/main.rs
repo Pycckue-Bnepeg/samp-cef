@@ -246,6 +246,7 @@ fn main() {
     let main_args = cef_sys::cef_main_args_t {
         instance: instance as *mut _,
     };
+
     let app = Arc::new(Application {
         subs: Arc::new(Mutex::new(HashMap::new())),
     });
