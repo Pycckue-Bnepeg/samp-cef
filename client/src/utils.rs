@@ -123,6 +123,7 @@ pub fn client_rect() -> [usize; 2] {
     size
 }
 
+#[inline(always)]
 pub fn current_time() -> i128 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)

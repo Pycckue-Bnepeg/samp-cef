@@ -1,6 +1,8 @@
 use std::net::SocketAddr;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
+
+use parking_lot::Mutex;
 
 use cef::types::list::List;
 use cef_sys::{cef_key_event_t, cef_key_event_type_t};
@@ -98,7 +100,7 @@ impl Drop for App {
         log::trace!("App::drop");
 
         {
-            let mut manager = self.manager.lock().unwrap();
+            let mut manager = self.manager.lock();
             manager.close_all_browsers();
             manager.shutdown_cef();
         }
@@ -198,7 +200,7 @@ impl App {
             if !self.samp_ready {
                 App::initialize_hooks();
                 self.samp_ready = true;
-                self.manager.lock().unwrap().initialize_cef();
+                self.manager.lock().initialize_cef();
             }
 
             log::trace!("SAMP: CNetGame address: {}", addr);
@@ -227,7 +229,7 @@ impl App {
 
         crate::external::call_disconnect();
 
-        let mut manager = self.manager.lock().unwrap();
+        let mut manager = self.manager.lock();
         manager.close_all_browsers();
         self.network.take();
         self.connected = false;
@@ -295,7 +297,7 @@ fn shitty() {
         if !app.samp_ready {
             log::trace!("SAMP init within {:?}", app.initialization.elapsed());
             app.samp_ready = true;
-            app.manager.lock().unwrap().initialize_cef();
+            app.manager.lock().initialize_cef();
         } else {
             if !app.window_focused {
                 mainloop(); //
@@ -323,7 +325,7 @@ pub fn mainloop() {
             app.audio.set_gain(menu.sfx_volume());
 
             let show_cursor = {
-                let mut manager = app.manager.lock().unwrap();
+                let mut manager = app.manager.lock();
                 manager.set_corrupted(paused);
                 manager.is_input_blocked() && !menu.is_active()
             };
@@ -337,7 +339,7 @@ pub fn mainloop() {
         while let Ok(event) = app.event_rx.try_recv() {
             match event {
                 Event::AlwaysListenKeys(browser_id, listen) => {
-                    let manager = app.manager.lock().unwrap();
+                    let manager = app.manager.lock();
                     manager.always_listen_keys(browser_id, listen);
                 }
 
@@ -354,7 +356,7 @@ pub fn mainloop() {
                     );
 
                     let show_cursor = {
-                        let mut manager = app.manager.lock().unwrap();
+                        let mut manager = app.manager.lock();
                         manager.create_browser(id, app.callbacks.clone(), &url);
                         manager.hide_browser(id, hidden);
                         manager.browser_focus(id, focused);
@@ -367,24 +369,24 @@ pub fn mainloop() {
 
                 Event::CreateExternBrowser(ext) => {
                     log::trace!("Request from server to create external browser with id {}. Texture name: {}", ext.id, ext.texture);
-                    let mut manager = app.manager.lock().unwrap();
+                    let mut manager = app.manager.lock();
 
                     manager.create_browser_on_texture(&ext, app.callbacks.clone());
                 }
 
                 Event::DestroyBrowser(id) => {
-                    let mut manager = app.manager.lock().unwrap();
+                    let mut manager = app.manager.lock();
                     manager.close_browser(id, true);
                 }
 
                 Event::HideBrowser(id, hide) => {
-                    let manager = app.manager.lock().unwrap();
+                    let manager = app.manager.lock();
                     manager.hide_browser(id, hide);
                 }
 
                 Event::FocusBrowser(id, focus) => {
                     let show_cursor = {
-                        let mut manager = app.manager.lock().unwrap();
+                        let mut manager = app.manager.lock();
                         manager.browser_focus(id, focus);
                         manager.is_input_blocked() && !CMenuManager::is_menu_active()
                     };
@@ -393,7 +395,7 @@ pub fn mainloop() {
                 }
 
                 Event::EmitEvent(event, list) => {
-                    let manager = app.manager.lock().unwrap();
+                    let manager = app.manager.lock();
                     manager.trigger_event(&event, list);
                 }
 
@@ -417,7 +419,7 @@ pub fn mainloop() {
                         network.send(event);
                     }
 
-                    let manager = app.manager.lock().unwrap();
+                    let manager = app.manager.lock();
                     manager.call_browser_ready(id);
                 }
 
@@ -429,17 +431,17 @@ pub fn mainloop() {
                 }
 
                 Event::AppendToObject(browser, object) => {
-                    let mut manager = app.manager.lock().unwrap();
+                    let mut manager = app.manager.lock();
                     manager.browser_append_to_object(browser, object);
                 }
 
                 Event::RemoveFromObject(browser, object) => {
-                    let mut manager = app.manager.lock().unwrap();
+                    let mut manager = app.manager.lock();
                     manager.browser_remove_from_object(browser, object);
                 }
 
                 Event::ToggleDevTools(browser, enabled) => {
-                    let manager = app.manager.lock().unwrap();
+                    let manager = app.manager.lock();
                     manager.toggle_dev_tools(browser, enabled);
                 }
 
@@ -448,7 +450,7 @@ pub fn mainloop() {
                 }
 
                 Event::SetAudioSettings(browser, audio_settings) => {
-                    let mut manager = app.manager.lock().unwrap();
+                    let mut manager = app.manager.lock();
                     manager.set_audio_settings(browser, audio_settings);
                 }
 
@@ -468,7 +470,7 @@ pub fn mainloop() {
                 app.audio.set_velocity(velocity);
                 app.audio.set_orientation(matrix);
 
-                let mut manager = app.manager.lock().unwrap();
+                let mut manager = app.manager.lock();
 
                 for browser in manager.external_browsers() {
                     for &object_id in browser.object_ids.iter() {
@@ -503,7 +505,7 @@ pub fn mainloop() {
 // TODO: Save key state. Mouse too?
 fn win_event(msg: UINT, wparam: WPARAM, lparam: LPARAM) -> bool {
     if let Some(app) = App::get() {
-        let mut manager = app.manager.lock().unwrap();
+        let mut manager = app.manager.lock();
         let mut notify_key_down = false;
 
         match msg {
@@ -613,7 +615,7 @@ extern "stdcall" fn async_key_state(key: i32) -> u16 {
     if let Some(app) = App::get() {
         let result = app.keystate_hook.call(key);
 
-        if let Ok(manager) = app.manager.try_lock() {
+        if let Some(manager) = app.manager.try_lock() {
             if manager.is_input_blocked() {
                 return 0;
             } else {

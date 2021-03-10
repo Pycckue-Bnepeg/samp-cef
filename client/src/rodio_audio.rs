@@ -7,8 +7,10 @@ use nalgebra::{Point3, Rotation3, Vector3};
 use std::collections::{BTreeMap, HashMap};
 use std::sync::{
     atomic::{AtomicBool, Ordering},
-    Arc, Mutex, RwLock,
+    Arc,
 };
+
+use parking_lot::{Mutex, RwLock};
 
 pub const MAX_DISTANCE: f32 = 50.0;
 pub const REFRENCE_DISTANCE: f32 = 15.0;
@@ -195,7 +197,6 @@ impl Audio {
     ) {
         self.stream_channels
             .write()
-            .unwrap()
             .insert((browser, stream_id), channels);
 
         let _ = self.command_tx.send(Command::Stream {
@@ -225,7 +226,6 @@ impl Audio {
         let channels = self
             .stream_channels
             .read()
-            .unwrap()
             .get(&(browser, stream_id))
             .unwrap_or(&1)
             .clone();
@@ -285,7 +285,7 @@ impl Audio {
 
     pub fn set_position(&self, position: CVector) {
         let point = Point3::new(position.x, position.y, position.z);
-        self.listener.lock().unwrap().position = point;
+        self.listener.lock().position = point;
     }
 
     pub fn set_orientation(&self, matrix: RwMatrix) {
@@ -294,7 +294,7 @@ impl Audio {
 
         let rotation = Rotation3::face_towards(&at, &up);
 
-        self.listener.lock().unwrap().rotation = rotation;
+        self.listener.lock().rotation = rotation;
     }
 
     pub fn set_object_settings(
@@ -302,7 +302,7 @@ impl Audio {
         settings: BrowserAudioSettings,
     ) {
         let position = {
-            let listener = self.listener.lock().unwrap();
+            let listener = self.listener.lock();
             let diff = Point3::new(
                 pos.x - listener.position.x,
                 pos.y - listener.position.y,

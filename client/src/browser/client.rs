@@ -2,11 +2,13 @@ use std::collections::{HashSet, VecDeque};
 use std::ffi::CString;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
-    Arc, Condvar, Mutex,
+    Arc,
+    // Arc, Condvar, Mutex,
 };
 use std::time::{Duration, Instant};
 
 use crossbeam_channel::Sender;
+use parking_lot::{Condvar, Mutex};
 
 use cef::browser::{Browser, ContextMenuParams, Frame, MenuModel};
 use cef::client::Client;
@@ -87,7 +89,7 @@ pub struct WebClient {
 impl LifespanHandler for WebClient {
     fn on_after_created(self: &Arc<Self>, browser: Browser) {
         {
-            let mut br = self.browser.lock().unwrap();
+            let mut br = self.browser.lock();
             *br = Some(browser);
         }
 
@@ -101,7 +103,7 @@ impl LifespanHandler for WebClient {
     fn on_before_close(self: &Arc<Self>, _: Browser) {
         log::trace!("LifespanHandler::on_before_close");
 
-        let mut browser = self.browser.lock().unwrap();
+        let mut browser = self.browser.lock();
 
         if let Some(browser) = browser.take() {
             browser.host().close_dev_tools();
@@ -190,7 +192,7 @@ impl Client for WebClient {
                 }
 
                 let event_name = args.string(0).to_string();
-                let callbacks = self.callbacks.lock().unwrap();
+                let callbacks = self.callbacks.lock();
 
                 if let Some(cb) = callbacks.get(&event_name) {
                     let name = CString::new(event_name.clone()).unwrap(); // 100% valid string
@@ -241,12 +243,12 @@ impl ContextMenuHandler for WebClient {
 
 impl RenderHandler for WebClient {
     fn view_rect(self: &Arc<Self>, _: Browser, rect: &mut cef_rect_t) {
-        let texture = self.view.lock().unwrap();
+        let texture = self.view.lock();
         *rect = texture.rect();
     }
 
     fn on_popup_show(self: &Arc<Self>, _: Browser, show: bool) {
-        let mut draw_data = self.draw_data.lock().unwrap();
+        let mut draw_data = self.draw_data.lock();
         draw_data.popup_show = show;
 
         if !show {
@@ -256,7 +258,7 @@ impl RenderHandler for WebClient {
     }
 
     fn on_popup_size(self: &Arc<Self>, _: Browser, rect: &cef_rect_t) {
-        let mut draw_data = self.draw_data.lock().unwrap();
+        let mut draw_data = self.draw_data.lock();
 
         draw_data.popup_rect = rect.clone();
 
@@ -270,14 +272,12 @@ impl RenderHandler for WebClient {
         buffer: &[u8], width: usize, height: usize,
     ) {
         // TODO: тест hidden
-        if
-        /*self.hidden.load(Ordering::SeqCst) ||*/
-        self.closing.load(Ordering::SeqCst) {
+        if self.hidden.load(Ordering::SeqCst) || self.closing.load(Ordering::SeqCst) {
             return;
         }
 
         {
-            let mut draw_data = self.draw_data.lock().unwrap();
+            let mut draw_data = self.draw_data.lock();
 
             match paint_type {
                 PaintElement::Popup => {
@@ -306,28 +306,19 @@ impl RenderHandler for WebClient {
 
         {
             let (mutex, cv) = &self.rendered;
-            let mut rendered = mutex.lock().unwrap();
+            let mut rendered = mutex.lock();
 
             *rendered = false;
 
-            // while !*rendered {
-            //     rendered = cv.wait(rendered).unwrap();
-            // }
-
-            match cv.wait_timeout_while(rendered, Duration::from_secs(2), |&mut done| !done) {
-                Ok((_, timeout_result)) => {
-                    if timeout_result.timed_out() {
-                        log::trace!("timed_out ... fuckit");
-                    }
-                }
-
-                Err(_) => {
-                    log::trace!("on_paint -> maybe main thread crashed ...");
-                }
+            if cv
+                .wait_for(&mut rendered, Duration::from_millis(50))
+                .timed_out()
+            {
+                log::trace!("timed_out ... fuckit");
             }
         }
 
-        self.draw_data.lock().unwrap().changed = false;
+        self.draw_data.lock().changed = false;
     }
 }
 
@@ -357,6 +348,10 @@ impl AudioHandler for WebClient {
             params.frames_per_buffer
         );
 
+        params.channel_layout = 2;
+        params.sample_rate = 44100;
+        params.frames_per_buffer = 512;
+
         true
     }
 
@@ -364,6 +359,9 @@ impl AudioHandler for WebClient {
         self: &Arc<Self>, browser: Browser, stream_id: i32, data: *mut *const f32, frames: i32,
         pts: i64,
     ) {
+        let current_time = crate::utils::current_time();
+        log::trace!("cur {} pts {}", current_time, pts);
+
         if let Some(audio) = self.audio.as_ref() {
             audio.append_pcm(self.id, stream_id, data, frames, pts as u64);
         }
@@ -375,7 +373,7 @@ impl AudioHandler for WebClient {
     ) {
         if let Some(audio) = self.audio.as_ref() {
             audio.create_stream(self.id, stream_id, channels, sample_rate, frames_per_buffer);
-            let objects = self.object_list.lock().unwrap();
+            let objects = self.object_list.lock();
 
             for &object_id in objects.iter() {
                 audio.add_source(self.id, object_id);
@@ -448,20 +446,22 @@ impl WebClient {
 
     #[inline]
     pub fn draw(&self) {
-        let mut texture = self.view.lock().unwrap();
+        let mut texture = self.view.lock();
         texture.draw();
     }
 
+    #[inline]
     pub fn on_lost_device(&self) {
         self.internal_hide(true, false); // hide browser but do not save value
 
-        let mut texture = self.view.lock().unwrap();
+        let mut texture = self.view.lock();
         texture.on_lost_device();
     }
 
+    #[inline]
     pub fn on_reset_device(&self) {
         {
-            let mut view = self.view.lock().unwrap();
+            let mut view = self.view.lock();
 
             if self.is_extern() {
             } else {
@@ -474,6 +474,7 @@ impl WebClient {
         self.restore_hide_status();
     }
 
+    #[inline]
     pub fn resize(&self, width: usize, height: usize) {
         let device = if self.is_extern() {
             None
@@ -481,13 +482,13 @@ impl WebClient {
             Some(client_api::gta::d3d9::device())
         };
 
-        let mut view = self.view.lock().unwrap();
+        let mut view = self.view.lock();
         view.resize(device, width, height);
         self.notify_was_resized();
     }
 
     fn notify_was_resized(&self) {
-        let browser = self.browser.lock().unwrap();
+        let browser = self.browser.lock();
 
         if let Some(host) = browser.as_ref().map(|brw| brw.host()) {
             host.was_resized();
@@ -502,8 +503,8 @@ impl WebClient {
         }
 
         {
-            let mut texture = self.view.lock().unwrap();
-            let draw_data = self.draw_data.lock().unwrap();
+            let mut texture = self.view.lock();
+            let draw_data = self.draw_data.lock();
             let size = texture.rect();
 
             if draw_data.changed {
@@ -560,13 +561,14 @@ impl WebClient {
     #[inline(always)]
     fn unlock(&self) {
         let (mutex, cv) = &self.rendered;
-        let mut rendered = mutex.lock().unwrap();
+        let mut rendered = mutex.lock();
         *rendered = true;
         cv.notify_all();
     }
 
+    #[inline(always)]
     pub fn browser(&self) -> Option<Browser> {
-        let browser = self.browser.lock().unwrap();
+        let browser = self.browser.lock();
 
         browser.as_ref().map(|browser| browser.clone())
     }
@@ -583,7 +585,7 @@ impl WebClient {
         if let Some(host) = self.browser().map(|browser| browser.host()) {
             if hide {
                 host.was_hidden(true);
-                let mut view = self.view.lock().unwrap();
+                let mut view = self.view.lock();
                 view.clear();
             } else {
                 host.was_hidden(false);
@@ -607,18 +609,18 @@ impl WebClient {
     }
 
     pub fn add_object(&self, object_id: i32) {
-        let mut objects = self.object_list.lock().unwrap();
+        let mut objects = self.object_list.lock();
         objects.insert(object_id);
     }
 
     pub fn remove_object(&self, object_id: i32) {
-        let mut objects = self.object_list.lock().unwrap();
+        let mut objects = self.object_list.lock();
         objects.remove(&object_id);
     }
 
     pub fn remove_view(&self) {
         let view = View::new(crate::utils::current_render_mode());
-        *self.view.lock().unwrap() = view;
+        *self.view.lock() = view;
     }
 
     pub fn toggle_dev_tools(&self, enabled: bool) {

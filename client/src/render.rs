@@ -1,6 +1,8 @@
 use std::ffi::c_void;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::time::Instant;
+
+use parking_lot::Mutex;
 
 use winapi::shared::d3d9::IDirect3DDevice9;
 
@@ -109,7 +111,7 @@ fn on_render(_: &mut IDirect3DDevice9) {
         let fps = render.calc_frames();
 
         {
-            let mut manager = render.manager.lock().unwrap();
+            let mut manager = render.manager.lock();
 
             if let Some(&fps) = fps.as_ref() {
                 manager.update_fps(fps);
@@ -125,7 +127,7 @@ fn on_render(_: &mut IDirect3DDevice9) {
 
 fn on_reset(_: &mut IDirect3DDevice9, reset_flag: u8) {
     if let Some(render) = Render::get() {
-        let mut manager = render.manager.lock().unwrap();
+        let mut manager = render.manager.lock();
 
         match reset_flag {
             RESET_FLAG_PRE => {
@@ -151,7 +153,7 @@ struct RenderState {
 
 extern "thiscall" fn centity_render(obj: *mut CEntity) {
     if let Some(render) = Render::get() {
-        let mut manager = render.manager.lock().unwrap();
+        let mut manager = render.manager.lock();
         let entity = unsafe { &mut *obj };
 
         let browsers = manager.external_browsers();
@@ -237,7 +239,7 @@ unsafe fn before_entity_render(materials: &mut [*mut RpMaterial], client: &mut E
                 continue;
             }
 
-            let mut view = client.browser.view.lock().unwrap();
+            let mut view = client.browser.view.lock();
 
             if view.rwtexture().is_none() {
                 if !(*texture).raster.is_null() {
@@ -249,7 +251,7 @@ unsafe fn before_entity_render(materials: &mut [*mut RpMaterial], client: &mut E
 
                     client.browser.resize(width, height);
 
-                    view = client.browser.view.lock().unwrap();
+                    view = client.browser.view.lock();
                 }
             }
 

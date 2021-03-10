@@ -23,18 +23,24 @@ macro_rules! set_texture_bytes {
             let $pitch = $dest.pitch;
             let $dest = &mut *$dest;
             $body
+
+            return;
         }
 
         if let Some(mut $dest) = $s.directx.as_mut().and_then(|d3d9| d3d9.bytes()) {
             let $pitch = $dest.pitch;
             let $dest = &mut *$dest;
             $body
+
+            return;
         }
 
         if let Some(mut $dest) = $s.renderware.as_mut().and_then(|rw| rw.bytes()) {
             let $pitch = $dest.pitch;
             let $dest = &mut *$dest;
             $body
+
+            return;
         }
     };
 }
@@ -497,16 +503,22 @@ impl View {
         if let Some(mut bytes) = self.rw_sprite.as_mut().and_then(|rw| rw.bytes()) {
             let pitch = bytes.pitch;
             func(&mut *bytes, pitch);
+
+            return;
         }
 
         if let Some(mut bytes) = self.directx.as_mut().and_then(|d3d9| d3d9.bytes()) {
             let pitch = bytes.pitch;
             func(&mut *bytes, pitch);
+
+            return;
         }
 
         if let Some(mut bytes) = self.renderware.as_mut().and_then(|rw| rw.bytes()) {
             let pitch = bytes.pitch;
             func(&mut *bytes, pitch);
+
+            return;
         }
     }
 }
