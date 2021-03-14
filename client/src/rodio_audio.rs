@@ -314,10 +314,31 @@ impl Audio {
 
         let dist = (position.clone() - Point3::origin()).magnitude();
 
+        // let position = if dist <= settings.reference_distance {
+        //     position.map(|i| i / dist)
+        // } else {
+        //     position.map(|i| i * (settings.max_distance - settings.reference_distance) * 0.01)
+        // };
+
+        let make = |x1: f32, y1: f32, x2: f32, y2: f32| {
+            let a = y1 - y2;
+            let b = x2 - x1;
+            let c = x1 * y2 - x2 * y1;
+
+            move |x: f32| -> f32 { (-a * x - c) / b }
+        };
+
         let position = if dist <= settings.reference_distance {
-            position.map(|i| i / dist)
+            position.map(|i| i / dist * 0.01) // полная громкость, источник почти в ухе
         } else {
-            position.map(|i| i * (settings.max_distance - settings.reference_distance) * 0.01)
+            let f = make(
+                0.0,
+                0.001,
+                settings.max_distance - settings.reference_distance,
+                100.0,
+            );
+            let k = f(dist - settings.reference_distance);
+            position.map(|i| i / dist * k)
         };
 
         let _ = self.command_tx.send(Command::ObjectSettings {
