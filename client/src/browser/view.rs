@@ -23,18 +23,24 @@ macro_rules! set_texture_bytes {
             let $pitch = $dest.pitch;
             let $dest = &mut *$dest;
             $body
+
+            return;
         }
 
         if let Some(mut $dest) = $s.directx.as_mut().and_then(|d3d9| d3d9.bytes()) {
             let $pitch = $dest.pitch;
             let $dest = &mut *$dest;
             $body
+
+            return;
         }
 
         if let Some(mut $dest) = $s.renderware.as_mut().and_then(|rw| rw.bytes()) {
             let $pitch = $dest.pitch;
             let $dest = &mut *$dest;
             $body
+
+            return;
         }
     };
 }
@@ -346,6 +352,7 @@ impl View {
         match self.render_mode {
             RenderMode::Renderware => self.rw_sprite = Some(SpriteContainer::new(width, height)),
             RenderMode::DirectX => self.directx = Some(D3Container::new(device, width, height)),
+            RenderMode::Empty => (),
         }
 
         self.set_size(width, height);
@@ -361,6 +368,13 @@ impl View {
 
         self.renderware = Some(container);
         self.set_size(width, height);
+    }
+
+    #[inline(never)]
+    pub fn make_empty(&mut self) {
+        self.destroy_previous();
+        self.render_mode = RenderMode::Empty;
+        self.set_size(1, 1);
     }
 
     #[inline]
@@ -427,6 +441,10 @@ impl View {
     }
 
     pub fn resize(&mut self, device: Option<&mut IDirect3DDevice9>, width: usize, height: usize) {
+        if self.render_mode == RenderMode::Empty {
+            return;
+        }
+
         let should_replace =
             (device.is_some() && self.directx.is_none() && self.rw_sprite.is_none())
                 || (device.is_none() && self.renderware.is_none());
@@ -447,6 +465,7 @@ impl View {
                 RenderMode::Renderware => {
                     self.rw_sprite = Some(SpriteContainer::new(width, height))
                 }
+                _ => (),
             }
         } else {
             self.renderware = Some(RwContainer::new(width, height));
@@ -497,16 +516,22 @@ impl View {
         if let Some(mut bytes) = self.rw_sprite.as_mut().and_then(|rw| rw.bytes()) {
             let pitch = bytes.pitch;
             func(&mut *bytes, pitch);
+
+            return;
         }
 
         if let Some(mut bytes) = self.directx.as_mut().and_then(|d3d9| d3d9.bytes()) {
             let pitch = bytes.pitch;
             func(&mut *bytes, pitch);
+
+            return;
         }
 
         if let Some(mut bytes) = self.renderware.as_mut().and_then(|rw| rw.bytes()) {
             let pitch = bytes.pitch;
             func(&mut *bytes, pitch);
+
+            return;
         }
     }
 }

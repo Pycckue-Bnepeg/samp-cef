@@ -34,7 +34,7 @@ struct CefPlugin {
     events: HashMap<String, (AmxIdent, String)>,
     event_rx: Receiver<Event>,
     amx_list: Vec<AmxIdent>,
-    await_connect: Vec<(i32, Instant)>,
+    await_connect: HashMap<i32, Instant>,
 }
 
 impl CefPlugin {
@@ -70,7 +70,7 @@ impl CefPlugin {
             event_rx,
             events: HashMap::new(),
             amx_list: Vec::new(),
-            await_connect: Vec::new(),
+            await_connect: HashMap::new(),
         }
     }
 
@@ -81,10 +81,12 @@ impl CefPlugin {
         let player_ip = player_ip.to_string();
 
         if let Ok(addr) = player_ip.parse() {
-            let mut server = self.server.lock().unwrap();
-            server.allow_connection(player_id, addr);
-            println!("Cef::on_player_connect({}, {})", player_id, player_ip);
-            self.await_connect.push((player_id, Instant::now()));
+            {
+                let mut server = self.server.lock().unwrap();
+                server.allow_connection(player_id, addr);
+            }
+
+            self.add_to_await_list(player_id);
         }
 
         Ok(true)
@@ -92,8 +94,12 @@ impl CefPlugin {
 
     #[native(name = "cef_on_player_disconnect")]
     fn on_player_disconnect(&mut self, _: &Amx, player_id: i32) -> AmxResult<bool> {
-        let mut server = self.server.lock().unwrap();
-        server.remove_connection(player_id);
+        {
+            let mut server = self.server.lock().unwrap();
+            server.remove_connection(player_id);
+        }
+
+        self.remove_from_await_list(player_id);
 
         Ok(true)
     }
@@ -278,21 +284,17 @@ impl CefPlugin {
 
     // utils
     fn notify_timeout(&mut self) {
-        let mut i = 0;
-        while i < self.await_connect.len() {
-            if self.await_connect[i].1.elapsed() >= INIT_TIMEOUT {
-                let (player, instant) = self.await_connect.remove(i);
-                println!(
-                    "notify_timeout({}, id:{} elapsed:{:?})",
-                    i,
-                    player,
-                    instant.elapsed()
-                );
-                self.notify_connect(player, false);
-            } else {
-                i += 1;
+        let mut keys = Vec::new();
+
+        for (&player_id, timing) in self.await_connect.iter() {
+            if timing.elapsed() >= INIT_TIMEOUT {
+                keys.push(player_id);
+                self.notify_connect(player_id, false);
             }
         }
+
+        keys.into_iter()
+            .for_each(|player_id| self.remove_from_await_list(player_id));
     }
 
     fn notify_connect(&self, player_id: i32, success: bool) {
@@ -307,6 +309,14 @@ impl CefPlugin {
             samp::amx::get(ident)
                 .map(|amx| exec_public!(amx, "OnCefBrowserCreated", player_id, browser_id, code));
         });
+    }
+
+    fn add_to_await_list(&mut self, player_id: i32) {
+        self.await_connect.insert(player_id, Instant::now());
+    }
+
+    fn remove_from_await_list(&mut self, player_id: i32) {
+        self.await_connect.remove(&player_id);
     }
 }
 
@@ -340,14 +350,7 @@ impl SampPlugin for CefPlugin {
                 Event::Connected(player) => {
                     println!("Event::Connected({})", player);
                     self.notify_connect(player, true);
-
-                    self.await_connect
-                        .iter()
-                        .position(|(player_id, _)| *player_id == player)
-                        .map(|idx| {
-                            println!("Remove {}", idx);
-                            self.await_connect.remove(idx);
-                        });
+                    self.remove_from_await_list(player);
                 }
 
                 Event::BrowserCreated(player, browser, code) => {

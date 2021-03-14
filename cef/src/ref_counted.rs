@@ -19,6 +19,7 @@ pub struct RefGuard<T: RefCounted> {
 }
 
 impl<T: RefCounted> RefGuard<T> {
+    #[inline]
     pub(crate) fn from_raw(ptr: *mut T) -> RefGuard<T> {
         RefGuard {
             object: ptr,

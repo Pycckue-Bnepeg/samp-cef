@@ -584,8 +584,14 @@ impl Manager {
     fn internal_close_client(client: Arc<WebClient>, audio: &Arc<Audio>, force_close: bool) {
         log::trace!("internal_close_client");
 
-        client.remove_view();
         client.close(force_close);
+
+        log::trace!("remove_view");
+
+        client.remove_view();
+
+        log::trace!("remove_all_streams");
+
         audio.remove_all_streams(client.id());
 
         log::trace!("internal_close_client end");

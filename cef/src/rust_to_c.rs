@@ -43,6 +43,7 @@ impl<T, I> Wrapper<T, I> {
         }
     }
 
+    #[inline]
     pub fn unwrap<'a>(ptr: *mut T) -> &'a mut Wrapper<T, I> {
         unsafe { &mut *(ptr as *mut Wrapper<T, I>) }
     }

@@ -18,6 +18,7 @@ pub struct Browser {
 }
 
 impl Browser {
+    #[inline]
     pub(crate) fn from_raw(raw: *mut cef_browser_t) -> Browser {
         if raw.is_null() {
             panic!("Browser::from_raw null pointer.");

@@ -123,6 +123,7 @@ pub fn client_rect() -> [usize; 2] {
     size
 }
 
+#[inline(always)]
 pub fn current_time() -> i128 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -172,10 +173,11 @@ pub fn cef_dir() -> PathBuf {
     }
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum RenderMode {
     DirectX,
     Renderware,
+    Empty,
 }
 
 pub fn current_render_mode() -> RenderMode {

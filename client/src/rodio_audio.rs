@@ -7,8 +7,10 @@ use nalgebra::{Point3, Rotation3, Vector3};
 use std::collections::{BTreeMap, HashMap};
 use std::sync::{
     atomic::{AtomicBool, Ordering},
-    Arc, Mutex, RwLock,
+    Arc,
 };
+
+use parking_lot::{Mutex, RwLock};
 
 pub const MAX_DISTANCE: f32 = 50.0;
 pub const REFRENCE_DISTANCE: f32 = 15.0;
@@ -57,7 +59,7 @@ struct Source {
     queue: Vec<Vec<f32>>,
     sample_rate: i32,
     muted: bool,
-    pcm_tx: Sender<Vec<f32>>,
+    pcm_tx: Sender<StreamingCommand>,
 }
 
 impl Source {
@@ -94,7 +96,11 @@ impl Source {
     }
 
     fn queue(&mut self, _sample_rate: i32, pcm: &[f32]) {
-        self.pcm_tx.send(Vec::from(pcm));
+        let _ = self.pcm_tx.send(StreamingCommand::Pcm(Vec::from(pcm)));
+    }
+
+    fn reset(&mut self) {
+        let _ = self.pcm_tx.send(StreamingCommand::Reset);
     }
 
     fn set_position(&mut self, position: Point3<f32>) {
@@ -191,7 +197,6 @@ impl Audio {
     ) {
         self.stream_channels
             .write()
-            .unwrap()
             .insert((browser, stream_id), channels);
 
         let _ = self.command_tx.send(Command::Stream {
@@ -221,7 +226,6 @@ impl Audio {
         let channels = self
             .stream_channels
             .read()
-            .unwrap()
             .get(&(browser, stream_id))
             .unwrap_or(&1)
             .clone();
@@ -281,7 +285,7 @@ impl Audio {
 
     pub fn set_position(&self, position: CVector) {
         let point = Point3::new(position.x, position.y, position.z);
-        self.listener.lock().unwrap().position = point;
+        self.listener.lock().position = point;
     }
 
     pub fn set_orientation(&self, matrix: RwMatrix) {
@@ -290,7 +294,7 @@ impl Audio {
 
         let rotation = Rotation3::face_towards(&at, &up);
 
-        self.listener.lock().unwrap().rotation = rotation;
+        self.listener.lock().rotation = rotation;
     }
 
     pub fn set_object_settings(
@@ -298,7 +302,7 @@ impl Audio {
         settings: BrowserAudioSettings,
     ) {
         let position = {
-            let listener = self.listener.lock().unwrap();
+            let listener = self.listener.lock();
             let diff = Point3::new(
                 pos.x - listener.position.x,
                 pos.y - listener.position.y,
@@ -310,10 +314,31 @@ impl Audio {
 
         let dist = (position.clone() - Point3::origin()).magnitude();
 
+        // let position = if dist <= settings.reference_distance {
+        //     position.map(|i| i / dist)
+        // } else {
+        //     position.map(|i| i * (settings.max_distance - settings.reference_distance) * 0.01)
+        // };
+
+        let make = |x1: f32, y1: f32, x2: f32, y2: f32| {
+            let a = y1 - y2;
+            let b = x2 - x1;
+            let c = x1 * y2 - x2 * y1;
+
+            move |x: f32| -> f32 { (-a * x - c) / b }
+        };
+
         let position = if dist <= settings.reference_distance {
-            position.map(|i| i / dist)
+            position.map(|i| i / dist * 0.01) // полная громкость, источник почти в ухе
         } else {
-            position.map(|i| i * (settings.max_distance - settings.reference_distance) * 0.01)
+            let f = make(
+                0.0,
+                0.001,
+                settings.max_distance - settings.reference_distance,
+                100.0,
+            );
+            let k = f(dist - settings.reference_distance);
+            position.map(|i| i / dist * k)
         };
 
         let _ = self.command_tx.send(Command::ObjectSettings {
@@ -381,6 +406,10 @@ impl AudioInner {
     fn append_pcm(
         &mut self, browser: u32, stream_id: i32, data: Vec<f32>, _frames: usize, pts: u64,
     ) {
+        if self.paused {
+            return;
+        }
+
         if let Some(entries) = self.streams.get_mut(&browser) {
             if let Some(stream) = entries
                 .iter_mut()
@@ -500,6 +529,17 @@ impl AudioInner {
         });
     }
 
+    fn reset_sinks(&mut self) {
+        self.streams.values_mut().for_each(|stream| {
+            stream.iter_mut().for_each(|stream| {
+                stream
+                    .sources
+                    .values_mut()
+                    .for_each(|source| source.reset());
+            });
+        });
+    }
+
     fn for_object<F>(&mut self, object_id: i32, mut func: F)
     where
         F: FnMut(&mut Source),
@@ -580,28 +620,30 @@ fn audio_thread(mut audio: AudioInner) {
 
         let mut browsers = &mut audio.streams;
 
-        for streams in browsers.values_mut() {
-            for stream in streams {
-                for (pts, pending) in stream.pending_pcm.iter() {
-                    let sample_rate = stream.sample_rate;
+        if !audio.paused {
+            for streams in browsers.values_mut() {
+                for stream in streams {
+                    for (pts, pending) in stream.pending_pcm.iter() {
+                        let sample_rate = stream.sample_rate;
 
-                    stream
-                        .sources
-                        .values_mut()
-                        .for_each(|source| source.queue(sample_rate, pending));
+                        stream
+                            .sources
+                            .values_mut()
+                            .for_each(|source| source.queue(sample_rate, pending));
 
-                    stream.last_pts = *pts;
-                    stream.last_frame_len = pending.len();
-                }
+                        stream.last_pts = *pts;
+                        stream.last_frame_len = pending.len();
+                    }
 
-                let keys: Vec<u64> = stream
-                    .pending_pcm
-                    .range(0..=stream.last_pts)
-                    .map(|(pts, _)| *pts)
-                    .collect();
+                    let keys: Vec<u64> = stream
+                        .pending_pcm
+                        .range(0..=stream.last_pts)
+                        .map(|(pts, _)| *pts)
+                        .collect();
 
-                for key in keys {
-                    stream.pending_pcm.remove(&key);
+                    for key in keys {
+                        stream.pending_pcm.remove(&key);
+                    }
                 }
             }
         }
@@ -610,26 +652,38 @@ fn audio_thread(mut audio: AudioInner) {
     }
 }
 
+#[derive(Debug, Clone)]
+enum StreamingCommand {
+    Pcm(Vec<f32>),
+    Reset,
+}
+
 struct StreamingSound {
     sample_rate: u32,
-    pcm_rx: Receiver<Vec<f32>>,
-    queue: Box<dyn Iterator<Item = f32> + Send>,
+    pcm_rx: Receiver<StreamingCommand>,
+    queue: std::vec::IntoIter<f32>,
     pending: Vec<Vec<f32>>,
     playing: bool,
 }
 
 impl StreamingSound {
-    fn new(sample_rate: u32) -> (StreamingSound, Sender<Vec<f32>>) {
+    fn new(sample_rate: u32) -> (StreamingSound, Sender<StreamingCommand>) {
         let (tx, rx) = crossbeam_channel::unbounded();
         let sound = StreamingSound {
             sample_rate,
             pcm_rx: rx,
-            queue: Box::new(std::iter::empty()),
+            queue: Vec::new().into_iter(),
             pending: Vec::with_capacity(8),
             playing: false,
         };
 
         (sound, tx)
+    }
+
+    fn reset(&mut self) {
+        self.queue = Vec::new().into_iter();
+        self.pending = Vec::with_capacity(8);
+        self.playing = false;
     }
 }
 
@@ -637,27 +691,37 @@ impl Iterator for StreamingSound {
     type Item = f32;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if let Ok(pending) = self.pcm_rx.try_recv() {
-            if self.playing {
-                let queue = std::mem::replace(&mut self.queue, Box::new(std::iter::empty()));
-                self.queue = Box::new(queue.chain(pending.into_iter()));
-            } else {
-                self.pending.push(pending);
+        while let Ok(cmd) = self.pcm_rx.try_recv() {
+            match cmd {
+                StreamingCommand::Pcm(pending) => {
+                    self.pending.push(pending);
+                }
+                StreamingCommand::Reset => self.reset(),
             }
         }
 
-        match self.queue.next() {
-            Some(next) => Some(next),
-            None => {
-                self.playing = false;
+        loop {
+            match self.queue.next() {
+                Some(sample) => return Some(sample),
+                None => {
+                    let push = if self.playing && self.pending.len() >= 1 {
+                        true
+                    } else if !self.playing && self.pending.len() >= 8 {
+                        true
+                    } else {
+                        self.playing = false;
+                        false
+                    };
 
-                if self.pending.len() >= 8 {
-                    let next = std::mem::replace(&mut self.pending, Vec::with_capacity(8));
-                    self.queue = Box::new(next.into_iter().flatten());
-                    self.playing = true;
+                    if push {
+                        let next = std::mem::replace(&mut self.pending, Vec::with_capacity(8));
+                        self.queue = next.into_iter().flatten().collect::<Vec<f32>>().into_iter();
+                        self.playing = true;
+                        continue;
+                    }
+
+                    return Some(0.0);
                 }
-
-                Some(0.0)
             }
         }
     }
