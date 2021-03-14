@@ -144,6 +144,8 @@ pub fn initialize(event_tx: Sender<Event>, manager: Arc<Mutex<Manager>>) -> Call
                             };
 
                             external.plugins.push(plugin);
+
+                            log::trace!("loaded plugin: {:?}", dir.path());
                         },
 
                         Err(e) => log::trace!("error loading library {:?}", e),
@@ -226,8 +228,8 @@ pub fn quit() {
 
 pub fn browser_created(browser_id: u32, status_code: i32) {
     if let Some(ext) = ExternalManager::get() {
-        for mut plugin in ext.plugins.drain(..) {
-            if let Some(func) = plugin.browser_created.as_mut() {
+        for plugin in &ext.plugins {
+            if let Some(func) = plugin.browser_created.as_ref() {
                 func(browser_id, status_code);
             }
         }
