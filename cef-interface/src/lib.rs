@@ -2,8 +2,8 @@ use std::os::raw::c_char;
 use std::sync::mpsc::{Receiver, Sender};
 use std::time::{Duration, Instant};
 
-use cef_api::CefApi;
 use cef_api::{cef_list_value_t, List};
+use cef_api::{CefApi, InternalApi};
 
 const DLL_PROCESS_ATTACH: u32 = 1;
 const DLL_PROCESS_DETACH: u32 = 0;
@@ -21,7 +21,6 @@ const DLL_PROCESS_DETACH: u32 = 0;
 
 struct App {
     circle: bool,
-    cef: CefApi,
     pressed: Instant,
     event_tx: Sender<(i32, i32)>,
     event_rx: Receiver<(i32, i32)>,
@@ -31,18 +30,18 @@ static mut APP: Option<App> = None;
 const CEF_INTERFACE_BROWSER: u32 = 102;
 
 #[no_mangle]
-pub extern "C" fn cef_initialize() {
-    let cef = CefApi::wait_loading().expect("No client.dll");
+pub extern "C" fn cef_initialize(api: *mut InternalApi) {
+    CefApi::initialize(api);
+
     let (event_tx, event_rx) = std::sync::mpsc::channel();
 
     // подписка на события от браузера (так же можно и от сервера слушать)
-    cef.subscribe("circle_click", circle_click);
-    cef.subscribe("circle_closed", circle_closed);
+    CefApi::subscribe("circle_click", circle_click);
+    CefApi::subscribe("circle_closed", circle_closed);
 
     let app = App {
         circle: false,
         pressed: Instant::now(),
-        cef,
         event_tx,
         event_rx,
     };
@@ -59,16 +58,17 @@ pub extern "C" fn cef_samp_mainloop() {
             if app.pressed.elapsed() >= Duration::from_millis(500) {
                 if !app.circle {
                     // если нажата кнопочка и можно в данный момент показать браузер, то показываем его и отсылаем событие
-                    if app.cef.try_focus_browser(CEF_INTERFACE_BROWSER) {
-                        let args = app.cef.create_list();
-                        app.cef.hide_browser(CEF_INTERFACE_BROWSER, false);
-                        app.cef.emit_event("show_actions", &args);
+                    if CefApi::try_focus_browser(CEF_INTERFACE_BROWSER) {
+                        let args = CefApi::create_list();
+
+                        CefApi::hide_browser(CEF_INTERFACE_BROWSER, false);
+                        CefApi::emit_event("show_actions", &args);
 
                         app.circle = true;
                     }
                 } else {
-                    app.cef.focus_browser(CEF_INTERFACE_BROWSER, false);
-                    app.cef.hide_browser(CEF_INTERFACE_BROWSER, true);
+                    CefApi::focus_browser(CEF_INTERFACE_BROWSER, false);
+                    CefApi::hide_browser(CEF_INTERFACE_BROWSER, true);
                     app.circle = false;
                 }
 
@@ -107,14 +107,14 @@ pub extern "C" fn cef_samp_mainloop() {
                     .as_ref()
                     .and_then(|p| p.name())
                 {
-                    let args = app.cef.create_list();
+                    let args = CefApi::create_list();
                     let name = cef::types::string::CefString::new(player);
 
                     args.set_string(0, &name);
                     args.set_integer(1, min_id as i32);
 
                     // если игрок найден, отправляет событие обратно в браузер с именем игрока и его ID.
-                    app.cef.emit_event("circle_found_player", &args);
+                    CefApi::emit_event("circle_found_player", &args);
                 }
             }
         }

@@ -286,8 +286,8 @@ pub fn uninitialize() {
 fn quit() {
     log::trace!("app::quit()");
 
-    crate::render::uninitialize();
     crate::external::quit();
+    crate::render::uninitialize();
 
     client_api::wndproc::uninitialize();
 }
@@ -419,8 +419,9 @@ pub fn mainloop() {
                         network.send(event);
                     }
 
-                    let manager = app.manager.lock();
-                    manager.call_browser_ready(id);
+                    // let manager = app.manager.lock();
+                    // manager.call_browser_ready(id);
+                    crate::external::browser_created(id, code);
                 }
 
                 Event::CefInitialize => {
