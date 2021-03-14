@@ -3,7 +3,6 @@ use std::ffi::CString;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc,
-    // Arc, Condvar, Mutex,
 };
 use std::time::{Duration, Instant};
 
@@ -271,8 +270,7 @@ impl RenderHandler for WebClient {
         self: &Arc<Self>, _: Browser, paint_type: PaintElement, mut dirty_rects: DirtyRects,
         buffer: &[u8], width: usize, height: usize,
     ) {
-        // TODO: тест hidden
-        if self.hidden.load(Ordering::SeqCst) || self.closing.load(Ordering::SeqCst) {
+        if self.closing.load(Ordering::SeqCst) {
             return;
         }
 
@@ -311,7 +309,7 @@ impl RenderHandler for WebClient {
             *rendered = false;
 
             if cv
-                .wait_for(&mut rendered, Duration::from_millis(50))
+                .wait_for(&mut rendered, Duration::from_millis(250))
                 .timed_out()
             {
                 log::trace!("timed_out ... fuckit");
@@ -348,10 +346,6 @@ impl AudioHandler for WebClient {
             params.frames_per_buffer
         );
 
-        params.channel_layout = 2;
-        params.sample_rate = 44100;
-        params.frames_per_buffer = 512;
-
         true
     }
 
@@ -359,9 +353,6 @@ impl AudioHandler for WebClient {
         self: &Arc<Self>, browser: Browser, stream_id: i32, data: *mut *const f32, frames: i32,
         pts: i64,
     ) {
-        let current_time = crate::utils::current_time();
-        log::trace!("cur {} pts {}", current_time, pts);
-
         if let Some(audio) = self.audio.as_ref() {
             audio.append_pcm(self.id, stream_id, data, frames, pts as u64);
         }
@@ -561,8 +552,12 @@ impl WebClient {
     #[inline(always)]
     fn unlock(&self) {
         let (mutex, cv) = &self.rendered;
-        let mut rendered = mutex.lock();
-        *rendered = true;
+
+        {
+            let mut rendered = mutex.lock();
+            *rendered = true;
+        }
+
         cv.notify_all();
     }
 
@@ -619,8 +614,7 @@ impl WebClient {
     }
 
     pub fn remove_view(&self) {
-        let view = View::new(crate::utils::current_render_mode());
-        *self.view.lock() = view;
+        self.view.lock().make_empty();
     }
 
     pub fn toggle_dev_tools(&self, enabled: bool) {

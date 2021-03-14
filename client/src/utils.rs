@@ -173,10 +173,11 @@ pub fn cef_dir() -> PathBuf {
     }
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum RenderMode {
     DirectX,
     Renderware,
+    Empty,
 }
 
 pub fn current_render_mode() -> RenderMode {
