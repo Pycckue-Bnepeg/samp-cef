@@ -1,5 +1,5 @@
 use std::net::SocketAddr;
-use std::sync::Arc;
+use std::sync::{Arc, Once};
 use std::time::{Duration, Instant};
 
 use parking_lot::Mutex;
@@ -32,6 +32,7 @@ const CEF_SERVER_PORT: u16 = 7779;
 pub const CEF_PLUGIN_VERSION: i32 = 0x00_01_00;
 
 static mut APP: Option<App> = None;
+static mut APP_READY: bool = false;
 
 pub enum Event {
     Connect(SocketAddr),
@@ -179,6 +180,7 @@ impl App {
         log::trace!("Hooking destroy functions.");
 
         NetGame::on_destroy(|| {
+            log::trace!("NetGame::on_destroy calling unitialize");
             uninitialize();
         });
 
@@ -189,10 +191,15 @@ impl App {
         });
 
         client_api::gta::game::on_shutdown(|| {
+            log::trace!("gta::game::on_shutdown calling unitialize");
             uninitialize();
         });
 
         log::trace!("Initialize done.");
+
+        unsafe {
+            APP_READY = true;
+        }
     }
 
     pub fn connect(&mut self) {
@@ -245,10 +252,6 @@ impl App {
 }
 
 pub fn initialize() {
-    // unsafe {
-    //     winapi::um::consoleapi::AllocConsole();
-    // }
-
     log::trace!("app::initialize()");
     log::trace!("App::new() ->");
 
@@ -276,11 +279,21 @@ pub fn initialize() {
 }
 
 pub fn uninitialize() {
+    static DESTROY: Once = Once::new();
+
     log::trace!("app::uninitialize()");
 
-    unsafe {
-        APP.take();
+    if unsafe { !APP_READY } {
+        log::trace!("app is not ready ... ignore this call");
+        return;
     }
+
+    DESTROY.call_once(|| {
+        log::trace!("app::uninitialize call once ->");
+        unsafe {
+            APP.take();
+        }
+    });
 }
 
 fn quit() {
@@ -419,8 +432,6 @@ pub fn mainloop() {
                         network.send(event);
                     }
 
-                    // let manager = app.manager.lock();
-                    // manager.call_browser_ready(id);
                     crate::external::browser_created(id, code);
                 }
 

@@ -556,6 +556,16 @@ impl Manager {
         log::trace!("POST cef::shutdown()");
     }
 
+    pub fn remove_views(&mut self) {
+        log::trace!("remove views");
+
+        for client in self.clients.values() {
+            client.remove_view();
+        }
+
+        log::trace!("remove views done");
+    }
+
     #[inline]
     fn temporary_hide(&self, hide: bool) {
         for client in self.clients.values() {
