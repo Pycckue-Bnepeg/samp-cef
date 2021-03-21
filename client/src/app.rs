@@ -32,7 +32,6 @@ const CEF_SERVER_PORT: u16 = 7779;
 pub const CEF_PLUGIN_VERSION: i32 = 0x00_01_00;
 
 static mut APP: Option<App> = None;
-static mut APP_READY: bool = false;
 
 pub enum Event {
     Connect(SocketAddr),
@@ -196,10 +195,6 @@ impl App {
         });
 
         log::trace!("Initialize done.");
-
-        unsafe {
-            APP_READY = true;
-        }
     }
 
     pub fn connect(&mut self) {
@@ -282,11 +277,6 @@ pub fn uninitialize() {
     static DESTROY: Once = Once::new();
 
     log::trace!("app::uninitialize()");
-
-    if unsafe { !APP_READY } {
-        log::trace!("app is not ready ... ignore this call");
-        return;
-    }
 
     DESTROY.call_once(|| {
         log::trace!("app::uninitialize call once ->");
@@ -570,7 +560,7 @@ fn win_event(msg: UINT, wparam: WPARAM, lparam: LPARAM) -> bool {
                 if key_index < 512 {
                     if manager.is_input_blocked() {
                         // allowed keys (screenshot and chat cycle)
-                        let is_allowed_key = wparam == VK_F8 as _ || wparam == VK_F7 as _;
+                        let is_allowed_key = wparam == VK_F8 as usize || wparam == VK_F7 as usize;
 
                         if (app.key_state[key_index]
                             && event.type_ == cef_key_event_type_t::KEYEVENT_KEYUP)

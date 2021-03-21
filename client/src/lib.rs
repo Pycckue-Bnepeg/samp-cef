@@ -11,6 +11,9 @@ use std::fs::File;
 
 pub mod app;
 pub mod browser;
+
+#[cfg(feature = "crash_logger")]
+pub mod crash_logger;
 pub mod external;
 pub mod network;
 pub mod render;
@@ -47,6 +50,9 @@ pub extern "stdcall" fn DllMain(instance: HMODULE, reason: u32, _reserved: u32) 
         render::preinitialize();
 
         std::thread::spawn(|| {
+            #[cfg(feature = "crash_logger")]
+            crash_logger::initialize();
+
             app::initialize();
         });
     }
