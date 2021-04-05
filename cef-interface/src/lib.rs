@@ -16,6 +16,7 @@ struct App {
     polling: bool,
     polling_interval: Duration,
     last_poll: Instant,
+    is_hud_visible: bool,
     event_tx: Sender<Event>,
     event_rx: Receiver<Event>,
 }
@@ -36,6 +37,7 @@ pub unsafe extern "C" fn cef_initialize(api: *mut InternalApi) {
         polling: false,
         polling_interval: Duration::from_secs(10),
         last_poll: Instant::now(),
+        is_hud_visible: false,
         event_tx,
         event_rx,
     };
@@ -64,6 +66,9 @@ pub extern "C" fn cef_samp_mainloop() {
                 Event::PollPlayerStats(poll, interval) => {
                     app.polling = poll;
                     app.polling_interval = Duration::from_millis(interval as _);
+
+                    let is_hud_visible = client_api::gta::display::is_radar_enabled();
+                    update_visible_state(app, is_hud_visible);
                 }
             }
         }
@@ -80,12 +85,29 @@ pub extern "C" fn cef_samp_mainloop() {
             list.set_integer(5, data.weapon as _);
             list.set_integer(6, data.ammo as _);
             list.set_integer(7, data.max_ammo as _);
+            list.set_integer(8, data.money as _);
+            list.set_double(9, data.velocity as _);
 
             CefApi::emit_event("game:data:playerStats", &list);
 
             app.last_poll = Instant::now();
         }
+
+        let is_hud_visible = client_api::gta::display::is_radar_enabled();
+
+        if app.polling && is_hud_visible != app.is_hud_visible {
+            update_visible_state(app, is_hud_visible);
+        }
     }
+}
+
+fn update_visible_state(app: &mut App, is_hud_visible: bool) {
+    app.is_hud_visible = is_hud_visible;
+
+    let list = CefApi::create_list();
+    list.set_bool(0, is_hud_visible);
+
+    CefApi::emit_event("game:hud:newVisibleState", &list);
 }
 
 #[no_mangle]
@@ -139,6 +161,8 @@ struct PlayerData {
     weapon: u32,
     ammo: u32,
     max_ammo: u32,
+    money: i32,
+    velocity: f32,
 }
 
 #[repr(C)]
@@ -170,6 +194,7 @@ fn gather_player_data() -> PlayerData {
                 / get_fat_and_muscule_modifier(STAT_AIR);
 
             data.wanted = (0x58DB60 as *const u32).read();
+            data.money = (0xB7CE50 as *const i32).read();
 
             let current_slot = ped.add(0x718).read() as usize;
             let weapons = std::slice::from_raw_parts(ped.add(0x5A0) as *mut CWeapon, 13);
@@ -179,6 +204,11 @@ fn gather_player_data() -> PlayerData {
                 data.ammo = weapon.ammo_in_clip;
                 data.max_ammo = weapon.total_ammo;
             }
+
+            let velo = local.velocity();
+            let velo = (velo.x.powi(2) + velo.y.powi(2) + velo.z.powi(2)).sqrt() * 100.0;
+
+            data.velocity = velo;
         }
     }
 

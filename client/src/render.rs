@@ -254,9 +254,12 @@ unsafe fn before_entity_render(materials: &mut [*mut RpMaterial], client: &mut E
                     let width = (raster.width * client.scale) as usize;
                     let height = (raster.height * client.scale) as usize;
 
+                    view.set_render_mode(crate::utils::current_render_mode());
+
                     drop(view);
 
                     client.browser.resize(width, height);
+                    client.browser.restore_hide_status();
 
                     view = client.browser.view.lock();
                 }

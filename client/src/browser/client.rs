@@ -270,7 +270,9 @@ impl RenderHandler for WebClient {
         self: &Arc<Self>, _: Browser, paint_type: PaintElement, mut dirty_rects: DirtyRects,
         buffer: &[u8], width: usize, height: usize,
     ) {
-        if self.closing.load(Ordering::SeqCst) {
+        let view = self.view.lock();
+
+        if self.closing.load(Ordering::SeqCst) || view.is_empty() {
             return;
         }
 
@@ -300,19 +302,33 @@ impl RenderHandler for WebClient {
                     draw_data.changed = true;
                 }
             }
-        }
+            // }
+            //
+            // {
 
-        {
+            let timing = std::time::Instant::now();
+
             let (mutex, cv) = &self.rendered;
             let mut rendered = mutex.lock();
 
             *rendered = false;
 
-            if cv
-                .wait_for(&mut rendered, Duration::from_millis(250))
-                .timed_out()
-            {
-                log::trace!("timed_out ... fuckit");
+            drop(view);
+            drop(draw_data);
+
+            // if cv
+            //     .wait_for(&mut rendered, Duration::from_millis(10_000))
+            //     .timed_out()
+            // {
+            //     log::trace!("timed_out ... fuckit");
+            // }
+
+            cv.wait(&mut rendered);
+
+            let dur = timing.elapsed();
+
+            if dur >= Duration::from_millis(100) {
+                log::trace!("was waiting for ... {:?}", dur);
             }
         }
 
@@ -445,8 +461,13 @@ impl WebClient {
     pub fn on_lost_device(&self) {
         self.internal_hide(true, false); // hide browser but do not save value
 
-        let mut texture = self.view.lock();
-        texture.on_lost_device();
+        {
+            let mut texture = self.view.lock();
+            texture.on_lost_device();
+            texture.make_empty();
+        }
+
+        self.unlock();
     }
 
     #[inline]
@@ -457,7 +478,10 @@ impl WebClient {
             if self.is_extern() {
             } else {
                 let rect = crate::utils::client_rect();
+
+                view.set_render_mode(crate::utils::current_render_mode());
                 view.make_directx(client_api::gta::d3d9::device(), rect[0], rect[1]);
+
                 self.notify_was_resized();
             }
         }
@@ -476,6 +500,8 @@ impl WebClient {
         let mut view = self.view.lock();
         view.resize(device, width, height);
         self.notify_was_resized();
+
+        self.unlock();
     }
 
     fn notify_was_resized(&self) {
@@ -495,8 +521,15 @@ impl WebClient {
 
         {
             let mut texture = self.view.lock();
-            let draw_data = self.draw_data.lock();
+            let mut draw_data = self.draw_data.lock();
             let size = texture.rect();
+
+            if draw_data.changed
+                && (size.height as usize != draw_data.height
+                    || size.width as usize != draw_data.width)
+            {
+                draw_data.changed = false;
+            }
 
             if draw_data.changed {
                 if draw_data.buffer.is_null() {
@@ -505,13 +538,6 @@ impl WebClient {
                 }
 
                 if draw_data.height == 0 || draw_data.width == 0 {
-                    self.unlock();
-                    return;
-                }
-
-                if size.height as usize != draw_data.height
-                    || size.width as usize != draw_data.width
-                {
                     self.unlock();
                     return;
                 }
@@ -579,9 +605,10 @@ impl WebClient {
 
         if let Some(host) = self.browser().map(|browser| browser.host()) {
             if hide {
-                host.was_hidden(true);
                 let mut view = self.view.lock();
                 view.clear();
+
+                host.was_hidden(true);
             } else {
                 host.was_hidden(false);
                 host.invalidate(PaintElement::View);

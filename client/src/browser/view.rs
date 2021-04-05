@@ -497,6 +497,14 @@ impl View {
         self.renderware.as_mut().and_then(|rw| rw.texture.clone())
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.render_mode == RenderMode::Empty
+    }
+
+    pub fn set_render_mode(&mut self, render_mode: RenderMode) {
+        self.render_mode = render_mode;
+    }
+
     fn destroy_previous(&mut self) {
         self.rw_sprite.take();
         self.directx.take();
