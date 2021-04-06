@@ -1,5 +1,5 @@
 use std::net::SocketAddr;
-use std::sync::Arc;
+use std::sync::{Arc, Once};
 use std::time::{Duration, Instant};
 
 use parking_lot::Mutex;
@@ -179,6 +179,7 @@ impl App {
         log::trace!("Hooking destroy functions.");
 
         NetGame::on_destroy(|| {
+            log::trace!("NetGame::on_destroy calling unitialize");
             uninitialize();
         });
 
@@ -189,6 +190,7 @@ impl App {
         });
 
         client_api::gta::game::on_shutdown(|| {
+            log::trace!("gta::game::on_shutdown calling unitialize");
             uninitialize();
         });
 
@@ -245,10 +247,6 @@ impl App {
 }
 
 pub fn initialize() {
-    // unsafe {
-    //     winapi::um::consoleapi::AllocConsole();
-    // }
-
     log::trace!("app::initialize()");
     log::trace!("App::new() ->");
 
@@ -276,18 +274,23 @@ pub fn initialize() {
 }
 
 pub fn uninitialize() {
+    static DESTROY: Once = Once::new();
+
     log::trace!("app::uninitialize()");
 
-    unsafe {
-        APP.take();
-    }
+    DESTROY.call_once(|| {
+        log::trace!("app::uninitialize call once ->");
+        unsafe {
+            APP.take();
+        }
+    });
 }
 
 fn quit() {
     log::trace!("app::quit()");
 
-    crate::render::uninitialize();
     crate::external::quit();
+    crate::render::uninitialize();
 
     client_api::wndproc::uninitialize();
 }
@@ -419,8 +422,7 @@ pub fn mainloop() {
                         network.send(event);
                     }
 
-                    let manager = app.manager.lock();
-                    manager.call_browser_ready(id);
+                    crate::external::browser_created(id, code);
                 }
 
                 Event::CefInitialize => {
@@ -558,7 +560,7 @@ fn win_event(msg: UINT, wparam: WPARAM, lparam: LPARAM) -> bool {
                 if key_index < 512 {
                     if manager.is_input_blocked() {
                         // allowed keys (screenshot and chat cycle)
-                        let is_allowed_key = wparam == VK_F8 as _ || wparam == VK_F7 as _;
+                        let is_allowed_key = wparam == VK_F8 as usize || wparam == VK_F7 as usize;
 
                         if (app.key_state[key_index]
                             && event.type_ == cef_key_event_type_t::KEYEVENT_KEYUP)

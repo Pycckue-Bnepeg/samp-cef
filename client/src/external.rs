@@ -37,12 +37,52 @@ pub struct ExternalManager {
 
 struct ExtPlugin {
     library: Library,
-    initialize: Option<Symbol<'static, extern "C" fn()>>,
+    initialize: Option<Symbol<'static, extern "C" fn(*mut InternalApi)>>,
     mainloop: Option<Symbol<'static, extern "C" fn()>>,
     dxreset: Option<Symbol<'static, extern "C" fn()>>,
     connect: Option<Symbol<'static, extern "C" fn()>>,
     disconnect: Option<Symbol<'static, extern "C" fn()>>,
     quit: Option<Symbol<'static, extern "C" fn()>>,
+    browser_created: Option<Symbol<'static, extern "C" fn(u32, i32)>>,
+}
+
+// TODO: cef_emit_server_event, cef_emit_client_event
+#[repr(C)]
+struct InternalApi {
+    cef_create_browser:
+        unsafe extern "C" fn(id: u32, url: *const c_char, hidden: bool, focused: bool),
+    cef_destroy_browser: unsafe extern "C" fn(id: u32),
+    cef_hide_browser: unsafe extern "C" fn(id: u32, hide: bool),
+    cef_focus_browser: unsafe extern "C" fn(id: u32, focus: bool),
+    cef_create_list: unsafe extern "C" fn() -> *mut cef_list_value_t,
+    cef_emit_event: unsafe extern "C" fn(event: *const c_char, list: *mut cef_list_value_t),
+    cef_subscribe: unsafe extern "C" fn(event: *const c_char, callback: Option<EventCallback>),
+    cef_input_available: unsafe extern "C" fn(browser: u32) -> bool,
+    cef_ready: unsafe extern "C" fn() -> bool,
+    cef_try_focus_browser: unsafe extern "C" fn(browser: u32) -> bool,
+    cef_browser_exists: unsafe extern "C" fn(browser: u32) -> bool,
+    cef_browser_ready: unsafe extern "C" fn(browser: u32) -> bool,
+    cef_on_browser_ready: unsafe extern "C" fn(browser: u32, callback: BrowserReadyCallback),
+    cef_gta_window_active: unsafe extern "C" fn() -> bool,
+}
+
+fn make_api_struct() -> InternalApi {
+    InternalApi {
+        cef_create_browser,
+        cef_destroy_browser,
+        cef_hide_browser,
+        cef_focus_browser,
+        cef_create_list,
+        cef_emit_event,
+        cef_subscribe,
+        cef_input_available,
+        cef_ready,
+        cef_try_focus_browser,
+        cef_browser_exists,
+        cef_browser_ready,
+        cef_on_browser_ready,
+        cef_gta_window_active,
+    }
 }
 
 impl ExternalManager {
@@ -81,10 +121,16 @@ pub fn initialize(event_tx: Sender<Event>, manager: Arc<Mutex<Manager>>) -> Call
                                 library.get::<extern "C" fn()>(b"cef_samp_mainloop").ok();
 
                             let dxreset = library.get::<extern "C" fn()>(b"cef_dxreset").ok();
-                            let initialize = library.get::<extern "C" fn()>(b"cef_initialize").ok();
+                            let initialize = library
+                                .get::<extern "C" fn(*mut InternalApi)>(b"cef_initialize")
+                                .ok();
+
                             let connect = library.get::<extern "C" fn()>(b"cef_connect").ok();
                             let disconnect = library.get::<extern "C" fn()>(b"cef_disconnect").ok();
                             let quit = library.get::<extern "C" fn()>(b"cef_quit").ok();
+                            let browser_created = library
+                                .get::<extern "C" fn(u32, i32)>(b"cef_browser_created")
+                                .ok();
 
                             let plugin = ExtPlugin {
                                 library: lib,
@@ -94,9 +140,12 @@ pub fn initialize(event_tx: Sender<Event>, manager: Arc<Mutex<Manager>>) -> Call
                                 connect,
                                 disconnect,
                                 quit,
+                                browser_created,
                             };
 
                             external.plugins.push(plugin);
+
+                            log::trace!("loaded plugin: {:?}", dir.path());
                         },
 
                         Err(e) => log::trace!("error loading library {:?}", e),
@@ -131,9 +180,11 @@ pub fn call_dxreset() {
 
 pub fn call_initialize() {
     if let Some(ext) = ExternalManager::get() {
+        let mut api = make_api_struct();
+
         for plugin in &ext.plugins {
             if let Some(func) = plugin.initialize.as_ref() {
-                func();
+                func(&mut api);
             }
         }
     }
@@ -175,10 +226,17 @@ pub fn quit() {
     }
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn cef_create_browser(
-    id: u32, url: *const c_char, hidden: bool, focused: bool,
-) {
+pub fn browser_created(browser_id: u32, status_code: i32) {
+    if let Some(ext) = ExternalManager::get() {
+        for plugin in &ext.plugins {
+            if let Some(func) = plugin.browser_created.as_ref() {
+                func(browser_id, status_code);
+            }
+        }
+    }
+}
+
+unsafe extern "C" fn cef_create_browser(id: u32, url: *const c_char, hidden: bool, focused: bool) {
     if url.is_null() {
         return;
     }
@@ -198,38 +256,33 @@ pub unsafe extern "C" fn cef_create_browser(
     }
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn cef_destroy_browser(id: u32) {
+unsafe extern "C" fn cef_destroy_browser(id: u32) {
     if let Some(external) = ExternalManager::get() {
         let mut manager = external.manager.lock();
         manager.close_browser(id, true);
     }
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn cef_hide_browser(id: u32, hide: bool) {
+unsafe extern "C" fn cef_hide_browser(id: u32, hide: bool) {
     if let Some(external) = ExternalManager::get() {
         let event = Event::HideBrowser(id, hide);
         external.event_tx.send(event);
     }
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn cef_focus_browser(id: u32, focus: bool) {
+unsafe extern "C" fn cef_focus_browser(id: u32, focus: bool) {
     if let Some(external) = ExternalManager::get() {
         let event = Event::FocusBrowser(id, focus);
         external.event_tx.send(event);
     }
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn cef_create_list() -> *mut cef_list_value_t {
+unsafe extern "C" fn cef_create_list() -> *mut cef_list_value_t {
     let list = List::new();
     list.into_cef()
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn cef_emit_event(event: *const c_char, list: *mut cef_list_value_t) {
+unsafe extern "C" fn cef_emit_event(event: *const c_char, list: *mut cef_list_value_t) {
     if event.is_null() {
         return;
     }
@@ -243,8 +296,7 @@ pub unsafe extern "C" fn cef_emit_event(event: *const c_char, list: *mut cef_lis
     }
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn cef_subscribe(event: *const c_char, callback: Option<EventCallback>) {
+unsafe extern "C" fn cef_subscribe(event: *const c_char, callback: Option<EventCallback>) {
     if event.is_null() || callback.is_none() {
         return;
     }
@@ -258,8 +310,7 @@ pub unsafe extern "C" fn cef_subscribe(event: *const c_char, callback: Option<Ev
     }
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn cef_input_available(browser: u32) -> bool {
+unsafe extern "C" fn cef_input_available(browser: u32) -> bool {
     ExternalManager::get()
         .map(|ext| {
             let manager = ext.manager.lock();
@@ -268,13 +319,12 @@ pub unsafe extern "C" fn cef_input_available(browser: u32) -> bool {
         .unwrap_or(false)
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn cef_ready() -> bool {
+// TODO: ?
+unsafe extern "C" fn cef_ready() -> bool {
     false
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn cef_try_focus_browser(browser: u32) -> bool {
+unsafe extern "C" fn cef_try_focus_browser(browser: u32) -> bool {
     ExternalManager::get()
         .map(|ext| {
             let mut manager = ext.manager.lock();
@@ -294,8 +344,7 @@ pub unsafe extern "C" fn cef_try_focus_browser(browser: u32) -> bool {
         .unwrap_or(false)
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn cef_browser_exists(browser: u32) -> bool {
+unsafe extern "C" fn cef_browser_exists(browser: u32) -> bool {
     ExternalManager::get()
         .map(|ext| {
             let manager = ext.manager.lock();
@@ -304,8 +353,7 @@ pub unsafe extern "C" fn cef_browser_exists(browser: u32) -> bool {
         .unwrap_or(false)
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn cef_browser_ready(browser: u32) -> bool {
+unsafe extern "C" fn cef_browser_ready(browser: u32) -> bool {
     ExternalManager::get()
         .map(|ext| {
             let manager = ext.manager.lock();
@@ -314,16 +362,14 @@ pub unsafe extern "C" fn cef_browser_ready(browser: u32) -> bool {
         .unwrap_or(false)
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn cef_on_browser_ready(browser: u32, callback: BrowserReadyCallback) {
+unsafe extern "C" fn cef_on_browser_ready(browser: u32, callback: BrowserReadyCallback) {
     if let Some(ext) = ExternalManager::get() {
         let mut manager = ext.manager.lock();
         manager.add_browser_ready(browser, callback);
     }
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn cef_gta_window_active() -> bool {
+unsafe extern "C" fn cef_gta_window_active() -> bool {
     ExternalManager::get()
         .map(|ext| ext.window_active.load(Ordering::SeqCst))
         .unwrap_or(false)

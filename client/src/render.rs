@@ -62,7 +62,7 @@ impl Render {
 }
 
 pub fn preinitialize() {
-    client_api::gta::d9_proxy::set_proxy(on_create, on_render, on_reset);
+    client_api::gta::d9_proxy::set_proxy(on_create, on_render, on_reset, on_destroy);
 }
 
 pub fn initialize(manager: Arc<Mutex<Manager>>) {
@@ -143,6 +143,13 @@ fn on_reset(_: &mut IDirect3DDevice9, reset_flag: u8) {
             }
             _ => (),
         }
+    }
+}
+
+fn on_destroy(_: &mut IDirect3DDevice9) {
+    if let Some(render) = Render::get() {
+        let mut manager = render.manager.lock();
+        manager.remove_views();
     }
 }
 
@@ -247,9 +254,12 @@ unsafe fn before_entity_render(materials: &mut [*mut RpMaterial], client: &mut E
                     let width = (raster.width * client.scale) as usize;
                     let height = (raster.height * client.scale) as usize;
 
+                    view.set_render_mode(crate::utils::current_render_mode());
+
                     drop(view);
 
                     client.browser.resize(width, height);
+                    client.browser.restore_hide_status();
 
                     view = client.browser.view.lock();
                 }

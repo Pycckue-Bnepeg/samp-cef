@@ -174,10 +174,10 @@ impl Audio {
 
         // TODO: crash app
         std::thread::spawn(move || {
-            let audio = AudioInner::new(rx);
-
-            log::trace!("audio_thread start");
-            audio_thread(audio);
+            if let Some(audio) = AudioInner::new(rx) {
+                log::trace!("audio_thread start");
+                audio_thread(audio);
+            }
         });
 
         let listener = Listener {
@@ -371,23 +371,24 @@ struct AudioInner {
 }
 
 impl AudioInner {
-    fn new(command_rx: Receiver<Command>) -> AudioInner {
+    fn new(command_rx: Receiver<Command>) -> Option<AudioInner> {
         let (output_stream, stream_handle) = match OutputStream::try_default() {
             Ok(val) => val,
             Err(err) => {
                 log::error!("rodeo no default output: {:?}", err);
-                std::process::exit(0);
+                // std::process::exit(0);
+                return None;
             }
         };
 
-        AudioInner {
+        Some(AudioInner {
             output_stream,
             stream_handle,
             command_rx,
             paused: false,
             gain: 1.0,
             streams: HashMap::new(),
-        }
+        })
     }
 
     fn create_stream(

@@ -189,23 +189,24 @@ impl Manager {
 
     #[inline]
     pub fn draw(&self) {
+        for client in self.clients.values() {
+            client.update_view();
+        }
+
         if self.do_not_draw {
             return;
         }
 
         if let Some(&focus) = self.focused.as_ref() {
             for client in self.clients.values().filter(|client| client.id() != focus) {
-                client.update_view();
                 client.draw();
             }
 
             if let Some(focused) = self.clients.get(&focus) {
-                focused.update_view();
                 focused.draw();
             }
         } else {
             for client in self.clients.values() {
-                client.update_view();
                 client.draw();
             }
         }
@@ -554,6 +555,16 @@ impl Manager {
         log::trace!("PRE cef::shutdown()");
         cef::shutdown();
         log::trace!("POST cef::shutdown()");
+    }
+
+    pub fn remove_views(&mut self) {
+        log::trace!("remove views");
+
+        for client in self.clients.values() {
+            client.remove_view();
+        }
+
+        log::trace!("remove views done");
     }
 
     #[inline]

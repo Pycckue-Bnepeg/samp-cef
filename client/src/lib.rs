@@ -11,6 +11,9 @@ use std::fs::File;
 
 pub mod app;
 pub mod browser;
+
+#[cfg(feature = "crash_logger")]
+pub mod crash_logger;
 pub mod external;
 pub mod network;
 pub mod render;
@@ -34,24 +37,28 @@ pub extern "stdcall" fn DllMain(instance: HMODULE, reason: u32, _reserved: u32) 
             DisableThreadLibraryCalls(instance);
         }
 
+        CombinedLogger::init(vec![
+            TermLogger::new(LevelFilter::Trace, Config::default(), TerminalMode::Mixed),
+            WriteLogger::new(
+                LevelFilter::Trace,
+                Config::default(),
+                File::create("cef_client.log").unwrap(),
+            ),
+        ])
+        .unwrap();
+
         render::preinitialize();
 
         std::thread::spawn(|| {
-            CombinedLogger::init(vec![
-                TermLogger::new(LevelFilter::Trace, Config::default(), TerminalMode::Mixed),
-                WriteLogger::new(
-                    LevelFilter::Trace,
-                    Config::default(),
-                    File::create("cef_client.log").unwrap(),
-                ),
-            ])
-            .unwrap();
+            #[cfg(feature = "crash_logger")]
+            crash_logger::initialize();
 
             app::initialize();
         });
     }
 
     if reason == DLL_PROCESS_DETACH {
+        log::trace!("DllMain reason == DLL_PROCESS_DETACH calling unitialize");
         app::uninitialize();
     }
 

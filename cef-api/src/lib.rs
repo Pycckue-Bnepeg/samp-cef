@@ -17,136 +17,114 @@ pub const CEF_EVENT_BREAK: c_int = 1;
 pub type BrowserReadyCallback = extern "C" fn(u32);
 pub type EventCallback = extern "C" fn(*const c_char, *mut cef_list_value_t) -> c_int;
 
-pub struct CefApi {
-    library: Library,
-    funcs: Symbols,
+static mut API: *mut InternalApi = std::ptr::null_mut();
+
+#[repr(C)]
+#[derive(Clone)]
+pub struct InternalApi {
+    cef_create_browser:
+        unsafe extern "C" fn(id: u32, url: *const c_char, hidden: bool, focused: bool),
+    cef_destroy_browser: unsafe extern "C" fn(id: u32),
+    cef_hide_browser: unsafe extern "C" fn(id: u32, hide: bool),
+    cef_focus_browser: unsafe extern "C" fn(id: u32, focus: bool),
+    cef_create_list: unsafe extern "C" fn() -> *mut cef_list_value_t,
+    cef_emit_event: unsafe extern "C" fn(event: *const c_char, list: *mut cef_list_value_t),
+    cef_subscribe: unsafe extern "C" fn(event: *const c_char, callback: Option<EventCallback>),
+    cef_input_available: unsafe extern "C" fn(browser: u32) -> bool,
+    cef_ready: unsafe extern "C" fn() -> bool,
+    cef_try_focus_browser: unsafe extern "C" fn(browser: u32) -> bool,
+    cef_browser_exists: unsafe extern "C" fn(browser: u32) -> bool,
+    cef_browser_ready: unsafe extern "C" fn(browser: u32) -> bool,
+    cef_on_browser_ready: unsafe extern "C" fn(browser: u32, callback: BrowserReadyCallback),
+    cef_gta_window_active: unsafe extern "C" fn() -> bool,
 }
 
-pub struct Symbols {
-    create_browser:
-        Symbol<'static, extern "C" fn(id: u32, url: *const c_char, hidden: bool, focused: bool)>,
-    destroy_browser: Symbol<'static, extern "C" fn(id: u32)>,
-    hide_browser: Symbol<'static, extern "C" fn(id: u32, hide: bool)>,
-    focus_browser: Symbol<'static, extern "C" fn(id: u32, focus: bool)>,
-    create_list: Symbol<'static, extern "C" fn() -> *mut cef_list_value_t>,
-    emit_event: Symbol<'static, extern "C" fn(event: *const c_char, args: *mut cef_list_value_t)>,
-    subscribe: Symbol<'static, extern "C" fn(event: *const c_char, callback: EventCallback)>,
-    input_available: Symbol<'static, extern "C" fn(id: u32) -> bool>,
-    try_focus_browser: Symbol<'static, extern "C" fn(id: u32) -> bool>,
-    browser_exists: Symbol<'static, extern "C" fn(id: u32) -> bool>,
-    browser_ready: Symbol<'static, extern "C" fn(id: u32) -> bool>,
-    on_browser_ready:
-        Symbol<'static, extern "C" fn(id: u32, callback: BrowserReadyCallback) -> bool>,
-
-    window_active: Symbol<'static, extern "C" fn() -> bool>,
-    //    is_ready: Symbol<'static, extern "C" fn() -> bool>,
-}
+pub struct CefApi;
 
 impl CefApi {
-    pub fn wait_loading() -> Option<CefApi> {
-        while !std::env::current_dir()
-            .map(|dir| {
-                std::env::current_exe()
-                    .map(|exe| exe.parent().unwrap() == dir)
-                    .unwrap_or(false)
-            })
-            .unwrap_or(false)
-        {
-            std::thread::sleep(std::time::Duration::from_millis(10));
+    pub fn initialize(api: *mut InternalApi) {
+        unsafe {
+            let boxed = Box::new((*api).clone());
+            API = Box::into_raw(boxed);
         }
-
-        let current = std::env::current_dir().unwrap();
-        let temp_dir = current.join("./cef");
-
-        std::env::set_current_dir(temp_dir).unwrap();
-
-        let cef_api = Library::new("client.dll").ok().map(|mut lib| {
-            let library: &'static mut Library = unsafe { &mut *(&mut lib as *mut Library) };
-
-            let funcs = unsafe {
-                Symbols {
-                    create_browser: library.get(b"cef_create_browser").unwrap(),
-                    destroy_browser: library.get(b"cef_destroy_browser").unwrap(),
-                    hide_browser: library.get(b"cef_hide_browser").unwrap(),
-                    focus_browser: library.get(b"cef_focus_browser").unwrap(),
-                    create_list: library.get(b"cef_create_list").unwrap(),
-                    emit_event: library.get(b"cef_emit_event").unwrap(),
-                    subscribe: library.get(b"cef_subscribe").unwrap(),
-                    input_available: library.get(b"cef_input_available").unwrap(),
-                    try_focus_browser: library.get(b"cef_try_focus_browser").unwrap(),
-                    browser_exists: library.get(b"cef_browser_exists").unwrap(),
-                    browser_ready: library.get(b"cef_browser_ready").unwrap(),
-                    on_browser_ready: library.get(b"cef_on_browser_ready").unwrap(),
-                    window_active: library.get(b"cef_gta_window_active").unwrap(),
-                }
-            };
-
-            CefApi {
-                library: lib,
-                funcs,
-            }
-        });
-
-        std::env::set_current_dir(current);
-
-        cef_api
     }
 
-    pub fn create_browser(&self, id: u32, url: &str, hidden: bool, focused: bool) {
+    pub fn uninitialize() {
+        unsafe {
+            let _ = Box::from_raw(API);
+            API = std::ptr::null_mut();
+        }
+    }
+
+    pub fn create_browser(id: u32, url: &str, hidden: bool, focused: bool) {
         let url_cstr = CString::new(url).unwrap();
-        (self.funcs.create_browser)(id, url_cstr.as_ptr(), hidden, focused);
+        unsafe {
+            ((*API).cef_create_browser)(id, url_cstr.as_ptr(), hidden, focused);
+        }
     }
 
-    pub fn destroy_browser(&self, id: u32) {
-        (self.funcs.destroy_browser)(id);
+    pub fn destroy_browser(id: u32) {
+        unsafe {
+            ((*API).cef_destroy_browser)(id);
+        }
     }
 
-    pub fn hide_browser(&self, id: u32, hide: bool) {
-        (self.funcs.hide_browser)(id, hide);
+    pub fn hide_browser(id: u32, hide: bool) {
+        unsafe {
+            ((*API).cef_hide_browser)(id, hide);
+        }
     }
 
-    pub fn focus_browser(&self, id: u32, focus: bool) {
-        (self.funcs.focus_browser)(id, focus);
+    pub fn focus_browser(id: u32, focus: bool) {
+        unsafe {
+            ((*API).cef_focus_browser)(id, focus);
+        }
     }
 
-    pub fn create_list(&self) -> List {
-        let list = (self.funcs.create_list)();
+    pub fn create_list() -> List {
+        let list = unsafe { ((*API).cef_create_list)() };
 
         List::try_from_raw(list).unwrap()
     }
 
-    pub fn emit_event(&self, event: &str, args: &List) {
+    pub fn emit_event(event: &str, args: &List) {
         let list = args.clone().into_cef();
         let event = CString::new(event).unwrap();
-        (self.funcs.emit_event)(event.as_ptr(), list);
+        unsafe {
+            ((*API).cef_emit_event)(event.as_ptr(), list);
+        }
     }
 
-    pub fn subscribe(&self, event: &str, callback: EventCallback) {
+    pub fn subscribe(event: &str, callback: EventCallback) {
         let event = CString::new(event).unwrap();
-        (self.funcs.subscribe)(event.as_ptr(), callback);
+        unsafe {
+            ((*API).cef_subscribe)(event.as_ptr(), Some(callback));
+        }
     }
 
-    pub fn is_input_available(&self, browser: u32) -> bool {
-        (self.funcs.input_available)(browser)
+    pub fn is_input_available(browser: u32) -> bool {
+        unsafe { ((*API).cef_input_available)(browser) }
     }
 
-    pub fn try_focus_browser(&self, browser: u32) -> bool {
-        (self.funcs.try_focus_browser)(browser)
+    pub fn try_focus_browser(browser: u32) -> bool {
+        unsafe { ((*API).cef_try_focus_browser)(browser) }
     }
 
-    pub fn browser_exists(&self, browser: u32) -> bool {
-        (self.funcs.browser_exists)(browser)
+    pub fn browser_exists(browser: u32) -> bool {
+        unsafe { ((*API).cef_browser_exists)(browser) }
     }
 
-    pub fn browser_ready(&self, browser: u32) -> bool {
-        (self.funcs.browser_ready)(browser)
+    pub fn browser_ready(browser: u32) -> bool {
+        unsafe { ((*API).cef_browser_ready)(browser) }
     }
 
-    pub fn on_browser_ready(&self, browser: u32, callback: BrowserReadyCallback) {
-        (self.funcs.on_browser_ready)(browser, callback);
+    pub fn on_browser_ready(browser: u32, callback: BrowserReadyCallback) {
+        unsafe {
+            ((*API).cef_on_browser_ready)(browser, callback);
+        }
     }
 
-    pub fn is_window_active(&self) -> bool {
-        (self.funcs.window_active)()
+    pub fn is_window_active() -> bool {
+        unsafe { ((*API).cef_gta_window_active)() }
     }
 }
