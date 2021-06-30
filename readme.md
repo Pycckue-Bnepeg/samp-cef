@@ -12,6 +12,18 @@ This project embeds CEF into SA:MP expanding abilities to express yourself with 
 - Place browsers on objects (with kind-of spatial sound)
 - Send and receive custom defined events from / to clients.
 
+## Crates
+- `cef` - Rust wrappers around CEF C API.
+- `cef-api` - Rust wrappers to build client plugins using CEF.
+- `cef-interface` - example of a Rust plugin.
+- `cef-sys` - bindings for CEF C API.
+- `client` - client CEF plugin.
+- `d3dx9` - bindings to DirectX SDK.
+- `loader` - small loader that makes it work (should be named `cef.asi`).
+- `messages` - protobuf messages to communicate with server on net.
+- `proto` - raw proto files.
+- `renderer` - glue between CEF renderer process and main logic.
+- `server` - server side plugin.
 ## Building
 ### Dependencies
 - [Rust compiler (nightly) with `i686-windows-pc-msvc` toolchain](https://rust-lang.org)
@@ -21,16 +33,26 @@ This project embeds CEF into SA:MP expanding abilities to express yourself with 
     - In powershell it's like `$env:CEF_PATH="C:/some/path"`
     - Then build
 
+### Notes ...
 If you get a linker error, you should change hard-coded links in the source code
 
 - `client/build.rs` - path to DirectX SDK (default one)
 
+### Running Rust
 and now
-> `cargo +nightly build --target i686-windows-pc-msvc --release`
+> ~~`cargo +nightly build --target i686-windows-pc-msvc --release`~~
+
+```sh
+rustup toolchain install nightly-i686
+cargo +nightly-i686 build --release
+```
+
 
 to build specific part you can add `--package <NAME>`
 
 for example if you will try to build ALL crates on linux, you will get an error. so, pass  `--package server` to build only server on linux.
+
+## CEF version
 
 Current versions of CEF and Chromium:
 `89.0.5+gc1f90d8+chromium-89.0.4389.40` `release branch 4389`
@@ -46,14 +68,16 @@ Chromium Version: 89.0.4389.40
 Chromium URL:     https://chromium.googlesource.com/chromium/src.git
                   @2c3400a2b467aa3cf67b4942740db29e60feecb8
 ```
-
-docs:
+## Docs
 - [docs/main_ru.md](/docs/main_ru.md)
 - [docs/main_en.md](/docs/main_en.md) (it's better to google translate russian one ...)
 
-videos:
+## Video examples
 - https://www.youtube.com/watch?v=Jh9IBlOKoVM (гоблин на весь дом)
 - https://www.youtube.com/watch?v=jU-O8_t1AfI (простые интерфейсы)
 - https://www.youtube.com/watch?v=qs7n8LoVYs4 (кастомный интерфейс гта)
 - https://www.youtube.com/watch?v=vcyTjn3RJhs (голосовой чят)
 - https://www.youtube.com/watch?v=6OnCSHKcOGU (кухня по телеку)
+
+## BIG TODO: EXAMPLES
+But it's similar to fivem or ragemp implementations.

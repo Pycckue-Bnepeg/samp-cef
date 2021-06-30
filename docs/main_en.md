@@ -8,7 +8,7 @@
 - `cef/`
     - `client.dll`
     - `libcef.dll`
-    - `sound.dll`
+    - `renderer.exe`
     - etc …
 
 
