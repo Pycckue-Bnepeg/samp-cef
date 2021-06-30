@@ -13,16 +13,22 @@ This project embeds CEF into SA:MP expanding abilities to express yourself with 
 ## Building
 ### Dependencies
 - [Rust compiler (nightly) with `i686-windows-pc-msvc` toolchain](https://rust-lang.org)
-- Prebuilt CEF with proprietary codes (if you wanna use streams). I had one for you in releases.
-- Microsoft DirectX SDK (June 2010)
+- Prebuilt CEF with proprietary codes (if you wanna use streams). I had one for you in releases. (Client only)
+- Microsoft DirectX SDK (June 2010) (Client only)
+- Environment variable `CEF_PATH` that points to `libcef.lib` (client only).
+    - In powershell it's like `$env:CEF_PATH="C:/some/path"`
+    - Then build
 
-I am a bad man. So ... You should change hard-coded links in the source code ...
+If you get a linker error, you should change hard-coded links in the source code
 
 - `client/build.rs` - path to DirectX SDK (default one)
-- `cef-sys/build.rs` - path to a static CEF library (libcef.lib).
 
 and now
 > `cargo +nightly build --target i686-windows-pc-msvc --release`
+
+to build specific part you can add `--package <NAME>`
+
+for example if you will try to build ALL crates on linux, you will get an error. so, pass  `--package server` to build only server on linux.
 
 Current versions of CEF and Chromium:
 `89.0.5+gc1f90d8+chromium-89.0.4389.40` `release branch 4389`

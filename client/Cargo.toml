@@ -24,7 +24,7 @@ winapi = { version = "0.3.8", features = ["d3d9", "winuser", "libloaderapi", "wi
 laminar = "0.3.2"
 messages = { path = "../messages" }
 quick-protobuf = "0.7.0"
-detour = "0.7.1"
+detour = { git = "https://github.com/darfink/detour-rs", rev = "3b6f17a" }
 libloading = "0.5.2"
 alto = "3.0.4"
 log = "0.4.14"
