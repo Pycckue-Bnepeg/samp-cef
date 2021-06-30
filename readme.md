@@ -5,6 +5,8 @@ This project embeds CEF into SA:MP expanding abilities to express yourself with 
 
 **It is a FRAMEWORK (or SDK), not something that you download and use**
 
+**ALSO `clientapi.h` IS OUTDATED!**
+
 ## What you can do
 - Create browser views from a gamemode or from client-side plugins (C ABI).
 - Place browsers on objects (with kind-of spatial sound)
@@ -45,9 +47,11 @@ Chromium URL:     https://chromium.googlesource.com/chromium/src.git
                   @2c3400a2b467aa3cf67b4942740db29e60feecb8
 ```
 
-docs (ru only sorry ......) [docs/main_ru.md](/docs/main_ru.md)
+docs:
+- [docs/main_ru.md](/docs/main_ru.md)
+- [docs/main_en.md](/docs/main_en.md) (it's better to google translate russian one ...)
 
-видеоприколы на основе разработки:
+videos:
 - https://www.youtube.com/watch?v=Jh9IBlOKoVM (гоблин на весь дом)
 - https://www.youtube.com/watch?v=jU-O8_t1AfI (простые интерфейсы)
 - https://www.youtube.com/watch?v=qs7n8LoVYs4 (кастомный интерфейс гта)
