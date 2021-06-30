@@ -47,6 +47,11 @@ rustup toolchain install nightly-i686
 cargo +nightly-i686 build --release
 ```
 
+also the client plugin can be built using OpenAL for sound ([rodio](https://crates.io/crates/rodio) by default). to do that compile the client without default features. for example:
+```
+cargo +nightly-i686 build --release --package client --no-default-features
+```
+to make it work you should place `openal.dll` as `sound.dll` in the `cef` folder. I do not remember what version is used exactly ... but I have it on the release page.
 
 to build specific part you can add `--package <NAME>`
 
