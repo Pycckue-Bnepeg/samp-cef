@@ -1,32 +1,30 @@
 # SAMP CEF
-данная разработочка позволяет вам создавать и отображать браузеры (используя CEF) в гта сан андреас по сети.
+This project embeds CEF into SA:MP expanding abilities to express yourself with beauty in-game interfaces using HTML / CSS / JavaScript.
 
-**РАЗРАБОТКА ТОЛКОМ НЕ ТЕСТИРОВАНА В РАЗЛИЧНЫХ УСЛОВИЯХ**
+**THIS MAYBE NOT PRODUCTION READY (THERE IS ONLY ONE SERVER USING IT RIGHT NOW)**
 
-но ... создавайте так сказать баг репорт на гитхабе, обязательно постараюсь починить
+**It is a FRAMEWORK (or SDK), not something that you download and use**
 
-## возможности
-- создавать окно браузера из игрового мода
-- размещать окна браузеров на объектах (с пространственным звуком)
-- отправлять и принимать кастомные события клиенту / серверу
-- использовать клиентский плагин как библиотеку и пользоваться всем функционалом из других динамических библиотек
+## What you can do
+- Create browser views from a gamemode or from client-side plugins (C ABI).
+- Place browsers on objects (with kind-of spatial sound)
+- Send and receive custom defined events from / to clients.
 
-## как собрать
-### зависимости
-- [компилятор rust (обязательно nightly, а так же таргет i686-windows-pc-msvc)](https://rust-lang.org)
-- собранный CEF с проприетарными кодеками (не совсем обязательно с ними, но благодаря им можно включать стримы). если есть доверие, можете взять уже собранный в релизах на гитхабе
+## Building
+### Dependencies
+- [Rust compiler (nightly) with `i686-windows-pc-msvc` toolchain](https://rust-lang.org)
+- Prebuilt CEF with proprietary codes (if you wanna use streams). I had one for you in releases.
 - Microsoft DirectX SDK (June 2010)
 
-я плохой человек, все пути прописаны руками, никаких вам переменных или еще чего, поэтому нужно перед сборкой провернуть две вещи:
+I am a bad man. So ... You should change hard-coded links in the source code ...
 
-- `client/build.rs` - путь прописан по умолчанию, как в установщике SDK
-- `cef-sys/build.rs` - внутри файла путь до папки к статической библиотеки (libcef.lib) CEF.
+- `client/build.rs` - path to DirectX SDK (default one)
+- `cef-sys/build.rs` - path to a static CEF library (libcef.lib).
 
-
-ну а дальше 
+and now
 > `cargo +nightly build --target i686-windows-pc-msvc --release`
 
-текущая версия CEF и Chromium:
+Current versions of CEF and Chromium:
 `89.0.5+gc1f90d8+chromium-89.0.4389.40` `release branch 4389`
 
 ```
@@ -41,7 +39,7 @@ Chromium URL:     https://chromium.googlesource.com/chromium/src.git
                   @2c3400a2b467aa3cf67b4942740db29e60feecb8
 ```
 
-основная документация валяется в [docs/main_ru.md](/docs/main_ru.md)
+docs (ru only sorry ......) [docs/main_ru.md](/docs/main_ru.md)
 
 видеоприколы на основе разработки:
 - https://www.youtube.com/watch?v=Jh9IBlOKoVM (гоблин на весь дом)
