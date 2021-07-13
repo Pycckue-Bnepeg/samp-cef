@@ -76,6 +76,7 @@ Chromium URL:     https://chromium.googlesource.com/chromium/src.git
 ## Docs
 - [docs/main_ru.md](/docs/main_ru.md)
 - [docs/main_en.md](/docs/main_en.md) (it's better to google translate russian one ...)
+- Also, check out wiki on github.
 
 ## Video examples
 - https://www.youtube.com/watch?v=Jh9IBlOKoVM (гоблин на весь дом)
