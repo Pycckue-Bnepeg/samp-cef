@@ -36,11 +36,8 @@ impl App for DefaultApp {
     fn on_before_command_line_processing(
         self: &Arc<Self>, process_type: CefString, command_line: CommandLine,
     ) {
-        // command_line.append_switch("disable-surfaces");
         command_line.append_switch("disable-gpu-compositing");
         command_line.append_switch("disable-gpu");
-        // command_line.append_switch("disable-d3d11");
-        // command_line.append_switch("disable-gpu-vsync");
         command_line.append_switch("enable-begin-frame-scheduling");
         command_line.append_switch_with_value("autoplay-policy", "no-user-gesture-required");
     }

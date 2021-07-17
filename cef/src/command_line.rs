@@ -36,4 +36,13 @@ impl CommandLine {
             func(self.inner.get_mut(), switch.as_cef_string());
         }
     }
+
+    pub fn append_argument(&self, arg: &str) {
+        let arg = CefString::new(arg);
+        let func = self.inner.append_argument.unwrap();
+
+        unsafe {
+            func(self.inner.get_mut(), arg.as_cef_string());
+        }
+    }
 }

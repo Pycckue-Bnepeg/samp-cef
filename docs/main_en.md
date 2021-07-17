@@ -62,6 +62,13 @@ Toggles dev tools.
 
 Changes audio settings of a browser. `reference_distance` - distance while volume will be 1.0. Then decreases till `max_distance` when it will be 0.
 
+`cef_focus_browser(player_id, browser_id, focused)`
+
+Makes a browser focused as it would be on creation with `focused = true`.
+
+`cef_always_listen_keys(player_id, browser_id, listen)`
+
+The browser starts listen to player input even if it is not focused. This allows you to add a JS key handler on background.
 ### Handlers:
 
 `forward OnCefBrowserCreated(player_id, browser_id, status_code)`
