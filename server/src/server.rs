@@ -150,7 +150,6 @@ impl Server {
 
     /// выпинываем игрока из списка клиентов
     fn handle_timeout(&mut self, addr: SocketAddr) {
-        self.allowed.remove(&addr.ip());
         self.clients.remove(&addr);
     }
 

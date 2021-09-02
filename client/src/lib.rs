@@ -37,14 +37,11 @@ pub extern "stdcall" fn DllMain(instance: HMODULE, reason: u32, _reserved: u32) 
             DisableThreadLibraryCalls(instance);
         }
 
-        CombinedLogger::init(vec![
-            TermLogger::new(LevelFilter::Trace, Config::default(), TerminalMode::Mixed),
-            WriteLogger::new(
-                LevelFilter::Trace,
-                Config::default(),
-                File::create("cef_client.log").unwrap(),
-            ),
-        ])
+        CombinedLogger::init(vec![WriteLogger::new(
+            LevelFilter::Trace,
+            Config::default(),
+            File::create("cef_client.log").unwrap(),
+        )])
         .unwrap();
 
         render::preinitialize();
