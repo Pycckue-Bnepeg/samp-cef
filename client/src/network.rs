@@ -371,6 +371,8 @@ impl Network {
                         if timeout_addr == addr {
                             log::trace!("CEF Network: Timeout");
                             handle_result(self.event_tx.send(Event::Timeout));
+
+                            self.net_open_connection(timeout_addr);
                         }
                     }
                 }

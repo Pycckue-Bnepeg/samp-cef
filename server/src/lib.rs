@@ -22,6 +22,7 @@ use crate::utils::{handle_result, IdPool};
 use crossbeam_channel::Receiver;
 
 const INIT_TIMEOUT: Duration = Duration::from_secs(10);
+const PORT_OFFSET: u16 = 2;
 
 pub enum Event {
     EmitEvent(i32, String, String),
@@ -39,26 +40,14 @@ struct CefPlugin {
 
 impl CefPlugin {
     fn new() -> Self {
-        // открывает UDP сокет на 7779 порту для cef
+        let ip: IpAddr =
+            crate::utils::parse_config_field("bind").unwrap_or_else(|| "0.0.0.0".parse().unwrap());
 
-        let ip: IpAddr = std::fs::read_to_string("./server.cfg")
-            .ok()
-            .and_then(|inner| {
-                inner
-                    .lines()
-                    .find(|line| line.starts_with("bind"))
-                    .map(|borrow| borrow.to_string())
-                    .and_then(|bind| {
-                        bind.split(" ")
-                            .skip(1)
-                            .next()
-                            .map(|borrow| borrow.to_string())
-                    })
-            })
-            .and_then(|addr| addr.parse().ok())
-            .unwrap_or_else(|| "0.0.0.0".parse().unwrap());
+        let port = crate::utils::parse_config_field("port").unwrap_or_else(|| 7777);
+        let addr = SocketAddr::from((ip, port + PORT_OFFSET));
+        let server = Server::new(addr);
 
-        let server = Server::new(SocketAddr::from((ip, 7779)));
+        info!("Bind CEF server on {:?}", addr);
 
         let event_rx = {
             let s = server.lock().unwrap();
