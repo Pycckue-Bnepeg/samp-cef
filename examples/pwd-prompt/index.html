@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+        <link rel="stylesheet" href="https://unpkg.com/98.css" />
+
+        <title>Password</title>
+
+        <style>
+            body {
+                display: flex;
+                align-content: center;
+                justify-content: center;
+            }
+        </style>
+    </head>
+    <body>
+        <div id="window" class="window" style="width: 300px">
+            <div class="title-bar">
+                <div class="title-bar-text">Access the server</div>
+                <div class="title-bar-controls">
+                    <button aria-label="Close" onclick="onCloseClick(this)"></button>
+                </div>
+            </div>
+            <div class="window-body">
+                <div class="field-row">
+                    <label for="pwd">Enter the server password</label>
+                    <input id="pwd" type="text" />
+                </div>
+                <button id="try-btn" onclick="onTryClick(this)">Try</button>
+                <div class="status-bar">
+                    <p class="status-bar-field">Server response:</p>
+                    <p id="res" class="status-bar-field">None</p>
+                </div>
+            </div>
+        </div>
+
+        <script>
+            const PWD_OK = 0;
+            const PWD_WRONG = 1;
+
+            const pwdField = document.getElementById('pwd');
+            const tryButton = document.getElementById('try-btn');
+            const promptWnd = document.getElementById('window');
+            const serverResponse = document.getElementById('res');
+
+            function onCloseClick(event) {
+                cef.emit('pwd:close');
+            }
+
+            function onTryClick(event) {
+                const pwd = pwdField.value;
+
+                if (pwd.length > 0) {
+                    tryButton.disabled = true;
+                    cef.emit('pwd:try', pwd);
+                }
+            }
+
+            cef.on('pwd:response', (response) => {
+                if (response == PWD_OK) {
+                    serverResponse.innerText = 'OK';
+
+                    setTimeout(() => {
+                        promptWnd.style.display = 'none'; // hide a window
+                        cef.set_focus(false); // unset a focus from the browser
+                    }, 5000);
+                } else {
+                    tryButton.disabled = false;
+                    serverResponse.innerText = 'Wrong password';
+                }
+            });
+        </script>
+    </body>
+</html>
