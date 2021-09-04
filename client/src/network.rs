@@ -232,6 +232,14 @@ impl Network {
             }
         }
 
+        if let Some(addr) = self.connection_state.addr() {
+            let packet = packets::Got {};
+            let packet = messages::try_into_packet(packet).unwrap();
+            let packet = Packet::reliable_ordered(addr, packet, None);
+
+            handle_result(self.socket.send(packet));
+        }
+
         handle_result(
             self.event_tx
                 .send(Event::EmitEvent(packet.event_name.to_string(), list)),
@@ -298,7 +306,7 @@ impl Network {
         let auth = packets::OpenConnection {};
 
         let packet = messages::try_into_packet(auth).unwrap();
-        let packet = Packet::unreliable_sequenced(address, packet, Some(1));
+        let packet = Packet::unreliable_sequenced(address, packet, None);
 
         log::trace!("CEF Network: OpenConnection ({})", address);
         log::trace!(
@@ -315,7 +323,7 @@ impl Network {
         };
 
         let packet = messages::try_into_packet(auth).unwrap();
-        let packet = Packet::unreliable_sequenced(address, packet, Some(1));
+        let packet = Packet::unreliable_sequenced(address, packet, None);
 
         log::trace!("CEF Network: RequestJoin ({})", address);
 
@@ -331,7 +339,7 @@ impl Network {
             };
 
             let packet = messages::try_into_packet(emit).unwrap();
-            let packet = Packet::unreliable_sequenced(address, packet, Some(1));
+            let packet = Packet::unreliable_sequenced(address, packet, None);
 
             handle_result(self.socket.send(packet));
         }
@@ -345,7 +353,7 @@ impl Network {
             };
 
             let packet = messages::try_into_packet(created).unwrap();
-            let packet = Packet::unreliable_sequenced(address, packet, Some(1));
+            let packet = Packet::unreliable_sequenced(address, packet, None);
 
             handle_result(self.socket.send(packet));
         }

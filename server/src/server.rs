@@ -122,7 +122,7 @@ impl Server {
         self.event_tx.send(Event::Connected(client.id()));
 
         try_into_packet(response).map(|bytes| {
-            let packet = Packet::unreliable_sequenced(addr, bytes, Some(1));
+            let packet = Packet::unreliable_sequenced(addr, bytes, None);
             self.sender.send(packet);
         });
     }
@@ -164,7 +164,7 @@ impl Server {
             let request = packets::OpenConnection {};
 
             try_into_packet(request).map(|bytes| {
-                let packet = Packet::unreliable_sequenced(addr, bytes, Some(1));
+                let packet = Packet::unreliable_sequenced(addr, bytes, None);
                 self.sender.send(packet);
             });
         }
@@ -204,7 +204,7 @@ impl Server {
                 };
 
                 let bytes = try_into_packet(packet).unwrap();
-                let packet = Packet::unreliable_sequenced(client.addr(), bytes.clone(), Some(1));
+                let packet = Packet::unreliable_sequenced(client.addr(), bytes.clone(), None);
                 sender.send(packet);
             });
         }
@@ -224,7 +224,7 @@ impl Server {
                 };
 
                 let bytes = try_into_packet(packet).unwrap();
-                let packet = Packet::unreliable_sequenced(client.addr(), bytes.clone(), Some(1));
+                let packet = Packet::unreliable_sequenced(client.addr(), bytes.clone(), None);
                 sender.send(packet);
             });
         }
@@ -245,7 +245,7 @@ impl Server {
                 };
 
                 let bytes = try_into_packet(packet).unwrap();
-                let packet = Packet::unreliable_sequenced(client.addr(), bytes.clone(), Some(1));
+                let packet = Packet::unreliable_sequenced(client.addr(), bytes.clone(), None);
                 sender.send(packet);
             });
         }
@@ -266,7 +266,7 @@ impl Server {
                 };
 
                 let bytes = try_into_packet(packet).unwrap();
-                let packet = Packet::unreliable_sequenced(client.addr(), bytes.clone(), Some(1));
+                let packet = Packet::unreliable_sequenced(client.addr(), bytes.clone(), None);
                 sender.send(packet);
             });
         }
@@ -288,7 +288,7 @@ impl Server {
                 };
 
                 let bytes = try_into_packet(packet).unwrap();
-                let packet = Packet::reliable_ordered(client.addr(), bytes.clone(), Some(1));
+                let packet = Packet::reliable_ordered(client.addr(), bytes.clone(), None);
                 sender.send(packet);
             });
         }
@@ -309,7 +309,7 @@ impl Server {
                 };
 
                 let bytes = try_into_packet(packet).unwrap();
-                let packet = Packet::unreliable_sequenced(client.addr(), bytes.clone(), Some(1));
+                let packet = Packet::unreliable_sequenced(client.addr(), bytes.clone(), None);
                 sender.send(packet);
             });
         }
@@ -340,7 +340,7 @@ impl Server {
                 };
 
                 let bytes = try_into_packet(packet).unwrap();
-                let packet = Packet::unreliable_sequenced(client.addr(), bytes.clone(), Some(1));
+                let packet = Packet::unreliable_sequenced(client.addr(), bytes.clone(), None);
                 sender.send(packet);
             });
         }
@@ -361,7 +361,7 @@ impl Server {
                 };
 
                 let bytes = try_into_packet(packet).unwrap();
-                let packet = Packet::unreliable_sequenced(client.addr(), bytes.clone(), Some(1));
+                let packet = Packet::unreliable_sequenced(client.addr(), bytes.clone(), None);
                 sender.send(packet);
             });
         }
@@ -382,7 +382,7 @@ impl Server {
                 };
 
                 let bytes = try_into_packet(packet).unwrap();
-                let packet = Packet::unreliable_sequenced(client.addr(), bytes.clone(), Some(1));
+                let packet = Packet::unreliable_sequenced(client.addr(), bytes.clone(), None);
                 sender.send(packet);
             });
         }
@@ -403,7 +403,7 @@ impl Server {
                 };
 
                 let bytes = try_into_packet(packet).unwrap();
-                let packet = Packet::unreliable_sequenced(client.addr(), bytes.clone(), Some(1));
+                let packet = Packet::unreliable_sequenced(client.addr(), bytes.clone(), None);
                 sender.send(packet);
             });
         }
@@ -427,7 +427,7 @@ impl Server {
                 };
 
                 let bytes = try_into_packet(packet).unwrap();
-                let packet = Packet::unreliable_sequenced(client.addr(), bytes.clone(), Some(1));
+                let packet = Packet::unreliable_sequenced(client.addr(), bytes.clone(), None);
                 sender.send(packet);
             });
         }

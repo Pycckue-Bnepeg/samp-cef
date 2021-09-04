@@ -9,7 +9,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 samp = { git = "https://github.com/zottce/samp-rs.git", branch = "potential-fix", features = ["encoding"] }
-laminar = "0.3.2"
+laminar = { git = "https://github.com/zottce/laminar.git" }
 log = "0.4.6"
 crossbeam-channel = "0.3.9"
 messages = { path = "../messages" }

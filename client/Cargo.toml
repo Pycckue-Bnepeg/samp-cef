@@ -21,7 +21,7 @@ cef-sys = { path = "../cef-sys" }
 crossbeam-channel = "0.3.9"
 d3dx9 = { path = "../d3dx9" }
 winapi = { version = "0.3.8", features = ["d3d9", "winuser", "libloaderapi", "winver", "consoleapi", "memoryapi", "shlobj"] }
-laminar = "0.3.2"
+laminar = { git = "https://github.com/zottce/laminar.git" }
 messages = { path = "../messages" }
 quick-protobuf = "0.7.0"
 detour = { git = "https://github.com/darfink/detour-rs", rev = "3b6f17a" }
