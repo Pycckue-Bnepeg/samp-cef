@@ -1,5 +1,7 @@
 use std::net::SocketAddr;
 
+use network::PeerId;
+
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub enum State {
     Connecting,
@@ -11,13 +13,15 @@ pub struct Client {
     id: i32, // SA:MP player id
     state: State,
     addr: SocketAddr,
+    peer: PeerId,
 }
 
 impl Client {
-    pub fn new(id: i32, addr: SocketAddr) -> Client {
+    pub fn new(id: i32, peer: PeerId, addr: SocketAddr) -> Client {
         Client {
             id,
             addr,
+            peer,
             state: State::Connecting,
         }
     }
@@ -36,5 +40,9 @@ impl Client {
 
     pub fn addr(&self) -> SocketAddr {
         self.addr.clone()
+    }
+
+    pub fn peer(&self) -> PeerId {
+        self.peer
     }
 }

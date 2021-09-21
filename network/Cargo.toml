@@ -1,0 +1,15 @@
+[package]
+name = "network"
+version = "0.1.0"
+edition = "2018"
+
+[dependencies]
+quinn = "0.7.2"
+futures-util = "0.3.17"
+tokio = { version = "1.11", features = ["full"] }
+rcgen = "0.8.13"
+rustls = { version = "0.19", features = ["dangerous_configuration", "quic"] }
+webpki = "0.21"
+slotmap = "1.0.6"
+anyhow = "1.0.44"
+crossbeam-channel = "0.5.1"

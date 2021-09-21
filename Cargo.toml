@@ -9,6 +9,7 @@ members = [
     "server",
     "cef-api",
     "cef-interface",
+    "network",
 ]
 
 [profile.release]
