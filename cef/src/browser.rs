@@ -239,6 +239,15 @@ impl Frame {
         V8Context::from_raw(ctx)
     }
 
+    pub fn load_url(&self, url: &str) {
+        let url = CefString::new(url);
+        let load = self.inner.load_url.unwrap();
+
+        unsafe {
+            load(self.inner.get_mut(), url.as_cef_string());
+        }
+    }
+
     pub fn send_process_message(&self, target_process: ProcessId, message: ProcessMessage) {
         let send = self
             .inner

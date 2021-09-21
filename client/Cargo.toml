@@ -18,19 +18,19 @@ encoding_rs = "0.8.20"
 client-api = { git = "https://github.com/zottce/samp-client-api.git", branch = "destroy" }
 cef = { path = "../cef" }
 cef-sys = { path = "../cef-sys" }
-crossbeam-channel = "0.3.9"
+crossbeam-channel = "0.5.1"
 d3dx9 = { path = "../d3dx9" }
 winapi = { version = "0.3.8", features = ["d3d9", "winuser", "libloaderapi", "winver", "consoleapi", "memoryapi", "shlobj"] }
-laminar = { git = "https://github.com/zottce/laminar.git" }
 messages = { path = "../messages" }
-quick-protobuf = "0.7.0"
+quick-protobuf = "0.8.0"
 detour = { git = "https://github.com/darfink/detour-rs", rev = "3b6f17a" }
-libloading = "0.5.2"
+libloading = "0.7.0"
 alto = "3.0.4"
 log = "0.4.14"
-simplelog = "0.9.0"
+simplelog = "0.10.0"
 ambisonic = "0.4.1"
-nalgebra = "0.24.1"
+nalgebra = "0.29.0"
 parking_lot = "0.11.1"
 serde = { version = "1.0.124", features = ["derive"] }
 serde_json = "1.0.64"
+net = { path = "../network", package = "network" }

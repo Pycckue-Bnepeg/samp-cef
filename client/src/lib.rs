@@ -37,9 +37,17 @@ pub extern "stdcall" fn DllMain(instance: HMODULE, reason: u32, _reserved: u32) 
             DisableThreadLibraryCalls(instance);
         }
 
+        let mut config = simplelog::ConfigBuilder::new();
+
+        let config = config
+            .add_filter_allow_str("client")
+            .add_filter_allow_str("client_api")
+            .set_max_level(LevelFilter::Trace)
+            .build();
+
         CombinedLogger::init(vec![WriteLogger::new(
             LevelFilter::Trace,
-            Config::default(),
+            config,
             File::create("cef_client.log").unwrap(),
         )])
         .unwrap();

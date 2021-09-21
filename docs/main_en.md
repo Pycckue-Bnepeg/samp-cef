@@ -68,7 +68,11 @@ Makes a browser focused as it would be on creation with `focused = true`.
 
 `cef_always_listen_keys(player_id, browser_id, listen)`
 
-The browser starts listen to player input even if it is not focused. This allows you to add a JS key handler on background.
+The browser starts listen to player input even if it is not focused. This allows you to add a JS key handler on background (`window.addEventListener("keyup")` for example).
+
+`cef_load_url(player_id, browser_id, const url[])`
+
+Loads a new page with a given url (faster than destroy and recreate browser).
 ### Handlers:
 
 `forward OnCefBrowserCreated(player_id, browser_id, status_code)`

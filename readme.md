@@ -1,11 +1,7 @@
 # SAMP CEF
 This project embeds CEF into SA:MP expanding abilities to express yourself with beauty in-game interfaces using HTML / CSS / JavaScript.
 
-**THIS MAYBE NOT PRODUCTION READY (THERE IS ONLY ONE SERVER USING IT RIGHT NOW)**
-
-**It is a FRAMEWORK (or SDK), not something that you download and use**
-
-**ALSO `clientapi.h` IS OUTDATED!**
+It is **a FRAMEWORK** (or SDK), not something that you download and use. To be able to create you should have some webdev basics (JS / HTML / CSS).
 
 ## What you can do
 - Create browser views from a gamemode or from client-side plugins (C ABI).
@@ -21,6 +17,7 @@ This project embeds CEF into SA:MP expanding abilities to express yourself with 
 - `d3dx9` - bindings to DirectX SDK.
 - `loader` - small loader that makes it work (should be named `cef.asi`).
 - `messages` - protobuf messages to communicate with server on net.
+- `network` - quinn glue (laminar like).
 - `proto` - raw proto files.
 - `renderer` - glue between CEF renderer process and main logic.
 - `server` - server side plugin.

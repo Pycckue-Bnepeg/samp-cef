@@ -484,6 +484,12 @@ impl Manager {
             });
     }
 
+    pub fn load_url(&self, browser_id: u32, url: &str) {
+        self.clients
+            .get(&browser_id)
+            .map(|client| client.load_url(url));
+    }
+
     pub fn call_browser_ready(&self, browser_id: u32) {
         self.ready_callbacks
             .get(&browser_id)

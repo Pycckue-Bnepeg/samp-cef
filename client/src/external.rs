@@ -113,42 +113,46 @@ pub fn initialize(event_tx: Sender<Event>, manager: Arc<Mutex<Manager>>) -> Call
         for dir in rd.filter_map(|dir| dir.ok()) {
             if let Some(ext) = dir.path().extension() {
                 if ext.to_string_lossy() == "dll" {
-                    match Library::new(dir.path().as_os_str()) {
-                        Ok(mut lib) => unsafe {
-                            let library: &'static mut Library = &mut *(&mut lib as *mut Library);
+                    unsafe {
+                        match Library::new(dir.path().as_os_str()) {
+                            Ok(mut lib) => {
+                                let library: &'static mut Library =
+                                    &mut *(&mut lib as *mut Library);
 
-                            let mainloop =
-                                library.get::<extern "C" fn()>(b"cef_samp_mainloop").ok();
+                                let mainloop =
+                                    library.get::<extern "C" fn()>(b"cef_samp_mainloop").ok();
 
-                            let dxreset = library.get::<extern "C" fn()>(b"cef_dxreset").ok();
-                            let initialize = library
-                                .get::<extern "C" fn(*mut InternalApi)>(b"cef_initialize")
-                                .ok();
+                                let dxreset = library.get::<extern "C" fn()>(b"cef_dxreset").ok();
+                                let initialize = library
+                                    .get::<extern "C" fn(*mut InternalApi)>(b"cef_initialize")
+                                    .ok();
 
-                            let connect = library.get::<extern "C" fn()>(b"cef_connect").ok();
-                            let disconnect = library.get::<extern "C" fn()>(b"cef_disconnect").ok();
-                            let quit = library.get::<extern "C" fn()>(b"cef_quit").ok();
-                            let browser_created = library
-                                .get::<extern "C" fn(u32, i32)>(b"cef_browser_created")
-                                .ok();
+                                let connect = library.get::<extern "C" fn()>(b"cef_connect").ok();
+                                let disconnect =
+                                    library.get::<extern "C" fn()>(b"cef_disconnect").ok();
+                                let quit = library.get::<extern "C" fn()>(b"cef_quit").ok();
+                                let browser_created = library
+                                    .get::<extern "C" fn(u32, i32)>(b"cef_browser_created")
+                                    .ok();
 
-                            let plugin = ExtPlugin {
-                                library: lib,
-                                initialize,
-                                mainloop,
-                                dxreset,
-                                connect,
-                                disconnect,
-                                quit,
-                                browser_created,
-                            };
+                                let plugin = ExtPlugin {
+                                    library: lib,
+                                    initialize,
+                                    mainloop,
+                                    dxreset,
+                                    connect,
+                                    disconnect,
+                                    quit,
+                                    browser_created,
+                                };
 
-                            external.plugins.push(plugin);
+                                external.plugins.push(plugin);
 
-                            log::trace!("loaded plugin: {:?}", dir.path());
-                        },
+                                log::trace!("loaded plugin: {:?}", dir.path());
+                            }
 
-                        Err(e) => log::trace!("error loading library {:?}", e),
+                            Err(e) => log::trace!("error loading library {:?}", e),
+                        }
                     }
                 }
             }
