@@ -29,6 +29,10 @@ native cef_toggle_dev_tools(player_id, browser_id, enabled);
 native cef_set_audio_settings(player_id, browser_id, Float:max_distance, Float:reference_distance);
 native cef_focus_browser(player_id, browser_id, focused);
 native cef_always_listen_keys(player_id, browser_id, listen);
+native cef_load_url(player_id, browser_id, const url[]);
+
+forward OnCefInitialize(player_id, success);
+forward OnCefBrowserCreated(player_id, browser_id, status_code);
 
 // internal callbacks hooks
 

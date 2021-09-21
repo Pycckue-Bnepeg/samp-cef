@@ -190,6 +190,12 @@ impl Network {
                     .ok();
             }
 
+            LOAD_URL => {
+                deserialize_from_slice(&packet.bytes)
+                    .map(|packet| self.handle_load_url(packet))
+                    .ok();
+            }
+
             _ => (),
         }
     }
@@ -304,6 +310,11 @@ impl Network {
             },
         );
 
+        handle_result(self.event_tx.send(event));
+    }
+
+    fn handle_load_url(&mut self, packet: packets::LoadUrl) {
+        let event = Event::LoadUrl(packet.browser_id, packet.url.to_string());
         handle_result(self.event_tx.send(event));
     }
 

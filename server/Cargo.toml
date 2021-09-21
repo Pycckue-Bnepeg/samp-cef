@@ -10,7 +10,7 @@ crate-type = ["cdylib"]
 [dependencies]
 samp = { git = "https://github.com/zottce/samp-rs.git", branch = "potential-fix", features = ["encoding"] }
 log = "0.4.6"
-crossbeam-channel = "0.3.9"
+crossbeam-channel = "0.5.1"
 messages = { path = "../messages" }
-quick-protobuf = "0.7.0"
+quick-protobuf = "0.8.0"
 network = { path = "../network" }

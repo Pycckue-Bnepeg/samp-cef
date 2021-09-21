@@ -59,6 +59,7 @@ pub enum Event {
     RemoveFromObject(u32, i32),
     ToggleDevTools(u32, bool),
     SetAudioSettings(u32, crate::audio::BrowserAudioSettings),
+    LoadUrl(u32, String),
 
     CefInitialize,
 
@@ -454,6 +455,11 @@ pub fn mainloop() {
                 Event::SetAudioSettings(browser, audio_settings) => {
                     let mut manager = app.manager.lock();
                     manager.set_audio_settings(browser, audio_settings);
+                }
+
+                Event::LoadUrl(browser, url) => {
+                    let mut manager = app.manager.lock();
+                    manager.load_url(browser, &url);
                 }
 
                 _ => (),

@@ -15,6 +15,7 @@ enum PacketId {
     REMOVE_FROM_OBJECT = 13;
     TOGGLE_DEV_TOOLS = 14;
     SET_AUDIO_SETTINGS = 15;
+    LOAD_URL = 16;
 
     // client/server side
     EMIT_EVENT = 8;
@@ -111,4 +112,9 @@ message SetAudioSettings {
     required uint32 browser_id = 1;
     required float max_distance = 2;
     required float reference_distance = 3;
+}
+
+message LoadUrl {
+    required uint32 browser_id = 1;
+    required string url = 2;
 }

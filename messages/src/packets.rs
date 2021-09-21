@@ -17,3 +17,4 @@ impl_into_packet!(AppendToObject, PacketId::APPEND_TO_OBJECT);
 impl_into_packet!(RemoveFromObject, PacketId::REMOVE_FROM_OBJECT);
 impl_into_packet!(ToggleDevTools, PacketId::TOGGLE_DEV_TOOLS);
 impl_into_packet!(SetAudioSettings, PacketId::SET_AUDIO_SETTINGS);
+impl_into_packet!(LoadUrl<'a>, PacketId::LOAD_URL);

@@ -271,6 +271,18 @@ impl CefPlugin {
         Ok(true)
     }
 
+    #[native(name = "cef_load_url")]
+    fn load_url(
+        &mut self, _: &Amx, player_id: i32, browser_id: u32, url: AmxString,
+    ) -> AmxResult<bool> {
+        let url = url.to_string();
+        let mut server = self.server.lock().unwrap();
+
+        server.load_url(player_id, browser_id, url);
+
+        Ok(true)
+    }
+
     // utils
     fn notify_timeout(&mut self) {
         let mut keys = Vec::new();
@@ -371,6 +383,7 @@ initialize_plugin!(
         CefPlugin::remove_from_object,
         CefPlugin::toggle_dev_tools,
         CefPlugin::set_audio_settings,
+        CefPlugin::load_url,
     ],
     {
         samp::plugin::enable_process_tick();

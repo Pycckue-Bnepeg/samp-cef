@@ -11,14 +11,18 @@ use std::time::Duration;
 use crate::client::Client;
 use crate::Event;
 
-struct Packet {
-    peer: PeerId,
-    bytes: Vec<u8>,
+enum Packet {
+    Normal { peer: PeerId, bytes: Vec<u8> },
+    Disonnect(PeerId),
 }
 
 impl Packet {
     fn new(peer: PeerId, bytes: Vec<u8>) -> Packet {
-        Packet { peer, bytes }
+        Packet::Normal { peer, bytes }
+    }
+
+    fn disconnect(peer: PeerId) -> Packet {
+        Packet::Disonnect(peer)
     }
 }
 
@@ -76,7 +80,10 @@ impl Server {
             }
 
             for packet in receiver.try_iter() {
-                socket.send_message(packet.peer, packet.bytes);
+                match packet {
+                    Packet::Normal { peer, bytes } => socket.send_message(peer, bytes),
+                    Packet::Disonnect(peer) => socket.disconnect(peer),
+                }
             }
 
             std::thread::sleep(Duration::from_millis(5));
@@ -174,6 +181,9 @@ impl Server {
                 let packet = Packet::new(peer, bytes);
                 self.sender.send(packet);
             });
+        } else {
+            let packet = Packet::disconnect(peer);
+            let _ = self.sender.send(packet);
         }
     }
 
@@ -189,6 +199,7 @@ impl Server {
         if let Some(addr) = addr {
             if let Some(client) = self.clients.remove(&addr) {
                 self.allowed.remove(&client.addr().ip());
+                let _ = self.sender.send(Packet::Disonnect(client.peer()));
             }
         }
     }
@@ -432,6 +443,27 @@ impl Server {
                     browser_id,
                     max_distance,
                     reference_distance,
+                };
+
+                let bytes = try_into_packet(packet).unwrap();
+                let packet = Packet::new(client.peer(), bytes);
+                sender.send(packet);
+            });
+        }
+    }
+
+    pub fn load_url(&mut self, player_id: i32, browser_id: u32, url: String) {
+        if let Some(addr) = self.peer_by_id(player_id) {
+            let Server {
+                ref mut clients,
+                ref mut sender,
+                ..
+            } = self;
+
+            clients.get_mut(&addr).map(|client| {
+                let packet = packets::LoadUrl {
+                    browser_id,
+                    url: url.into(),
                 };
 
                 let bytes = try_into_packet(packet).unwrap();

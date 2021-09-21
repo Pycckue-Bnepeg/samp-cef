@@ -677,6 +677,12 @@ impl WebClient {
         });
     }
 
+    pub fn load_url(&self, url: &str) {
+        if let Some(browser) = self.browser() {
+            browser.main_frame().load_url(url);
+        }
+    }
+
     pub fn id(&self) -> u32 {
         self.id
     }
