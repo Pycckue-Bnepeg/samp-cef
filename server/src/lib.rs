@@ -3,7 +3,9 @@ use std::net::{IpAddr, SocketAddr};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
+use crossbeam_channel::Receiver;
 use log::info;
+use messages::packets::EventValue;
 
 use samp::amx::AmxIdent;
 use samp::args::Args;
@@ -14,20 +16,23 @@ mod client;
 mod server;
 mod utils;
 
-use messages::packets::EventValue;
-
 use crate::server::Server;
-use crate::utils::{handle_result, IdPool};
 
-use crossbeam_channel::Receiver;
-
-const INIT_TIMEOUT: Duration = Duration::from_secs(10);
+const INIT_TIMEOUT: Duration = Duration::from_secs(5);
 const PORT_OFFSET: u16 = 2;
 
 pub enum Event {
-    EmitEvent(i32, String, String),
-    Connected(i32),
-    BrowserCreated(i32, u32, i32),
+    EmitEvent {
+        player_id: i32,
+        event: String,
+        arguments: String,
+    },
+    PlayerConnected(i32),
+    BrowserCreated {
+        player_id: i32,
+        browser_id: u32,
+        code: i32,
+    },
 }
 
 struct CefPlugin {
@@ -133,7 +138,7 @@ impl CefPlugin {
     }
 
     #[native(name = "cef_emit_event", raw)]
-    fn emit_event(&mut self, _: &Amx, mut args: Args) -> AmxResult<bool> {
+    fn emit_event(&mut self, _: &Amx, args: Args) -> AmxResult<bool> {
         if args.count() < 2 || (args.count() - 2) % 2 != 0 {
             info!("cef_emit_event invalid count of arguments");
             return Ok(false);
@@ -294,8 +299,9 @@ impl CefPlugin {
             }
         }
 
-        keys.into_iter()
-            .for_each(|player_id| self.remove_from_await_list(player_id));
+        keys.into_iter().for_each(|player_id| {
+            self.remove_from_await_list(player_id);
+        });
     }
 
     fn notify_connect(&self, player_id: i32, success: bool) {
@@ -316,8 +322,8 @@ impl CefPlugin {
         self.await_connect.insert(player_id, Instant::now());
     }
 
-    fn remove_from_await_list(&mut self, player_id: i32) {
-        self.await_connect.remove(&player_id);
+    fn remove_from_await_list(&mut self, player_id: i32) -> bool {
+        self.await_connect.remove(&player_id).is_some()
     }
 }
 
@@ -341,21 +347,29 @@ impl SampPlugin for CefPlugin {
     fn process_tick(&mut self) {
         while let Ok(event) = self.event_rx.try_recv() {
             match event {
-                Event::EmitEvent(player, event, args) => {
+                Event::EmitEvent {
+                    player_id,
+                    event,
+                    arguments,
+                } => {
                     if let Some((ident, cb)) = self.events.get(&event) {
                         samp::amx::get(*ident)
-                            .map(|amx| exec_public!(amx, &cb, player, &args => string));
+                            .map(|amx| exec_public!(amx, &cb, player_id, &arguments => string));
                     }
                 }
 
-                Event::Connected(player) => {
-                    println!("Event::Connected({})", player);
-                    self.notify_connect(player, true);
-                    self.remove_from_await_list(player);
+                Event::PlayerConnected(player) => {
+                    if self.remove_from_await_list(player) {
+                        self.notify_connect(player, true);
+                    }
                 }
 
-                Event::BrowserCreated(player, browser, code) => {
-                    self.notify_browser_created(player, browser, code);
+                Event::BrowserCreated {
+                    player_id,
+                    browser_id,
+                    code,
+                } => {
+                    self.notify_browser_created(player_id, browser_id, code);
                 }
 
                 _ => (),
