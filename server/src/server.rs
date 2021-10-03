@@ -1,4 +1,5 @@
 use crossbeam_channel::{Receiver, Sender};
+use log::trace;
 use messages::{packets, try_into_packet};
 use network::{CertStrategy, Event as SocketEvent, PeerId, Socket};
 use quick_protobuf::deserialize_from_slice;
@@ -83,7 +84,10 @@ impl Server {
             for packet in receiver.try_iter() {
                 match packet {
                     Packet::Normal { peer, bytes } => socket.send_message(peer, bytes),
-                    Packet::Disconnect(peer) => socket.disconnect(peer),
+                    Packet::Disconnect(peer) => {
+                        trace!("socket::disconnect {:?}", peer);
+                        socket.disconnect(peer);
+                    }
                 }
             }
 
@@ -154,7 +158,7 @@ impl Server {
                 event,
             };
 
-            self.event_tx.send(event);
+            let _ = self.event_tx.send(event);
         }
     }
 
@@ -168,20 +172,30 @@ impl Server {
             code: packet.status_code,
         };
 
-        self.event_tx.send(event);
+        let _ = self.event_tx.send(event);
     }
 
     /// выпинываем игрока из списка клиентов
     fn handle_timeout(&mut self, addr: PeerId) {
+        trace!("handle_timeout {:?}", addr);
         self.clients.remove(&addr);
+
+        trace!("{:#?}", self.allowed);
+        trace!("{:#?}", self.clients);
     }
 
     /// обрабатывает новое входящее соединение
     fn handle_new_connection(&mut self, peer: PeerId, addr: SocketAddr) {
+        trace!("handle_new_connection {:?} {:?}", peer, addr);
+
         if !self.clients.contains_key(&peer) && self.allowed.contains_key(&addr.ip()) {
             let player_id = *self.allowed.get(&addr.ip()).unwrap();
 
+            trace!("handle_new_connection: ok {}", player_id);
+
             if self.peer_by_id(player_id).is_none() {
+                trace!("handle_new_connection: ok no peer with this id");
+
                 let client = Client::new(player_id, peer, addr);
 
                 self.clients.insert(peer, client);
@@ -211,14 +225,18 @@ impl Server {
         self.allowed.insert(addr, player_id);
     }
 
-    pub fn remove_connection(&mut self, player_id: i32) {
-        let addr = self.peer_by_id(player_id);
+    pub fn remove_connection(&mut self, player_id: i32, addr: Option<IpAddr>) {
+        let peer = self.peer_by_id(player_id);
 
-        if let Some(addr) = addr {
-            if let Some(client) = self.clients.remove(&addr) {
+        if let Some(peer) = peer {
+            if let Some(client) = self.clients.remove(&peer) {
                 self.allowed.remove(&client.addr().ip());
                 let _ = self.sender.send(Packet::Disconnect(client.peer()));
             }
+        }
+
+        if let Some(addr) = addr {
+            self.allowed.remove(&addr);
         }
     }
 

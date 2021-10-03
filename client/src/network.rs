@@ -77,6 +77,13 @@ impl ConnectionState {
             _ => None,
         }
     }
+
+    fn is_auth(&self) -> bool {
+        match self {
+            ConnectionState::Auth(_, _, _) => true,
+            _ => false,
+        }
+    }
 }
 
 struct Network {
@@ -381,13 +388,14 @@ impl Network {
                         }
                     }
 
-                    // SocketEvent::Connected() => log::trace!("connect? {}", addr), // what?
                     SocketEvent::Disconnect(peer, addr) => {
                         if peer == server_peer {
                             log::trace!("CEF Network: Timeout");
                             handle_result(self.event_tx.send(Event::Timeout));
 
-                            self.net_open_connection(self.connection_state.addr().unwrap());
+                            if !self.connection_state.is_auth() {
+                                self.net_open_connection(self.connection_state.addr().unwrap());
+                            }
                         }
                     }
 
@@ -395,7 +403,9 @@ impl Network {
                         log::trace!("CEF Network: ConnectionError");
                         handle_result(self.event_tx.send(Event::Timeout));
 
-                        self.net_open_connection(self.connection_state.addr().unwrap());
+                        if !self.connection_state.is_auth() {
+                            self.net_open_connection(self.connection_state.addr().unwrap());
+                        }
                     }
 
                     _ => (),
