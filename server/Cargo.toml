@@ -14,3 +14,4 @@ crossbeam-channel = "0.5.1"
 messages = { path = "../messages" }
 quick-protobuf = "0.8.0"
 network = { path = "../network" }
+simplelog = "0.10.2"
