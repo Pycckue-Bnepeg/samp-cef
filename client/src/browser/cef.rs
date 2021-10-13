@@ -40,6 +40,9 @@ impl App for DefaultApp {
         command_line.append_switch("disable-gpu");
         command_line.append_switch("enable-begin-frame-scheduling");
         command_line.append_switch_with_value("autoplay-policy", "no-user-gesture-required");
+
+        // TODO: permissions
+        command_line.append_switch("enable-media-stream");
     }
 }
 
