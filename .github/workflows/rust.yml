@@ -21,8 +21,7 @@ jobs:
     - name: Install nightly rust
       uses: actions-rs/toolchain@v1
       with:
-        toolchain: nightly
-        target: i686-unknown-linux-gnu
+        toolchain: nightly-i686-unknown-linux-gnu
         override: true
 
     - uses: actions/checkout@v2
@@ -79,8 +78,7 @@ jobs:
     - name: Install nightly rust
       uses: actions-rs/toolchain@v1
       with:
-        toolchain: nightly
-        target: i686-pc-windows-msvc
+        toolchain: nightly-i686-pc-windows-msvc
         override: true
 
     - uses: actions/checkout@v2
