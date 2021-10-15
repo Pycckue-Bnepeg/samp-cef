@@ -1,0 +1,30 @@
+name: Rust
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build_server:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-20.04, ubuntu-18.04]
+
+    steps:
+    - uses: actions/checkout@v2
+    - name: Build server plugin
+      run: cargo build --package server --release
+    - uses: actions/upload-artifact@v2
+      with:
+        name: cef-${{ matrix.os }}.so
+        path: target/release/libserver.so
+
+#   build_client:
+#     runs-on: windows-latest
