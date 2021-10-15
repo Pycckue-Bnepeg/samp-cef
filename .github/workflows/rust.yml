@@ -46,7 +46,7 @@ jobs:
     container: centos:7.5.1804
 
     steps:
-      - name: Install nightly rust
+    - name: Install nightly rust
       uses: actions-rs/toolchain@v1
       with:
         toolchain: nightly-i686-unknown-linux-gnu
@@ -74,7 +74,7 @@ jobs:
         os: [debian:9, debian:10, debian:11]
 
     steps:
-      - name: Install nightly rust
+    - name: Install nightly rust
       uses: actions-rs/toolchain@v1
       with:
         toolchain: nightly-i686-unknown-linux-gnu
