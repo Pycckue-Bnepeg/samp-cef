@@ -47,7 +47,7 @@ jobs:
 
     steps:
     - name: Install i386 deps
-      run: sudo yum install git curl gcc g++ dpkg-dev make libgcc libgcc.i686 glibc-devel.i686 zlib.i686 zlib -y
+      run: yum install git curl gcc g++ dpkg-dev make libgcc libgcc.i686 glibc-devel.i686 zlib.i686 zlib -y
 
     - name: Install nightly rust
       uses: actions-rs/toolchain@v1
@@ -76,9 +76,9 @@ jobs:
     steps:
     - name: Install i386 deps
       run: |
-        sudo dpkg --add-architecture i386 
-        sudo apt-get update 
-        sudo apt-get install build-essential curl make g++-multilib lib32z1 lib64z1 zlib1g -y
+        dpkg --add-architecture i386 
+        apt-get update 
+        apt-get install build-essential curl make g++-multilib lib32z1 lib64z1 zlib1g -y
 
     - name: Install nightly rust
       uses: actions-rs/toolchain@v1
