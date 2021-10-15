@@ -68,10 +68,10 @@ jobs:
 
   build_server_debian:
     runs-on: ubuntu-latest
-    container: ${{ matrix.os }}
+    container: debian:${{ matrix.os }}
     strategy:
       matrix:
-        os: [debian:9, debian:10, debian:11]
+        os: [9, 10, 11]
 
     steps:
     - name: Install nightly rust
@@ -94,7 +94,7 @@ jobs:
 
     - uses: actions/upload-artifact@v2
       with:
-        name: cef-${{ matrix.os }}.so
+        name: cef-debian-${{ matrix.os }}.so
         path: stripped.so
 
   build_client:
