@@ -11,6 +11,7 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  # TODO: docker builds centos and other friends
   build_server:
     runs-on: ${{ matrix.os }}
     strategy:
@@ -23,6 +24,12 @@ jobs:
       with:
         toolchain: nightly-i686-unknown-linux-gnu
         override: true
+    
+    - name: Install i386 deps
+      run: |
+        sudo dpkg --add-architecture i386 
+        sudo apt-get update 
+        sudo apt-get install build-essential g++-multilib -y
 
     - uses: actions/checkout@v2
     - name: Build server plugin
