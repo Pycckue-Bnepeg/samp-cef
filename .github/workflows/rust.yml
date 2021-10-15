@@ -20,11 +20,42 @@ jobs:
     steps:
     - uses: actions/checkout@v2
     - name: Build server plugin
-      run: cargo build --package server --release
+      run: |
+        cargo build --package server --release
+        strip -s target/release/libserver.so -o stripped.so
     - uses: actions/upload-artifact@v2
       with:
         name: cef-${{ matrix.os }}.so
-        path: target/release/libserver.so
+        path: stripped.so
 
-#   build_client:
-#     runs-on: windows-latest
+  build_client:
+    runs-on: windows-latest
+    steps:
+    - uses: actions/checkout@v2
+    - name: Prepare environment
+      run: |
+        curl -L https://download.microsoft.com/download/a/e/7/ae743f1f-632b-4809-87a9-aa1bb3458e31/DXSDK_Jun10.exe -o _DX2010_.exe
+        7z x _DX2010_.exe DXSDK/Include -o_DX2010_
+        7z x _DX2010_.exe DXSDK/Lib/x86 -o_DX2010_
+        mv _DX2010_/DXSDK "C:/Program Files (x86)/Microsoft DirectX SDK (June 2010)/Lib/x86"
+        rm -fR _DX*_ _DX*_.exe
+        curl -L https://github.com/ZOTTCE/samp-cef/releases/download/v1.1-beta/libcef.lib -o libcef.lib
+        mv libcef.lib $HOME/cef/libcef.lib
+        echo ::set-env name=CEF_PATH::$HOME/cef
+      shell: bash
+
+    - name: Build client
+      run: cargo build --release
+      shell: bash
+    - uses: actions/upload-artifact@v2
+      with:
+        name: client.dll
+        path: target/release/client.dll
+    - uses: actions/upload-artifact@v2
+      with:
+        name: renderer.exe
+        path: target/release/renderer.exe
+    - uses: actions/upload-artifact@v2
+      with:
+        name: cef.asi
+        path: target/release/loader.dll
