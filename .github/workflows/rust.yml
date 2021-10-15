@@ -46,14 +46,14 @@ jobs:
     container: centos:7.5.1804
 
     steps:
+    - name: Install i386 deps
+      run: sudo yum install git curl gcc g++ dpkg-dev make libgcc libgcc.i686 glibc-devel.i686 zlib.i686 zlib -y
+
     - name: Install nightly rust
       uses: actions-rs/toolchain@v1
       with:
         toolchain: nightly-i686-unknown-linux-gnu
         override: true
-    
-    - name: Install i386 deps
-      run: sudo yum install gcc g++ dpkg-dev libgcc libgcc.i686 glibc-devel.i686 zlib.i686 zlib -y
 
     - uses: actions/checkout@v2
     - name: Build server plugin
@@ -74,17 +74,17 @@ jobs:
         os: [9, 10, 11]
 
     steps:
+    - name: Install i386 deps
+      run: |
+        sudo dpkg --add-architecture i386 
+        sudo apt-get update 
+        sudo apt-get install build-essential curl make g++-multilib lib32z1 lib64z1 zlib1g -y
+
     - name: Install nightly rust
       uses: actions-rs/toolchain@v1
       with:
         toolchain: nightly-i686-unknown-linux-gnu
         override: true
-    
-    - name: Install i386 deps
-      run: |
-        sudo dpkg --add-architecture i386 
-        sudo apt-get update 
-        sudo apt-get install build-essential g++-multilib -y
 
     - uses: actions/checkout@v2
     - name: Build server plugin
