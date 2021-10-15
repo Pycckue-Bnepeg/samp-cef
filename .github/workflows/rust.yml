@@ -78,7 +78,7 @@ jobs:
       run: |
         dpkg --add-architecture i386 
         apt-get update 
-        apt-get install build-essential curl make g++-multilib lib32z1 lib64z1 zlib1g -y
+        apt-get -f install build-dep build-essential curl make g++-multilib lib32z1 lib64z1 zlib1g -y
 
     - name: Install nightly rust
       uses: actions-rs/toolchain@v1
