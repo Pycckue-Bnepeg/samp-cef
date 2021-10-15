@@ -162,3 +162,8 @@ jobs:
       with:
         name: cef.asi
         path: target/release/loader.dll
+
+    - uses: actions/upload-artifact@v2
+      with:
+        name: cef-windows.dll
+        path: target/release/server.dll

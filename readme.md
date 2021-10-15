@@ -21,6 +21,18 @@ It is **a FRAMEWORK** (or SDK), not something that you download and use. To be a
 - `proto` - raw proto files.
 - `renderer` - glue between CEF renderer process and main logic.
 - `server` - server side plugin.
+
+## Download
+Latest builds from the master branch are placed in [the Actions](https://github.com/ZOTTCE/samp-cef/actions).
+
+Currently there is those OS:
+- CentOS 7 (`cef-centos-7.so`)
+- Debian 9, 10, 11 (`cef-debian-*.so`)
+- Ubuntu 18.04, 20.04 (`cef-ubuntu-*.so`)
+- Windows (`cef-windows.dll`)
+
+And also all client-side parts (`cef.asi`, `client.dll`, `renderer.exe`).
+
 ## Building
 ### Dependencies
 - [Rust compiler (nightly) with `i686-windows-pc-msvc` toolchain](https://rust-lang.org)
