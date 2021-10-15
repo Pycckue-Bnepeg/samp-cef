@@ -56,6 +56,7 @@ jobs:
     - name: Download CEF static library
       run: |
         curl -L https://github.com/ZOTTCE/samp-cef/releases/download/v1.1-beta/libcef.lib -o libcef.lib
+        mkdir $HOME/cef
         mv libcef.lib $HOME/cef/libcef.lib
       shell: bash
 
