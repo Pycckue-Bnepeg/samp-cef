@@ -18,6 +18,13 @@ jobs:
         os: [ubuntu-20.04, ubuntu-18.04]
 
     steps:
+    - name: Install nightly rust
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: nightly
+        target: i686-unknown-linux-gnu
+        override: true
+
     - uses: actions/checkout@v2
     - name: Build server plugin
       run: |
@@ -45,6 +52,13 @@ jobs:
         path: ${{ env.DX_SDK_DIR }}
         key: directx
 
+    - name: CEF static library cache
+      id: cef-cache
+      uses: actions/cache@v2
+      with:
+        path: ${{ env.CEF_PATH }}
+        key: libcef
+
     - name: Install DirectX SDK
       if: steps.dx-cache.outputs.cache-hit != 'true'
       run: |
@@ -55,11 +69,19 @@ jobs:
       shell: bash
 
     - name: Download CEF static library
+      if: steps.cef-cache.outputs.cache-hit != 'true'
       run: |
         curl -L https://github.com/ZOTTCE/samp-cef/releases/download/v1.1-beta/libcef.lib -o libcef.lib
-        mkdir $HOME/cef
-        mv libcef.lib $HOME/cef/libcef.lib
+        mkdir $CEF_PATH
+        mv libcef.lib $CEF_PATH/libcef.lib
       shell: bash
+
+    - name: Install nightly rust
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: nightly
+        target: i686-pc-windows-msvc
+        override: true
 
     - uses: actions/checkout@v2
     - name: Build client
