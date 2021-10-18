@@ -50,7 +50,7 @@ impl CefPlugin {
         let ip: IpAddr =
             crate::utils::parse_config_field("bind").unwrap_or_else(|| "0.0.0.0".parse().unwrap());
 
-        let port = crate::utils::parse_config_field("port").unwrap_or_else(|| 7777);
+        let port = crate::utils::parse_config_field("port").unwrap_or(7777);
         let addr = SocketAddr::from((ip, port + PORT_OFFSET));
         let server = Server::new(addr);
 
@@ -80,7 +80,7 @@ impl CefPlugin {
         if let Ok(addr) = player_ip.parse::<IpAddr>() {
             trace!("allow_connection {} {:?}", player_id, addr);
 
-            self.ips.insert(player_id, addr.clone());
+            self.ips.insert(player_id, addr);
 
             {
                 let mut server = self.server.lock().unwrap();
@@ -375,7 +375,7 @@ impl SampPlugin for CefPlugin {
 
                     if let Some((ident, cb)) = self.events.get(&event) {
                         samp::amx::get(*ident)
-                            .map(|amx| exec_public!(amx, &cb, player_id, &arguments => string));
+                            .map(|amx| exec_public!(amx, cb, player_id, &arguments => string));
                     }
                 }
 
@@ -444,7 +444,7 @@ initialize_plugin!(
         // )])
         // .unwrap();
 
-        let plugin = CefPlugin::new();
-        return plugin;
+
+        CefPlugin::new()
     }
 );

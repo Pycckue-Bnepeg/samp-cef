@@ -77,10 +77,10 @@ impl V8Handler for Handler {
                 let func = args[1].clone();
 
                 let mut events = self.subs.lock().unwrap();
-                let subs = events.entry(name).or_insert_with(|| Vec::new());
+                let subs = events.entry(name).or_insert_with(Vec::new);
 
                 let ctx = V8Context::current_context();
-                subs.push((func, ctx.clone()));
+                subs.push((func, ctx));
 
                 return true;
             }
@@ -110,7 +110,7 @@ impl V8Handler for Handler {
             }
 
             "emit" => {
-                if args.len() < 1 {
+                if args.is_empty() {
                     return false;
                 }
 
@@ -187,7 +187,7 @@ impl RenderProcessHandler for Application {
         global.set_value_by_key(&key_cef, &cef_obj);
     }
 
-    fn on_context_released(self: &Arc<Self>, _browser: Browser, frame: Frame, context: V8Context) {
+    fn on_context_released(self: &Arc<Self>, _browser: Browser, _frame: Frame, context: V8Context) {
         let mut subs = self.subs.lock().unwrap();
 
         for value in subs.values_mut() {

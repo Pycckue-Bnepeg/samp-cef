@@ -1,14 +1,10 @@
-use ambisonic::rodio::buffer::SamplesBuffer;
 use ambisonic::rodio::{OutputStream, OutputStreamHandle, Sink};
 use ambisonic::{BmixerComposer, BstreamConfig, SoundController};
 use client_api::gta::matrix::{CVector, RwMatrix};
 use crossbeam_channel::{Receiver, Sender};
 use nalgebra::{Point3, Rotation3, Vector3};
 use std::collections::{BTreeMap, HashMap};
-use std::sync::{
-    atomic::{AtomicBool, Ordering},
-    Arc,
-};
+use std::sync::Arc;
 
 use parking_lot::{Mutex, RwLock};
 
@@ -223,12 +219,11 @@ impl Audio {
             return;
         }
 
-        let channels = self
+        let channels = *self
             .stream_channels
             .read()
             .get(&(browser, stream_id))
-            .unwrap_or(&1)
-            .clone();
+            .unwrap_or(&1);
 
         let frames = frames as usize;
         let factor = 1.0 / channels as f32;
@@ -312,7 +307,7 @@ impl Audio {
             listener.rotation.transform_point(&diff)
         };
 
-        let dist = (position.clone() - Point3::origin()).magnitude();
+        let dist = (position - Point3::origin()).magnitude();
 
         // let position = if dist <= settings.reference_distance {
         //     position.map(|i| i / dist)
@@ -432,7 +427,7 @@ impl AudioInner {
                 entries.remove(idx);
             }
 
-            remove = entries.len() == 0;
+            remove = entries.is_empty();
         }
 
         if remove {
@@ -487,8 +482,8 @@ impl AudioInner {
         let gain = self.gain;
 
         self.for_object(object_id, |source| {
-            source.set_position(pos.clone());
-            source.set_velocity(velo.clone());
+            source.set_position(pos);
+            source.set_velocity(velo);
 
             if source.muted {
                 source.sink.set_volume(gain);
@@ -547,9 +542,9 @@ impl AudioInner {
     {
         self.streams.values_mut().for_each(|stream| {
             stream.iter_mut().for_each(|stream| {
-                stream.sources.get_mut(&object_id).map(|source| {
+                if let Some(source) = stream.sources.get_mut(&object_id) {
                     func(source);
-                });
+                }
             })
         });
     }
@@ -619,7 +614,7 @@ fn audio_thread(mut audio: AudioInner) {
             }
         }
 
-        let mut browsers = &mut audio.streams;
+        let browsers = &mut audio.streams;
 
         if !audio.paused {
             for streams in browsers.values_mut() {
@@ -705,7 +700,7 @@ impl Iterator for StreamingSound {
             match self.queue.next() {
                 Some(sample) => return Some(sample),
                 None => {
-                    let push = if self.playing && self.pending.len() >= 1 {
+                    let push = if self.playing && !self.pending.is_empty() {
                         true
                     } else if !self.playing && self.pending.len() >= 8 {
                         true

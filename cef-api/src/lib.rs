@@ -1,6 +1,4 @@
-use libloading::{Library, Symbol};
-
-use std::ffi::{CStr, CString};
+use std::ffi::CString;
 use std::os::raw::{c_char, c_int};
 
 pub use cef::types::{
@@ -42,11 +40,9 @@ pub struct InternalApi {
 pub struct CefApi;
 
 impl CefApi {
-    pub fn initialize(api: *mut InternalApi) {
-        unsafe {
-            let boxed = Box::new((*api).clone());
-            API = Box::into_raw(boxed);
-        }
+    pub unsafe fn initialize(api: *mut InternalApi) {
+        let boxed = Box::new((*api).clone());
+        API = Box::into_raw(boxed);
     }
 
     pub fn uninitialize() {

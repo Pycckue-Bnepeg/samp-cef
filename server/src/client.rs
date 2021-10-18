@@ -39,7 +39,7 @@ impl Client {
     }
 
     pub fn addr(&self) -> SocketAddr {
-        self.addr.clone()
+        self.addr
     }
 
     pub fn peer(&self) -> PeerId {

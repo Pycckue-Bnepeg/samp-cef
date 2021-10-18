@@ -1,4 +1,3 @@
-use winapi::shared::minwindef::*;
 use winapi::um::unknwnbase::{IUnknown, IUnknownVtbl};
 
 use winapi::RIDL;

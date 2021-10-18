@@ -406,6 +406,6 @@ impl Server {
         self.clients
             .iter()
             .find(|(_, client)| client.id() == player_id)
-            .map(|(&peer, _)| peer.clone())
+            .map(|(&peer, _)| peer)
     }
 }

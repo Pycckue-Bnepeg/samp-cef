@@ -64,16 +64,16 @@ enum ConnectionState {
 impl ConnectionState {
     fn addr(&self) -> Option<SocketAddr> {
         match self {
-            ConnectionState::Auth(addr, _, _) => Some(addr.clone()),
-            ConnectionState::Connected(addr, _) => Some(addr.clone()),
+            ConnectionState::Auth(addr, _, _) => Some(*addr),
+            ConnectionState::Connected(addr, _) => Some(*addr),
             _ => None,
         }
     }
 
     fn peer(&self) -> Option<PeerId> {
         match self {
-            ConnectionState::Auth(_, _, peer) => Some(peer.clone()),
-            ConnectionState::Connected(_, peer) => Some(peer.clone()),
+            ConnectionState::Auth(_, _, peer) => Some(*peer),
+            ConnectionState::Connected(_, peer) => Some(*peer),
             _ => None,
         }
     }
@@ -255,7 +255,7 @@ impl Network {
             }
 
             if let Some(s) = &arg.string_value {
-                let cef_str = cef::types::string::CefString::new(&s);
+                let cef_str = cef::types::string::CefString::new(s);
                 list.set_string(idx, &cef_str);
             }
         }
@@ -349,7 +349,7 @@ impl Network {
     }
 
     fn net_emit_event(&mut self, event: String, args: String) {
-        if let ConnectionState::Connected(address, peer) = self.connection_state {
+        if let ConnectionState::Connected(_address, peer) = self.connection_state {
             let emit = packets::EmitEvent {
                 event_name: event.into(),
                 args: Some(args.into()),
@@ -363,7 +363,7 @@ impl Network {
     }
 
     fn net_browser_created(&mut self, browser_id: u32, status_code: i32) {
-        if let ConnectionState::Connected(address, peer) = self.connection_state {
+        if let ConnectionState::Connected(_address, peer) = self.connection_state {
             let created = packets::BrowserCreated {
                 browser_id,
                 status_code,
@@ -388,7 +388,7 @@ impl Network {
                         }
                     }
 
-                    SocketEvent::Disconnect(peer, addr) => {
+                    SocketEvent::Disconnect(peer, _addr) => {
                         if peer == server_peer {
                             log::trace!("CEF Network: Timeout");
                             handle_result(self.event_tx.send(Event::Timeout));
@@ -416,7 +416,7 @@ impl Network {
         if let ConnectionState::Auth(addr, time, _) = &self.connection_state {
             if time.elapsed() >= Duration::from_millis(2500) {
                 log::trace!("CEF Network: CEF didn't connect. Retrying ...");
-                self.net_open_connection(addr.clone());
+                self.net_open_connection(*addr);
             }
         }
     }

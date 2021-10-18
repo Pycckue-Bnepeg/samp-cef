@@ -1,6 +1,6 @@
 use libloading::Library;
 use std::os::windows::ffi::OsStrExt;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 const DLL_PROCESS_ATTACH: u32 = 1;
 const DLL_PROCESS_DETACH: u32 = 0;
@@ -19,8 +19,7 @@ pub extern "stdcall" fn DllMain(_instance: u32, reason: u32, _reserved: u32) -> 
             let path = {
                 let try_launcher = std::env::args()
                     .skip_while(|arg| !arg.contains("--lp"))
-                    .skip(1)
-                    .next()
+                    .nth(1)
                     .map(|p| PathBuf::from(&p));
 
                 let try_exe_path = std::env::current_exe()
@@ -57,5 +56,5 @@ pub extern "stdcall" fn DllMain(_instance: u32, reason: u32, _reserved: u32) -> 
         }
     }
 
-    return true;
+    true
 }

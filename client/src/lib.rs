@@ -6,7 +6,7 @@ use winapi::shared::minwindef::HMODULE;
 use winapi::um::libloaderapi::DisableThreadLibraryCalls;
 use winapi::um::winnt::{DLL_PROCESS_ATTACH, DLL_PROCESS_DETACH};
 
-use simplelog::{CombinedLogger, Config, LevelFilter, TermLogger, TerminalMode, WriteLogger};
+use simplelog::{CombinedLogger, LevelFilter, WriteLogger};
 use std::fs::File;
 
 pub mod app;
@@ -67,5 +67,5 @@ pub extern "stdcall" fn DllMain(instance: HMODULE, reason: u32, _reserved: u32) 
         app::uninitialize();
     }
 
-    return true;
+    true
 }

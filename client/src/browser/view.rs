@@ -10,8 +10,7 @@ use std::ops::{Deref, DerefMut};
 use std::ptr::NonNull;
 use winapi::shared::d3d9::{IDirect3DDevice9, IDirect3DSurface9, IDirect3DTexture9};
 use winapi::shared::d3d9types::{
-    D3DFMT_A8R8G8B8, D3DLOCKED_RECT, D3DLOCK_DISCARD, D3DPOOL_DEFAULT, D3DPOOL_MANAGED,
-    D3DSURFACE_DESC, D3DUSAGE_DYNAMIC, D3DUSAGE_WRITEONLY,
+    D3DFMT_A8R8G8B8, D3DLOCKED_RECT, D3DPOOL_DEFAULT, D3DSURFACE_DESC, D3DUSAGE_DYNAMIC,
 };
 
 const D3D_OK: i32 = 0;
@@ -162,7 +161,7 @@ impl D3Container {
                     Some(D3LockGuard {
                         bytes: std::slice::from_raw_parts_mut(rect.pBits as *mut u8, size as usize),
                         pitch: rect.Pitch as usize,
-                        surface: surface.clone(),
+                        surface: *surface,
                     })
                 } else {
                     None
@@ -256,7 +255,7 @@ impl RwContainer {
                 RwLockGuard {
                     bytes: std::slice::from_raw_parts_mut(bytes, size as usize),
                     pitch: raster.as_mut().stride as usize,
-                    raster: raster.clone(),
+                    raster: *raster,
                 }
             })
         }
@@ -379,8 +378,12 @@ impl View {
 
     #[inline]
     pub fn draw(&mut self) {
-        self.rw_sprite.as_mut().map(|rw| rw.draw());
-        self.directx.as_mut().map(|d3d9| d3d9.draw());
+        if let Some(rw) = self.rw_sprite.as_mut() {
+            rw.draw()
+        }
+        if let Some(d3d9) = self.directx.as_mut() {
+            d3d9.draw()
+        }
     }
 
     #[inline(always)]
@@ -494,7 +497,7 @@ impl View {
     }
 
     pub fn rwtexture(&mut self) -> Option<NonNull<RwTexture>> {
-        self.renderware.as_mut().and_then(|rw| rw.texture.clone())
+        self.renderware.as_mut().and_then(|rw| rw.texture)
     }
 
     pub fn is_empty(&self) -> bool {
@@ -538,8 +541,6 @@ impl View {
         if let Some(mut bytes) = self.renderware.as_mut().and_then(|rw| rw.bytes()) {
             let pitch = bytes.pitch;
             func(&mut *bytes, pitch);
-
-            return;
         }
     }
 }

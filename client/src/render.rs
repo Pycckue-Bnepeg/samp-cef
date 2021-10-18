@@ -10,7 +10,7 @@ use crate::browser::manager::{ExternalClient, Manager};
 
 use client_api::gta::entity::CEntity;
 use client_api::gta::menu_manager::CMenuManager;
-use client_api::gta::rw::{self, rpworld::*, rwcore::*, rwplcore::*};
+use client_api::gta::rw::{self, rpworld::*, rwplcore::*};
 use client_api::samp::objects::Object;
 
 use detour::GenericDetour;
@@ -161,7 +161,7 @@ struct RenderState {
 extern "thiscall" fn centity_render(obj: *mut CEntity) {
     if let Some(render) = Render::get() {
         let mut manager = render.manager.lock();
-        let entity = unsafe { &mut *obj };
+        let _entity = unsafe { &mut *obj };
 
         let browsers = manager.external_browsers();
 
@@ -230,7 +230,7 @@ extern "C" fn atomic_callback(atomic: *mut RpAtomic, data: *mut c_void) -> *mut 
         }
     }
 
-    return atomic;
+    atomic
 }
 
 unsafe fn before_entity_render(materials: &mut [*mut RpMaterial], client: &mut ExternalClient) {
@@ -248,21 +248,19 @@ unsafe fn before_entity_render(materials: &mut [*mut RpMaterial], client: &mut E
 
             let mut view = client.browser.view.lock();
 
-            if view.rwtexture().is_none() {
-                if !(*texture).raster.is_null() {
-                    let raster = &mut *(*texture).raster;
-                    let width = (raster.width * client.scale) as usize;
-                    let height = (raster.height * client.scale) as usize;
+            if view.rwtexture().is_none() && !(*texture).raster.is_null() {
+                let raster = &mut *(*texture).raster;
+                let width = (raster.width * client.scale) as usize;
+                let height = (raster.height * client.scale) as usize;
 
-                    view.set_render_mode(crate::utils::current_render_mode());
+                view.set_render_mode(crate::utils::current_render_mode());
 
-                    drop(view);
+                drop(view);
 
-                    client.browser.resize(width, height);
-                    client.browser.restore_hide_status();
+                client.browser.resize(width, height);
+                client.browser.restore_hide_status();
 
-                    view = client.browser.view.lock();
-                }
+                view = client.browser.view.lock();
             }
 
             if let Some(replace) = view.rwtexture() {

@@ -51,7 +51,7 @@ pub fn cef_keyboard_modifiers(wparam: WPARAM, lparam: LPARAM) -> u32 {
 
         VK_INSERT | VK_DELETE | VK_HOME | VK_END | VK_PRIOR | VK_NEXT | VK_UP | VK_DOWN
         | VK_LEFT | VK_RIGHT => {
-            if !(((lparam >> 16) & KF_EXTENDED as isize) != 0) {
+            if ((lparam >> 16) & KF_EXTENDED as isize) == 0 {
                 modifiers |= EVENTFLAG_IS_KEY_PAD;
             }
         }
@@ -97,7 +97,7 @@ pub fn cef_keyboard_modifiers(wparam: WPARAM, lparam: LPARAM) -> u32 {
         _ => (),
     }
 
-    return modifiers as u32;
+    modifiers as u32
 }
 
 pub fn client_rect() -> [usize; 2] {
@@ -158,8 +158,7 @@ pub fn documents_path() -> PathBuf {
 pub fn cef_dir() -> PathBuf {
     if let Some(path) = std::env::args()
         .skip_while(|arg| !arg.contains("--lp"))
-        .skip(1)
-        .next()
+        .nth(1)
     {
         PathBuf::from(path).join("cef")
     } else {

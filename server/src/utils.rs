@@ -17,12 +17,7 @@ pub fn parse_config_field<F: FromStr>(field: &str) -> Option<F> {
                 .lines()
                 .find(|line| line.starts_with(field))
                 .map(|borrow| borrow.to_string())
-                .and_then(|bind| {
-                    bind.split(" ")
-                        .skip(1)
-                        .next()
-                        .map(|borrow| borrow.to_string())
-                })
+                .and_then(|bind| bind.split(' ').nth(1).map(|borrow| borrow.to_string()))
         })
         .and_then(|addr| addr.parse().ok())
 }

@@ -34,7 +34,7 @@ impl App for DefaultApp {
     }
 
     fn on_before_command_line_processing(
-        self: &Arc<Self>, process_type: CefString, command_line: CommandLine,
+        self: &Arc<Self>, _process_type: CefString, command_line: CommandLine,
     ) {
         command_line.append_switch("disable-gpu-compositing");
         command_line.append_switch("disable-gpu");

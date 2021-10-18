@@ -21,7 +21,7 @@ use client_api::samp::inputs;
 use client_api::samp::netgame::NetGame;
 use client_api::samp::objects::Object;
 use client_api::samp::players::local_player;
-use client_api::samp::Gamestate;
+
 use client_api::wndproc;
 
 use crossbeam_channel::{Receiver, Sender};
@@ -270,7 +270,7 @@ pub fn initialize() {
                 "You have installed an unsupported SA:MP version.\nCurrently supported versions are 0.3.7 R1 and R3.",
             );
 
-        return; // don't waste time
+        // don't waste time
     }
 }
 
@@ -302,10 +302,8 @@ fn shitty() {
             log::trace!("SAMP init within {:?}", app.initialization.elapsed());
             app.samp_ready = true;
             app.manager.lock().initialize_cef();
-        } else {
-            if !app.window_focused {
-                mainloop(); //
-            }
+        } else if !app.window_focused {
+            mainloop(); //
         }
     }
 }
@@ -458,7 +456,7 @@ pub fn mainloop() {
                 }
 
                 Event::LoadUrl(browser, url) => {
-                    let mut manager = app.manager.lock();
+                    let manager = app.manager.lock();
                     manager.load_url(browser, &url);
                 }
 
@@ -575,11 +573,9 @@ fn win_event(msg: UINT, wparam: WPARAM, lparam: LPARAM) -> bool {
                             app.key_state[key_index] = false;
                             notify_key_down = true;
                         }
-                    } else {
-                        if event.type_ != cef_key_event_type_t::KEYEVENT_CHAR {
-                            app.key_state[key_index] =
-                                event.type_ == cef_key_event_type_t::KEYEVENT_RAWKEYDOWN;
-                        }
+                    } else if event.type_ != cef_key_event_type_t::KEYEVENT_CHAR {
+                        app.key_state[key_index] =
+                            event.type_ == cef_key_event_type_t::KEYEVENT_RAWKEYDOWN;
                     }
                 }
 
@@ -615,7 +611,7 @@ fn win_event(msg: UINT, wparam: WPARAM, lparam: LPARAM) -> bool {
         return manager.is_input_blocked() && !notify_key_down;
     }
 
-    return false;
+    false
 }
 
 // TODO: Add ability to return the right AsyncKeyState result
@@ -632,5 +628,5 @@ extern "stdcall" fn async_key_state(key: i32) -> u16 {
         }
     }
 
-    return 0;
+    0
 }

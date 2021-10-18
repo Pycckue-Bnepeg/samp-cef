@@ -4,14 +4,14 @@ use crate::browser::client::WebClient;
 use crate::external::{BrowserReadyCallback, CallbackList};
 
 use cef::handlers::render::PaintElement;
-use cef::types::list::{List, ValueType};
+use cef::types::list::List;
 use cef::types::string::CefString;
 use cef_sys::{cef_event_flags_t, cef_key_event_t, cef_mouse_button_type_t, cef_mouse_event_t};
 
 use std::collections::{HashMap, VecDeque};
-use std::sync::{Arc, MutexGuard};
+use std::sync::Arc;
 
-use client_api::gta::rw::rwcore::{RwRaster, RwTexture};
+use client_api::gta::rw::rwcore::RwTexture;
 use client_api::gta::rw::rwplcore::RwSurfaceProperties;
 
 use crossbeam_channel::Sender;
@@ -174,7 +174,7 @@ impl Manager {
                     }
                 }
 
-                if cl.object_ids.len() == 0 {
+                if cl.object_ids.is_empty() {
                     cl.browser.hide(true);
                 }
             });
@@ -235,10 +235,9 @@ impl Manager {
         for (_, client) in &self.clients {
             client.on_reset_device();
 
-            client
-                .browser()
-                .map(|browser| browser.host())
-                .map(|host| host.invalidate(PaintElement::View));
+            if let Some(host) = client.browser().map(|browser| browser.host()) {
+                host.invalidate(PaintElement::View)
+            }
         }
     }
 
@@ -347,7 +346,7 @@ impl Manager {
         // отправлять события клавиш ТОЛЬКО сфокусированному браузеру. иначе можно и другим запросившим
         if let Some(client) = self.focused.as_ref().and_then(|id| self.clients.get(id)) {
             if let Some(host) = client.browser().map(|browser| browser.host()) {
-                host.send_keyboard_event(event.clone());
+                host.send_keyboard_event(event);
             }
         } else {
             for host in self
@@ -357,7 +356,7 @@ impl Manager {
                 .map(|client| client.browser().map(|browser| browser.host()))
                 .flatten()
             {
-                host.send_keyboard_event(event.clone());
+                host.send_keyboard_event(event);
             }
         }
     }
@@ -400,15 +399,18 @@ impl Manager {
                 } else {
                     self.focused = Some(id);
                 }
+            } else if self
+                .focused
+                .as_ref()
+                .filter(|focused| **focused == id)
+                .is_some()
+            {
+                self.focused = self.focused_queue.pop_front();
             } else {
-                if let Some(_) = self.focused.as_ref().filter(|focused| **focused == id) {
-                    self.focused = self.focused_queue.pop_front();
-                } else {
-                    self.focused_queue
-                        .iter()
-                        .position(|&queue| queue == id)
-                        .map(|idx| self.focused_queue.remove(idx));
-                }
+                self.focused_queue
+                    .iter()
+                    .position(|&queue| queue == id)
+                    .map(|idx| self.focused_queue.remove(idx));
             }
         }
     }
@@ -464,15 +466,15 @@ impl Manager {
     }
 
     pub fn toggle_dev_tools(&self, browser_id: u32, enabled: bool) {
-        self.clients
-            .get(&browser_id)
-            .map(|client| client.toggle_dev_tools(enabled));
+        if let Some(client) = self.clients.get(&browser_id) {
+            client.toggle_dev_tools(enabled)
+        }
     }
 
     pub fn always_listen_keys(&self, browser_id: u32, listen: bool) {
-        self.clients
-            .get(&browser_id)
-            .map(|client| client.set_always_listen_keys(listen));
+        if let Some(client) = self.clients.get(&browser_id) {
+            client.set_always_listen_keys(listen)
+        }
     }
 
     pub fn set_audio_settings(&mut self, browser_id: u32, audio_settings: BrowserAudioSettings) {
@@ -485,15 +487,15 @@ impl Manager {
     }
 
     pub fn load_url(&self, browser_id: u32, url: &str) {
-        self.clients
-            .get(&browser_id)
-            .map(|client| client.load_url(url));
+        if let Some(client) = self.clients.get(&browser_id) {
+            client.load_url(url)
+        }
     }
 
     pub fn call_browser_ready(&self, browser_id: u32) {
-        self.ready_callbacks
-            .get(&browser_id)
-            .map(|callbacks| callbacks.iter().for_each(|cb| cb(browser_id)));
+        if let Some(callbacks) = self.ready_callbacks.get(&browser_id) {
+            callbacks.iter().for_each(|cb| cb(browser_id))
+        }
     }
 
     pub fn add_browser_ready(&mut self, browser_id: u32, callback: BrowserReadyCallback) {
@@ -504,7 +506,7 @@ impl Manager {
 
         self.ready_callbacks
             .entry(browser_id)
-            .or_insert_with(|| Vec::new())
+            .or_insert_with(Vec::new)
             .push(callback);
     }
 

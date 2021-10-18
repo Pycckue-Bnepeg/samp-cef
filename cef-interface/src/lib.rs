@@ -56,10 +56,8 @@ pub extern "C" fn cef_samp_mainloop() {
                             .values_mut()
                             .filter(|comp| comp.is_part_of_interface())
                             .for_each(|comp| comp.set_visible(visible));
-                    } else {
-                        if let Some(component) = app.hud.get_mut(&name) {
-                            component.set_visible(visible);
-                        }
+                    } else if let Some(component) = app.hud.get_mut(&name) {
+                        component.set_visible(visible);
                     }
                 }
 

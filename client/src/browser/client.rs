@@ -1,10 +1,10 @@
-use std::collections::{HashSet, VecDeque};
+use std::collections::HashSet;
 use std::ffi::CString;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc,
 };
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use crossbeam_channel::Sender;
 use parking_lot::{Condvar, Mutex};
@@ -22,14 +22,12 @@ use cef::ProcessId;
 
 use cef_sys::{cef_audio_parameters_t, cef_rect_t};
 
-use client_api::gta::rw::rwcore::{RwRaster, RwTexture};
 use client_api::utils::handle_result;
 
 use crate::app::Event;
 use crate::audio::Audio;
 use crate::browser::view::View;
 use crate::external::{CallbackList, EXTERNAL_BREAK};
-use crate::utils::RenderMode;
 
 struct DrawData {
     buffer: *const u8,
@@ -259,7 +257,7 @@ impl RenderHandler for WebClient {
     fn on_popup_size(self: &Arc<Self>, _: Browser, rect: &cef_rect_t) {
         let mut draw_data = self.draw_data.lock();
 
-        draw_data.popup_rect = rect.clone();
+        draw_data.popup_rect = *rect;
 
         draw_data
             .popup_buffer
@@ -292,7 +290,7 @@ impl RenderHandler for WebClient {
                     if draw_data.popup_was_before && !draw_data.popup_show {
                         draw_data.popup_was_before = false;
                         dirty_rects.count += 1;
-                        dirty_rects.rects.push(draw_data.popup_rect.clone());
+                        dirty_rects.rects.push(draw_data.popup_rect);
                     }
 
                     draw_data.rects = dirty_rects;
@@ -337,7 +335,7 @@ impl RenderHandler for WebClient {
 }
 
 impl LoadHandler for WebClient {
-    fn on_load_end(self: &Arc<Self>, browser: Browser, frame: Frame, status_code: i32) {
+    fn on_load_end(self: &Arc<Self>, _browser: Browser, frame: Frame, status_code: i32) {
         log::trace!(
             "LoadHandler::on_load_end. id: {} status: {}",
             self.id,
@@ -353,7 +351,7 @@ impl LoadHandler for WebClient {
 
 impl AudioHandler for WebClient {
     fn get_audio_parameters(
-        self: &Arc<Self>, browser: Browser, params: &mut cef_audio_parameters_t,
+        self: &Arc<Self>, _browser: Browser, params: &mut cef_audio_parameters_t,
     ) -> bool {
         log::trace!(
             "get_audio_parameters: {} {} {}",
@@ -366,7 +364,7 @@ impl AudioHandler for WebClient {
     }
 
     fn on_audio_stream_packet(
-        self: &Arc<Self>, browser: Browser, stream_id: i32, data: *mut *const f32, frames: i32,
+        self: &Arc<Self>, _browser: Browser, stream_id: i32, data: *mut *const f32, frames: i32,
         pts: i64,
     ) {
         if let Some(audio) = self.audio.as_ref() {
@@ -375,7 +373,7 @@ impl AudioHandler for WebClient {
     }
 
     fn on_audio_stream_started(
-        self: &Arc<Self>, browser: Browser, stream_id: i32, channels: i32, channel_layout: i32,
+        self: &Arc<Self>, _browser: Browser, stream_id: i32, channels: i32, _channel_layout: i32,
         sample_rate: i32, frames_per_buffer: i32,
     ) {
         if let Some(audio) = self.audio.as_ref() {
@@ -388,13 +386,13 @@ impl AudioHandler for WebClient {
         }
     }
 
-    fn on_audio_stream_stopped(self: &Arc<Self>, browser: Browser, stream_id: i32) {
+    fn on_audio_stream_stopped(self: &Arc<Self>, _browser: Browser, stream_id: i32) {
         if let Some(audio) = self.audio.as_ref() {
             audio.remove_stream(self.id, stream_id);
         }
     }
 
-    fn on_audio_stream_error(self: &Arc<Self>, browser: Browser, error: String) {
+    fn on_audio_stream_error(self: &Arc<Self>, _browser: Browser, error: String) {
         log::trace!("on_audio_stream_error: {:?}", error);
     }
 }
@@ -557,7 +555,7 @@ impl WebClient {
                     }
                 }
 
-                texture.update_texture(&bytes, draw_data.rects.as_slice());
+                texture.update_texture(bytes, draw_data.rects.as_slice());
             }
 
             if draw_data.popup_show {
@@ -591,7 +589,7 @@ impl WebClient {
     pub fn browser(&self) -> Option<Browser> {
         let browser = self.browser.lock();
 
-        browser.as_ref().map(|browser| browser.clone())
+        browser.as_ref().cloned()
     }
 
     pub fn hide(&self, hide: bool) {
@@ -695,9 +693,9 @@ impl WebClient {
         self.closing.store(true, Ordering::SeqCst);
         self.unlock();
 
-        self.browser()
-            .map(|br| br.host())
-            .map(|host| host.close_browser(force_close));
+        if let Some(host) = self.browser().map(|br| br.host()) {
+            host.close_browser(force_close)
+        }
     }
 
     pub fn always_listen_keys(&self) -> bool {
