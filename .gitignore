@@ -4,3 +4,4 @@ Cargo.lock
 .idea
 /linux-build
 deploy.cmd
+rust-toolchain.toml

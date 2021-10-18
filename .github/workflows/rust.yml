@@ -148,6 +148,17 @@ jobs:
       run: cargo build --release
       shell: bash
 
+    - name: Make a package
+      run: |
+        mkdir redist && cd redist
+        curl -L https://github.com/ZOTTCE/samp-cef/releases/download/v1.1-beta/cef.zip -o cef_redist.zip
+        7z x cef_redist.zip -ocef
+        cp ../target/release/client.dll cef/client.dll
+        cp ../target/release/renderer.exe cef/renderer.exe
+        cp ../target/release/loader.dll cef.asi
+        7z a -tzip cef.zip cef.asi cef
+      shell: bash
+
     - uses: actions/upload-artifact@v2
       with:
         name: client.dll
@@ -167,3 +178,8 @@ jobs:
       with:
         name: cef-windows.dll
         path: target/release/server.dll
+
+    - uses: actions/upload-artifact@v2
+      with:
+        name: cef.zip
+        path: redist/cef.zip
