@@ -1,8 +1,9 @@
 use crate::utils::RenderMode;
 use cef_sys::cef_rect_t;
 use client_api::gta::matrix::CRect;
+use client_api::gta::rw;
 use client_api::gta::rw::rwcore::{RwRaster, RwTexture};
-use client_api::gta::rw::rwplcore::RwRGBA;
+use client_api::gta::rw::rwplcore::{self, RwRGBA};
 use client_api::gta::sprite::Sprite;
 use d3dx9::d3dx9core::{D3DXCreateSprite, ID3DXSprite};
 use d3dx9::d3dx9math::D3DXVECTOR3;
@@ -311,7 +312,12 @@ impl SpriteContainer {
                 alpha: 0xFF,
             };
 
+            let prev = rw::render_state(rwplcore::RENDERSTATETEXTUREFILTER);
+
+            rw::set_render_state(rwplcore::RENDERSTATETEXTUREFILTER, rwplcore::FILTERNEAREST);
             sprite.draw(rect, color);
+
+            rw::set_render_state(rwplcore::RENDERSTATETEXTUREFILTER, prev);
         }
     }
 
