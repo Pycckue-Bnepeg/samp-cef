@@ -52,8 +52,6 @@ pub extern "stdcall" fn DllMain(instance: HMODULE, reason: u32, _reserved: u32) 
         )])
         .unwrap();
 
-        render::preinitialize();
-
         std::thread::spawn(|| {
             #[cfg(feature = "crash_logger")]
             crash_logger::initialize();

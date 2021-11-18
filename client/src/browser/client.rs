@@ -403,8 +403,8 @@ impl WebClient {
 
         log::trace!("crate::utils::client_rect: {:?}", rect);
 
-        let mut view = View::new(crate::utils::current_render_mode());
-        view.make_directx(client_api::gta::d3d9::device(), rect[0], rect[1]);
+        let mut view = View::new();
+        view.make_display(rect[0], rect[1]);
 
         let client = WebClient {
             hidden: AtomicBool::new(false),
@@ -428,7 +428,7 @@ impl WebClient {
     pub fn new_extern(
         id: u32, cbs: CallbackList, event_tx: Sender<Event>, audio: Arc<Audio>,
     ) -> Arc<WebClient> {
-        let view = View::new(crate::utils::current_render_mode());
+        let view = View::new();
 
         let client = WebClient {
             hidden: AtomicBool::new(false),
@@ -462,7 +462,7 @@ impl WebClient {
         {
             let mut texture = self.view.lock();
             texture.on_lost_device();
-            texture.make_empty();
+            texture.make_inactive();
         }
 
         self.unlock();
@@ -477,8 +477,8 @@ impl WebClient {
             } else {
                 let rect = crate::utils::client_rect();
 
-                view.set_render_mode(crate::utils::current_render_mode());
-                view.make_directx(client_api::gta::d3d9::device(), rect[0], rect[1]);
+                view.make_active();
+                view.make_display(rect[0], rect[1]);
 
                 self.notify_was_resized();
             }
@@ -489,14 +489,8 @@ impl WebClient {
 
     #[inline]
     pub fn resize(&self, width: usize, height: usize) {
-        let device = if self.is_extern() {
-            None
-        } else {
-            Some(client_api::gta::d3d9::device())
-        };
-
         let mut view = self.view.lock();
-        view.resize(device, width, height);
+        view.resize(self.is_extern(), width, height);
         self.notify_was_resized();
 
         self.unlock();
@@ -639,7 +633,7 @@ impl WebClient {
     }
 
     pub fn remove_view(&self) {
-        self.view.lock().make_empty();
+        self.view.lock().make_inactive();
     }
 
     pub fn toggle_dev_tools(&self, enabled: bool) {

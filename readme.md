@@ -37,7 +37,6 @@ And also all client-side parts (`cef.asi`, `client.dll`, `renderer.exe`).
 ### Dependencies
 - [Rust compiler (nightly) with `i686-windows-pc-msvc` toolchain](https://rust-lang.org)
 - Prebuilt CEF with proprietary codes (if you wanna use streams). I had one for you in releases. (Client only)
-- Microsoft DirectX SDK (June 2010) (Client only)
 - Environment variable `CEF_PATH` that points to `libcef.lib` (client only).
     - In powershell it's like `$env:CEF_PATH="C:/some/path"`
     - Then build

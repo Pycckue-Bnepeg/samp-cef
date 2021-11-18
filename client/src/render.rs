@@ -4,8 +4,6 @@ use std::time::Instant;
 
 use parking_lot::Mutex;
 
-use winapi::shared::d3d9::IDirect3DDevice9;
-
 use crate::browser::manager::{ExternalClient, Manager};
 
 use client_api::gta::entity::CEntity;
@@ -15,12 +13,15 @@ use client_api::samp::objects::Object;
 
 use detour::GenericDetour;
 
-const RESET_FLAG_PRE: u8 = 0;
-const RESET_FLAG_POST: u8 = 1;
-
 static mut RENDER: Option<Render> = None;
 
 const REFERENCE_FRAMES: u64 = 10;
+
+const DRAWING_EVENT: usize = 0x58FAE0;
+const SHUTDOWN_RW_EVENT: usize = 0x53BB80;
+
+type DrawingEventFn = extern "C" fn();
+type ShutdownRwEventFn = extern "C" fn();
 
 struct FrameCounter {
     start_at: Instant,
@@ -31,8 +32,9 @@ struct FrameCounter {
 struct Render {
     manager: Arc<Mutex<Manager>>,
     centity_render: GenericDetour<extern "thiscall" fn(obj: *mut CEntity)>,
+    drawing_event: GenericDetour<DrawingEventFn>,
+    shutdown_event: GenericDetour<ShutdownRwEventFn>,
     counter: FrameCounter,
-    init: bool,
 }
 
 impl Render {
@@ -61,19 +63,31 @@ impl Render {
     }
 }
 
-pub fn preinitialize() {
-    client_api::gta::d9_proxy::set_proxy(on_create, on_render, on_reset, on_destroy);
-}
-
 pub fn initialize(manager: Arc<Mutex<Manager>>) {
     log::trace!("hooking CEntity::render");
 
     let centity_render = unsafe {
         let render_func: extern "thiscall" fn(*mut CEntity) = std::mem::transmute(0x00534310);
         let centity_render = GenericDetour::new(render_func, centity_render).unwrap();
-        centity_render.enable().unwrap();
 
+        centity_render.enable().unwrap();
         centity_render
+    };
+
+    let drawing_event = unsafe {
+        let func: DrawingEventFn = std::mem::transmute(DRAWING_EVENT);
+        let hook = GenericDetour::new(func, drawing_event).unwrap();
+
+        hook.enable().unwrap();
+        hook
+    };
+
+    let shutdown_event = unsafe {
+        let func: ShutdownRwEventFn = std::mem::transmute(SHUTDOWN_RW_EVENT);
+        let hook = GenericDetour::new(func, shutdown_event).unwrap();
+
+        hook.enable().unwrap();
+        hook
     };
 
     log::trace!("hooking ok ...");
@@ -87,8 +101,9 @@ pub fn initialize(manager: Arc<Mutex<Manager>>) {
     let render = Render {
         manager,
         centity_render,
+        drawing_event,
+        shutdown_event,
         counter,
-        init: false,
     };
 
     unsafe {
@@ -102,11 +117,7 @@ pub fn uninitialize() {
     }
 }
 
-fn on_create() {
-    log::trace!("GTA: Device is created!");
-}
-
-fn on_render(_: &mut IDirect3DDevice9) {
+fn on_render() {
     if let Some(render) = Render::get() {
         let fps = render.calc_frames();
 
@@ -125,28 +136,9 @@ fn on_render(_: &mut IDirect3DDevice9) {
     crate::app::mainloop();
 }
 
-fn on_reset(_: &mut IDirect3DDevice9, reset_flag: u8) {
-    if let Some(render) = Render::get() {
-        let mut manager = render.manager.lock();
+fn on_destroy() {
+    log::trace!("rwshutdown ...");
 
-        match reset_flag {
-            RESET_FLAG_PRE => {
-                manager.on_lost_device();
-                drop(manager);
-                crate::external::call_dxreset();
-            }
-
-            RESET_FLAG_POST => {
-                manager.on_reset_device();
-                let rect = crate::utils::client_rect();
-                manager.resize(rect[0], rect[1]);
-            }
-            _ => (),
-        }
-    }
-}
-
-fn on_destroy(_: &mut IDirect3DDevice9) {
     if let Some(render) = Render::get() {
         let mut manager = render.manager.lock();
         manager.remove_views();
@@ -156,6 +148,22 @@ fn on_destroy(_: &mut IDirect3DDevice9) {
 struct RenderState {
     client: *mut ExternalClient,
     before: bool,
+}
+
+extern "C" fn drawing_event() {
+    if let Some(render) = Render::get() {
+        render.drawing_event.call();
+    }
+
+    on_render();
+}
+
+extern "C" fn shutdown_event() {
+    on_destroy();
+
+    if let Some(render) = Render::get() {
+        render.shutdown_event.call();
+    }
 }
 
 extern "thiscall" fn centity_render(obj: *mut CEntity) {
@@ -253,7 +261,7 @@ unsafe fn before_entity_render(materials: &mut [*mut RpMaterial], client: &mut E
                 let width = (raster.width * client.scale) as usize;
                 let height = (raster.height * client.scale) as usize;
 
-                view.set_render_mode(crate::utils::current_render_mode());
+                view.make_active();
 
                 drop(view);
 
