@@ -79,10 +79,7 @@ impl ConnectionState {
     }
 
     fn is_auth(&self) -> bool {
-        match self {
-            ConnectionState::Auth(_, _, _) => true,
-            _ => false,
-        }
+        matches!(self, ConnectionState::Auth(_, _, _))
     }
 }
 

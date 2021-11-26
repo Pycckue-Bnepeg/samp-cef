@@ -595,6 +595,7 @@ fn win_event(msg: UINT, wparam: WPARAM, lparam: LPARAM) -> bool {
                 crate::external::window_active(active);
                 app.window_focused = active;
                 manager.set_corrupted(!active);
+                manager.do_not_draw(!active);
 
                 return false;
             }

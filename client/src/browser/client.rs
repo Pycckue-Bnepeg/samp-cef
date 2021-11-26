@@ -71,6 +71,7 @@ pub struct WebClient {
     id: u32, // static
     is_extern: bool,
     hidden: AtomicBool,
+    prev_hidden_flag: AtomicBool,
     closing: AtomicBool,
     listen_keys: AtomicBool,
     pub view: Mutex<View>,
@@ -300,11 +301,6 @@ impl RenderHandler for WebClient {
                     draw_data.changed = true;
                 }
             }
-            // }
-            //
-            // {
-
-            let timing = std::time::Instant::now();
 
             let (mutex, cv) = &self.rendered;
             let mut rendered = mutex.lock();
@@ -314,20 +310,7 @@ impl RenderHandler for WebClient {
             drop(view);
             drop(draw_data);
 
-            // if cv
-            //     .wait_for(&mut rendered, Duration::from_millis(10_000))
-            //     .timed_out()
-            // {
-            //     log::trace!("timed_out ... fuckit");
-            // }
-
-            cv.wait(&mut rendered);
-
-            let dur = timing.elapsed();
-
-            if dur >= Duration::from_millis(100) {
-                log::trace!("was waiting for ... {:?}", dur);
-            }
+            cv.wait_for(&mut rendered, Duration::from_secs(1));
         }
 
         self.draw_data.lock().changed = false;
@@ -408,6 +391,7 @@ impl WebClient {
 
         let client = WebClient {
             hidden: AtomicBool::new(false),
+            prev_hidden_flag: AtomicBool::new(false),
             closing: AtomicBool::new(false),
             listen_keys: AtomicBool::new(false),
             view: Mutex::new(view),
@@ -432,6 +416,7 @@ impl WebClient {
 
         let client = WebClient {
             hidden: AtomicBool::new(false),
+            prev_hidden_flag: AtomicBool::new(false),
             closing: AtomicBool::new(false),
             listen_keys: AtomicBool::new(false),
             view: Mutex::new(view),
@@ -457,7 +442,7 @@ impl WebClient {
 
     #[inline]
     pub fn on_lost_device(&self) {
-        self.internal_hide(true, false); // hide browser but do not save value
+        self.internal_hide(true, true); // hide browser but do not save value
 
         {
             let mut texture = self.view.lock();
@@ -587,13 +572,17 @@ impl WebClient {
     }
 
     pub fn hide(&self, hide: bool) {
-        self.internal_hide(hide, true);
+        self.internal_hide(hide, false);
     }
 
-    pub fn internal_hide(&self, hide: bool, store_value: bool) {
-        if store_value {
-            self.hidden.store(hide, Ordering::SeqCst);
+    pub fn internal_hide(&self, hide: bool, update_prev: bool) {
+        if update_prev {
+            let cur = self.hidden.load(Ordering::SeqCst);
+            self.prev_hidden_flag.store(cur, Ordering::SeqCst);
         }
+
+        self.hidden.store(hide, Ordering::SeqCst);
+        self.unlock();
 
         if let Some(host) = self.browser().map(|browser| browser.host()) {
             if hide {
@@ -613,7 +602,7 @@ impl WebClient {
     }
 
     pub fn restore_hide_status(&self) {
-        self.internal_hide(self.hidden.load(Ordering::SeqCst), false);
+        self.internal_hide(self.prev_hidden_flag.load(Ordering::SeqCst), false);
     }
 
     pub fn set_audio_muted(&self, muted: bool) {
@@ -641,7 +630,7 @@ impl WebClient {
 
         let id = self.id();
 
-        self.browser().map(|br| br.host()).map(|host| {
+        if let Some(host) = self.browser().map(|br| br.host()) {
             if enabled {
                 let caption = format!("Dev Tools for {} browser", id);
                 let window_name = cef::types::string::CefString::new(&caption);
@@ -666,7 +655,7 @@ impl WebClient {
             } else {
                 host.close_dev_tools();
             }
-        });
+        }
     }
 
     pub fn load_url(&self, url: &str) {

@@ -579,7 +579,7 @@ impl Manager {
     fn temporary_hide(&self, hide: bool) {
         for client in self.clients.values() {
             if hide {
-                client.internal_hide(true, false);
+                client.internal_hide(true, true);
             } else {
                 client.restore_hide_status();
             }

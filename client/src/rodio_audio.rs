@@ -700,9 +700,9 @@ impl Iterator for StreamingSound {
             match self.queue.next() {
                 Some(sample) => return Some(sample),
                 None => {
-                    let push = if self.playing && !self.pending.is_empty() {
-                        true
-                    } else if !self.playing && self.pending.len() >= 8 {
+                    let push = if (self.playing && !self.pending.is_empty())
+                        || (!self.playing && self.pending.len() >= 8)
+                    {
                         true
                     } else {
                         self.playing = false;
