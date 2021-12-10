@@ -310,7 +310,13 @@ impl RenderHandler for WebClient {
             drop(view);
             drop(draw_data);
 
-            cv.wait_for(&mut rendered, Duration::from_secs(1));
+            if cv
+                .wait_for(&mut rendered, Duration::from_secs(2))
+                .timed_out()
+                && !*rendered
+            {
+                return;
+            }
         }
 
         self.draw_data.lock().changed = false;

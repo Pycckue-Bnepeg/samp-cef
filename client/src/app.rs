@@ -190,6 +190,10 @@ impl App {
             }
         });
 
+        client_api::samp::deathwindow::DeathWindow::on_draw(|| {
+            crate::render::render();
+        });
+
         client_api::gta::game::on_shutdown(|| {
             log::trace!("gta::game::on_shutdown calling unitialize");
             uninitialize();

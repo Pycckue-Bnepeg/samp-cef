@@ -118,6 +118,10 @@ pub fn uninitialize() {
 }
 
 fn on_render() {
+    crate::app::mainloop();
+}
+
+pub fn render() {
     if let Some(render) = Render::get() {
         let fps = render.calc_frames();
 
@@ -132,8 +136,6 @@ fn on_render() {
             manager.draw();
         }
     }
-
-    crate::app::mainloop();
 }
 
 fn on_destroy() {
