@@ -527,14 +527,19 @@ fn win_event(msg: UINT, wparam: WPARAM, lparam: LPARAM) -> bool {
 
                 manager.send_mouse_move_event(x, y);
             }
-
-            WM_LBUTTONDOWN => manager.send_mouse_click_event(MouseKey::Left, true),
-            WM_LBUTTONUP => manager.send_mouse_click_event(MouseKey::Left, false),
-            WM_RBUTTONDOWN => manager.send_mouse_click_event(MouseKey::Right, true),
-            WM_RBUTTONUP => manager.send_mouse_click_event(MouseKey::Right, false),
-            WM_MBUTTONDOWN => manager.send_mouse_click_event(MouseKey::Middle, true),
-            WM_MBUTTONUP => manager.send_mouse_click_event(MouseKey::Middle, false),
-
+			
+            WM_LBUTTONDOWN => manager.send_mouse_click_event(MouseKey::Left, true, 1),
+            WM_LBUTTONUP => manager.send_mouse_click_event(MouseKey::Left, false, 1),
+            WM_LBUTTONDBLCLK => manager.send_mouse_click_event(MouseKey::Left, true, 2),
+			
+            WM_RBUTTONDOWN => manager.send_mouse_click_event(MouseKey::Right, true, 1),
+            WM_RBUTTONUP => manager.send_mouse_click_event(MouseKey::Right, false, 1),
+            WM_RBUTTONDBLCLK => manager.send_mouse_click_event(MouseKey::Right, true, 2),
+			
+            WM_MBUTTONDOWN => manager.send_mouse_click_event(MouseKey::Middle, true, 1),
+            WM_MBUTTONUP => manager.send_mouse_click_event(MouseKey::Middle, false, 1),
+            WM_MBUTTONDBLCLK => manager.send_mouse_click_event(MouseKey::Middle, true, 2),
+			
             WM_MOUSEWHEEL => {
                 let delta = if (wparam >> 16) as i16 > 0 { 1 } else { -1 };
                 manager.send_mouse_wheel(delta);

@@ -152,13 +152,13 @@ impl BrowserHost {
     }
 
     pub fn send_mouse_click(
-        &self, key: cef_sys::cef_mouse_button_type_t::Type, event: cef_mouse_event_t, is_down: bool,
+        &self, key: cef_sys::cef_mouse_button_type_t::Type, event: cef_mouse_event_t, is_down: bool, clickCount: i32
     ) {
         if let Some(smce) = self.inner.send_mouse_click_event {
             unsafe {
                 let up = if is_down { 0 } else { 1 };
 
-                smce(self.inner.get_mut(), &event, key, up, 1);
+                smce(self.inner.get_mut(), &event, key, up, clickCount);
             }
         }
     }
