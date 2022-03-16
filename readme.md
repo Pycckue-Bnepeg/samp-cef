@@ -1,3 +1,6 @@
+[![SWUbanner](https://raw.githubusercontent.com/vshymanskyy/StandWithUkraine/main/banner-direct-single.svg)](https://vshymanskyy.github.io/StandWithUkraine)
+
+[![StandWithUkraine](https://raw.githubusercontent.com/vshymanskyy/StandWithUkraine/main/badges/StandWithUkraine.svg)](https://vshymanskyy.github.io/StandWithUkraine) [![RussianWarship](https://raw.githubusercontent.com/vshymanskyy/StandWithUkraine/main/badges/RussianWarship.svg)](https://vshymanskyy.github.io/StandWithUkraine)
 # SAMP CEF
 This project embeds CEF into SA:MP expanding abilities to express yourself with beauty in-game interfaces using HTML / CSS / JavaScript.
 
@@ -87,11 +90,11 @@ Chromium URL:     https://chromium.googlesource.com/chromium/src.git
 - Also, check out wiki on github.
 
 ## Video examples
-- https://www.youtube.com/watch?v=Jh9IBlOKoVM (гоблин на весь дом)
-- https://www.youtube.com/watch?v=jU-O8_t1AfI (простые интерфейсы)
-- https://www.youtube.com/watch?v=qs7n8LoVYs4 (кастомный интерфейс гта)
-- https://www.youtube.com/watch?v=vcyTjn3RJhs (голосовой чят)
-- https://www.youtube.com/watch?v=6OnCSHKcOGU (кухня по телеку)
+- https://www.youtube.com/watch?v=Jh9IBlOKoVM (гоблін на весь будинок)
+- https://www.youtube.com/watch?v=jU-O8_t1AfI (прості інтерфейси)
+- https://www.youtube.com/watch?v=qs7n8LoVYs4 (кастомний інтерфейс гта)
+- https://www.youtube.com/watch?v=vcyTjn3RJhs (голосовий чят)
+- https://www.youtube.com/watch?v=6OnCSHKcOGU (кухня по телiку)
 
 ## BIG TODO: EXAMPLES
 But it's similar to fivem or ragemp implementations.
