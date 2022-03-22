@@ -298,7 +298,7 @@ impl Manager {
     }
 
     #[inline]
-    pub fn send_mouse_click_event(&mut self, button: MouseKey, is_down: bool) {
+    pub fn send_mouse_click_event(&mut self, button: MouseKey, is_down: bool, clickCount: i32) {
         if self.input_corrupted {
             return;
         }
@@ -319,7 +319,7 @@ impl Manager {
                     MouseKey::Right => cef_mouse_button_type_t::MBT_RIGHT,
                 };
 
-                host.send_mouse_click(key, event, is_down);
+                host.send_mouse_click(key, event, is_down, clickCount);
             }
         }
     }
