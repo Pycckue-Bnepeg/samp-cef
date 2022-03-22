@@ -59,7 +59,7 @@ struct ActiveConnection {
 }
 
 pub struct Socket {
-    runtime: Runtime,
+    _runtime: Runtime,
     cmd_tx: Sender<Command>,
     event_rx: crossbeam_channel::Receiver<WorkerEvent>,
     peers_id: SlotMap<PeerId, ()>,
@@ -87,9 +87,9 @@ impl Socket {
         let (event_tx, event_rx) = crossbeam_channel::unbounded();
         let (cmd_tx, cmd_rx) = mpsc::unbounded_channel();
 
-        let runtime = Runtime::new().unwrap();
+        let _runtime = Runtime::new().unwrap();
 
-        runtime.block_on(async move {
+        _runtime.block_on(async move {
             let (endpoint, incoming) = builder.bind(&addr).unwrap();
 
             tokio::spawn(worker_task(
@@ -102,7 +102,7 @@ impl Socket {
         });
 
         Self {
-            runtime,
+            _runtime,
             cmd_tx,
             event_rx,
             peers_id: SlotMap::with_key(),
