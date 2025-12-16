@@ -48,11 +48,10 @@ If you get a linker error, you should change hard-coded links in the source code
 
 ### Running Rust
 and now
-> ~~`cargo +nightly build --target i686-windows-pc-msvc --release`~~
 
 ```sh
-rustup toolchain install nightly-i686
-cargo +nightly-i686 build --release
+rustup toolchain install nightly-2022-11-06-i686-pc-windows-msvc
+cargo build --release
 ```
 
 also the client plugin can be built using OpenAL for sound ([rodio](https://crates.io/crates/rodio) by default). to do that compile the client without default features. for example:
