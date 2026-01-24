@@ -15,7 +15,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-20.04, ubuntu-18.04]
+        os: [ubuntu-25.10, ubuntu-25.04, ubuntu-24.04]
 
     steps:
       - uses: actions/checkout@v4
@@ -63,59 +63,12 @@ jobs:
           name: cef-${{ matrix.os }}.so
           path: stripped.so
 
-  build_server_centos:
-    runs-on: ubuntu-latest
-    container: centos:7.5.1804
-
-    steps:
-      - name: Install deps
-        run: yum install -y git curl gcc gcc-c++ make
-
-      - name: Install pinned nightly + i686 target
-        uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: nightly-2022-11-06
-          targets: i686-unknown-linux-gnu
-
-      - uses: actions/checkout@v4
-
-      - name: Cache cargo registry
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-          key: cargo-registry-${{ runner.os }}-centos7-i686-unknown-linux-gnu-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            cargo-registry-${{ runner.os }}-centos7-i686-unknown-linux-gnu-
-            cargo-registry-${{ runner.os }}-centos7-
-
-      - name: Cache target dir
-        uses: actions/cache@v4
-        with:
-          path: |
-            ${{ github.workspace }}/target
-          key: cargo-target-${{ runner.os }}-centos7-i686-unknown-linux-gnu-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            cargo-target-${{ runner.os }}-centos7-i686-unknown-linux-gnu-
-            cargo-target-${{ runner.os }}-centos7-
-
-      - name: Build server plugin
-        run: |
-          cargo build --package server --release --target i686-unknown-linux-gnu
-          strip -s target/i686-unknown-linux-gnu/release/libserver.so -o stripped.so
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: cef-centos-7.so
-          path: stripped.so
-
   build_server_debian:
     runs-on: ubuntu-latest
     container: debian:${{ matrix.os }}
     strategy:
       matrix:
-        os: [9, 10, 11]
+        os: [12, 13]
 
     steps:
       - name: Install i386 deps
@@ -232,8 +185,8 @@ jobs:
             cargo-target-${{ runner.os }}-i686-pc-windows-msvc-
             cargo-target-${{ runner.os }}-
 
-      - name: Build client
-        run: cargo build --release
+      - name: Build client (i686)
+        run: cargo build --release --target i686-pc-windows-msvc
         shell: bash
 
       - name: Make a package
@@ -241,31 +194,31 @@ jobs:
           mkdir redist && cd redist
           curl -L https://github.com/ZOTTCE/samp-cef/releases/download/v1.1-beta/cef.zip -o cef_redist.zip
           7z x cef_redist.zip -ocef
-          cp ../target/release/client.dll cef/client.dll
-          cp ../target/release/renderer.exe cef/renderer.exe
-          cp ../target/release/loader.dll cef.asi
+          cp ../target/i686-pc-windows-msvc/release/client.dll cef/client.dll
+          cp ../target/i686-pc-windows-msvc/release/renderer.exe cef/renderer.exe
+          cp ../target/i686-pc-windows-msvc/release/loader.dll cef.asi
           7z a -tzip cef.zip cef.asi cef
         shell: bash
 
       - uses: actions/upload-artifact@v4
         with:
           name: client.dll
-          path: target/release/client.dll
+          path: target/i686-pc-windows-msvc/release/client.dll
 
       - uses: actions/upload-artifact@v4
         with:
           name: renderer.exe
-          path: target/release/renderer.exe
+          path: target/i686-pc-windows-msvc/release/renderer.exe
 
       - uses: actions/upload-artifact@v4
         with:
           name: cef.asi
-          path: target/release/loader.dll
+          path: target/i686-pc-windows-msvc/release/loader.dll
 
       - uses: actions/upload-artifact@v4
         with:
           name: cef-windows.dll
-          path: target/release/server.dll
+          path: target/i686-pc-windows-msvc/release/server.dll
 
       - uses: actions/upload-artifact@v4
         with:
