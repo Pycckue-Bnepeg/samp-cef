@@ -40,9 +40,13 @@ pub struct InternalApi {
 pub struct CefApi;
 
 impl CefApi {
+    /// # Safety
+    /// `api` must be a valid pointer to an initialized `InternalApi`.
     pub unsafe fn initialize(api: *mut InternalApi) {
-        let boxed = Box::new((*api).clone());
-        API = Box::into_raw(boxed);
+        let boxed = unsafe { Box::new((*api).clone()) };
+        unsafe {
+            API = Box::into_raw(boxed);
+        }
     }
 
     pub fn uninitialize() {

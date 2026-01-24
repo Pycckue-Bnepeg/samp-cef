@@ -2,7 +2,8 @@
 name = "cef-interface"
 version = "0.1.0"
 authors = ["ZOTTCE <zottce@gmail.com>"]
-edition = "2018"
+edition = "2024"
+rust-version = "1.93"
 
 [lib]
 crate-type = ["cdylib"]
@@ -10,5 +11,5 @@ crate-type = ["cdylib"]
 [dependencies]
 cef = { path = "../cef" }
 cef-api = { path = "../cef-api" }
-client-api = { git = "https://github.com/zottce/samp-client-api.git", branch = "destroy" }
-region = "2.2.0"
+client-api = { git = "https://github.com/zottce/samp-client-api.git", rev = "886d15e" }
+region = "3.0.2"

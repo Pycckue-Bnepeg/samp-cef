@@ -1,14 +1,15 @@
 use std::collections::HashSet;
 use std::ffi::CString;
 use std::sync::{
-    atomic::{AtomicBool, Ordering},
     Arc,
+    atomic::{AtomicBool, Ordering},
 };
 use std::time::Duration;
 
 use crossbeam_channel::Sender;
 use parking_lot::{Condvar, Mutex};
 
+use cef::ProcessId;
 use cef::browser::{Browser, ContextMenuParams, Frame, MenuModel};
 use cef::client::Client;
 use cef::handlers::audio::AudioHandler;
@@ -18,7 +19,6 @@ use cef::handlers::load::LoadHandler;
 use cef::handlers::render::{DirtyRects, PaintElement, RenderHandler};
 use cef::process_message::ProcessMessage;
 use cef::types::list::ValueType;
-use cef::ProcessId;
 
 use cef_sys::{cef_audio_parameters_t, cef_rect_t};
 
@@ -30,7 +30,7 @@ use crate::browser::view::View;
 use crate::external::{CallbackList, EXTERNAL_BREAK};
 
 struct DrawData {
-    buffer: *const u8,
+    view_buffer: Vec<u8>,
     width: usize,
     height: usize,
     rects: DirtyRects,
@@ -39,12 +39,13 @@ struct DrawData {
     popup_show: bool,
     popup_was_before: bool,
     changed: bool,
+    generation: u64,
 }
 
 impl DrawData {
     fn new() -> DrawData {
         DrawData {
-            buffer: std::ptr::null(),
+            view_buffer: Vec::new(),
             width: 0,
             height: 0,
             rects: DirtyRects {
@@ -63,6 +64,7 @@ impl DrawData {
             popup_show: false,
             popup_was_before: false,
             changed: false,
+            generation: 0,
         }
     }
 }
@@ -81,27 +83,36 @@ pub struct WebClient {
     event_tx: Sender<Event>,
     callbacks: CallbackList,
     object_list: Mutex<HashSet<i32>>,
-    rendered: (Mutex<bool>, Condvar),
+    rendered: (Mutex<u64>, Condvar),
 }
 
-impl LifespanHandler for WebClient {
-    fn on_after_created(self: &Arc<Self>, browser: Browser) {
+#[derive(Clone)]
+pub struct WebClientRef(Arc<WebClient>);
+
+impl From<Arc<WebClient>> for WebClientRef {
+    fn from(inner: Arc<WebClient>) -> Self {
+        Self(inner)
+    }
+}
+
+impl LifespanHandler for WebClientRef {
+    fn on_after_created(&self, browser: Browser) {
         {
-            let mut br = self.browser.lock();
+            let mut br = self.0.browser.lock();
             *br = Some(browser);
         }
 
-        let hidden = self.hidden.load(Ordering::SeqCst);
+        let hidden = self.0.hidden.load(Ordering::SeqCst);
 
         log::trace!("LifespanHandler::on_after_created. hidden: {}", hidden);
 
-        self.hide(hidden);
+        self.0.hide(hidden);
     }
 
-    fn on_before_close(self: &Arc<Self>, _: Browser) {
+    fn on_before_close(&self, _: Browser) {
         log::trace!("LifespanHandler::on_before_close");
 
-        let mut browser = self.browser.lock();
+        let mut browser = self.0.browser.lock();
 
         if let Some(browser) = browser.take() {
             browser.host().close_dev_tools();
@@ -109,31 +120,31 @@ impl LifespanHandler for WebClient {
     }
 }
 
-impl Client for WebClient {
+impl Client for WebClientRef {
     type LifespanHandler = Self;
     type RenderHandler = Self;
     type ContextMenuHandler = Self;
     type LoadHandler = Self;
     type AudioHandler = Self;
 
-    fn lifespan_handler(self: &Arc<Self>) -> Option<Arc<Self>> {
+    fn lifespan_handler(&self) -> Option<Self> {
         Some(self.clone())
     }
 
-    fn render_handler(self: &Arc<Self>) -> Option<Arc<Self>> {
+    fn render_handler(&self) -> Option<Self> {
         Some(self.clone())
     }
 
-    fn context_menu_handler(self: &Arc<Self>) -> Option<Arc<Self>> {
+    fn context_menu_handler(&self) -> Option<Self> {
         Some(self.clone())
     }
 
-    fn load_handler(self: &Arc<Self>) -> Option<Arc<Self>> {
+    fn load_handler(&self) -> Option<Self> {
         Some(self.clone())
     }
 
-    fn audio_handler(self: &Arc<Self>) -> Option<Arc<Self>> {
-        if self.is_extern {
+    fn audio_handler(&self) -> Option<Self> {
+        if self.0.is_extern {
             Some(self.clone())
         } else {
             None
@@ -141,13 +152,13 @@ impl Client for WebClient {
     }
 
     fn on_process_message(
-        self: &Arc<Self>, _browser: Browser, _frame: Frame, _source: ProcessId, msg: ProcessMessage,
+        &self, _browser: Browser, _frame: Frame, _source: ProcessId, msg: ProcessMessage,
     ) -> bool {
         let name = msg.name().to_string();
 
         log::trace!(
             "WebClient::on_process_message. browser_id: {}, message: {:?}",
-            self.id,
+            self.0.id,
             name
         );
 
@@ -162,7 +173,7 @@ impl Client for WebClient {
                     _ => false,
                 };
 
-                handle_result(self.event_tx.send(Event::FocusBrowser(self.id, focus)));
+                handle_result(self.0.event_tx.send(Event::FocusBrowser(self.0.id, focus)));
 
                 return true;
             }
@@ -177,7 +188,7 @@ impl Client for WebClient {
                     _ => false,
                 };
 
-                handle_result(self.event_tx.send(Event::HideBrowser(self.id, hide)));
+                handle_result(self.0.event_tx.send(Event::HideBrowser(self.0.id, hide)));
 
                 return true;
             }
@@ -190,7 +201,7 @@ impl Client for WebClient {
                 }
 
                 let event_name = args.string(0).to_string();
-                let callbacks = self.callbacks.lock();
+                let callbacks = self.0.callbacks.lock();
 
                 if let Some(cb) = callbacks.get(&event_name) {
                     let name = CString::new(event_name.clone()).unwrap(); // 100% valid string
@@ -221,7 +232,7 @@ impl Client for WebClient {
                 }
 
                 let event = Event::EmitEventOnServer(event_name, arguments);
-                handle_result(self.event_tx.send(event));
+                handle_result(self.0.event_tx.send(event));
             }
 
             _ => (),
@@ -231,22 +242,20 @@ impl Client for WebClient {
     }
 }
 
-impl ContextMenuHandler for WebClient {
-    fn on_before_context_menu(
-        self: &Arc<Self>, _: Browser, _: Frame, _: ContextMenuParams, model: MenuModel,
-    ) {
+impl ContextMenuHandler for WebClientRef {
+    fn on_before_context_menu(&self, _: Browser, _: Frame, _: ContextMenuParams, model: MenuModel) {
         model.clear(); // remove context menu
     }
 }
 
-impl RenderHandler for WebClient {
-    fn view_rect(self: &Arc<Self>, _: Browser, rect: &mut cef_rect_t) {
-        let texture = self.view.lock();
+impl RenderHandler for WebClientRef {
+    fn view_rect(&self, _: Browser, rect: &mut cef_rect_t) {
+        let texture = self.0.view.lock();
         *rect = texture.rect();
     }
 
-    fn on_popup_show(self: &Arc<Self>, _: Browser, show: bool) {
-        let mut draw_data = self.draw_data.lock();
+    fn on_popup_show(&self, _: Browser, show: bool) {
+        let mut draw_data = self.0.draw_data.lock();
         draw_data.popup_show = show;
 
         if !show {
@@ -255,8 +264,8 @@ impl RenderHandler for WebClient {
         }
     }
 
-    fn on_popup_size(self: &Arc<Self>, _: Browser, rect: &cef_rect_t) {
-        let mut draw_data = self.draw_data.lock();
+    fn on_popup_size(&self, _: Browser, rect: &cef_rect_t) {
+        let mut draw_data = self.0.draw_data.lock();
 
         draw_data.popup_rect = *rect;
 
@@ -266,17 +275,17 @@ impl RenderHandler for WebClient {
     }
 
     fn on_paint(
-        self: &Arc<Self>, _: Browser, paint_type: PaintElement, mut dirty_rects: DirtyRects,
-        buffer: &[u8], width: usize, height: usize,
+        &self, _: Browser, paint_type: PaintElement, mut dirty_rects: DirtyRects, buffer: &[u8],
+        width: usize, height: usize,
     ) {
-        let view = self.view.lock();
+        let view = self.0.view.lock();
 
-        if self.closing.load(Ordering::SeqCst) || view.is_empty() {
+        if self.0.closing.load(Ordering::SeqCst) || view.is_empty() {
             return;
         }
 
-        {
-            let mut draw_data = self.draw_data.lock();
+        let generation = {
+            let mut draw_data = self.0.draw_data.lock();
 
             match paint_type {
                 PaintElement::Popup => {
@@ -295,53 +304,66 @@ impl RenderHandler for WebClient {
                     }
 
                     draw_data.rects = dirty_rects;
-                    draw_data.buffer = buffer.as_ptr();
                     draw_data.height = height;
                     draw_data.width = width;
+                    if draw_data.view_buffer.len() != buffer.len() {
+                        draw_data.view_buffer.resize(buffer.len(), 0);
+                    }
+                    draw_data.view_buffer.copy_from_slice(buffer);
                     draw_data.changed = true;
+                    draw_data.generation = draw_data.generation.wrapping_add(1);
                 }
             }
 
-            let (mutex, cv) = &self.rendered;
-            let mut rendered = mutex.lock();
+            draw_data.generation
+        };
 
-            *rendered = false;
+        drop(view);
 
-            drop(view);
-            drop(draw_data);
+        let (mutex, cv) = &self.0.rendered;
+        let mut rendered = mutex.lock();
 
+        while *rendered < generation {
             if cv
                 .wait_for(&mut rendered, Duration::from_secs(2))
                 .timed_out()
-                && !*rendered
+                && *rendered < generation
             {
+                drop(rendered);
+                let mut draw_data = self.0.draw_data.lock();
+                if draw_data.generation == generation {
+                    draw_data.changed = false;
+                    draw_data.view_buffer.clear();
+                }
                 return;
             }
         }
 
-        self.draw_data.lock().changed = false;
-    }
-}
-
-impl LoadHandler for WebClient {
-    fn on_load_end(self: &Arc<Self>, _browser: Browser, frame: Frame, status_code: i32) {
-        log::trace!(
-            "LoadHandler::on_load_end. id: {} status: {}",
-            self.id,
-            status_code
-        );
-
-        if frame.is_main() {
-            let event = Event::BrowserCreated(self.id, status_code);
-            handle_result(self.event_tx.send(event));
+        drop(rendered);
+        let mut draw_data = self.0.draw_data.lock();
+        if draw_data.generation == generation {
+            draw_data.changed = false;
         }
     }
 }
 
-impl AudioHandler for WebClient {
-    fn get_audio_parameters(
-        self: &Arc<Self>, _browser: Browser, params: &mut cef_audio_parameters_t,
-    ) -> bool {
+impl LoadHandler for WebClientRef {
+    fn on_load_end(&self, _browser: Browser, frame: Frame, status_code: i32) {
+        log::trace!(
+            "LoadHandler::on_load_end. id: {} status: {}",
+            self.0.id,
+            status_code
+        );
+
+        if frame.is_main() {
+            let event = Event::BrowserCreated(self.0.id, status_code);
+            handle_result(self.0.event_tx.send(event));
+        }
+    }
+}
+
+impl AudioHandler for WebClientRef {
+    fn get_audio_parameters(&self, _browser: Browser, params: &mut cef_audio_parameters_t) -> bool {
         log::trace!(
             "get_audio_parameters: {} {} {}",
             params.sample_rate,
@@ -352,41 +374,50 @@ impl AudioHandler for WebClient {
         true
     }
 
+    #[allow(clippy::not_unsafe_ptr_arg_deref)]
     fn on_audio_stream_packet(
-        self: &Arc<Self>, _browser: Browser, stream_id: i32, data: *mut *const f32, frames: i32,
-        pts: i64,
+        &self, _browser: Browser, stream_id: i32, data: *mut *const f32, frames: i32, pts: i64,
     ) {
-        if let Some(audio) = self.audio.as_ref() {
-            audio.append_pcm(self.id, stream_id, data, frames, pts as u64);
-        }
-    }
-
-    fn on_audio_stream_started(
-        self: &Arc<Self>, _browser: Browser, stream_id: i32, channels: i32, _channel_layout: i32,
-        sample_rate: i32, frames_per_buffer: i32,
-    ) {
-        if let Some(audio) = self.audio.as_ref() {
-            audio.create_stream(self.id, stream_id, channels, sample_rate, frames_per_buffer);
-            let objects = self.object_list.lock();
-
-            for &object_id in objects.iter() {
-                audio.add_source(self.id, object_id);
+        if let Some(audio) = self.0.audio.as_ref() {
+            unsafe {
+                audio.append_pcm(self.0.id, stream_id, data, frames, pts as u64);
             }
         }
     }
 
-    fn on_audio_stream_stopped(self: &Arc<Self>, _browser: Browser, stream_id: i32) {
-        if let Some(audio) = self.audio.as_ref() {
-            audio.remove_stream(self.id, stream_id);
+    fn on_audio_stream_started(
+        &self, _browser: Browser, stream_id: i32, channels: i32, _channel_layout: i32,
+        sample_rate: i32, frames_per_buffer: i32,
+    ) {
+        if let Some(audio) = self.0.audio.as_ref() {
+            audio.create_stream(
+                self.0.id,
+                stream_id,
+                channels,
+                sample_rate,
+                frames_per_buffer,
+            );
+            let objects = self.0.object_list.lock();
+
+            for &object_id in objects.iter() {
+                audio.add_source(self.0.id, object_id);
+            }
         }
     }
 
-    fn on_audio_stream_error(self: &Arc<Self>, _browser: Browser, error: String) {
+    fn on_audio_stream_stopped(&self, _browser: Browser, stream_id: i32) {
+        if let Some(audio) = self.0.audio.as_ref() {
+            audio.remove_stream(self.0.id, stream_id);
+        }
+    }
+
+    fn on_audio_stream_error(&self, _browser: Browser, error: String) {
         log::trace!("on_audio_stream_error: {:?}", error);
     }
 }
 
 impl WebClient {
+    #[allow(clippy::arc_with_non_send_sync)]
     pub fn new(id: u32, cbs: CallbackList, event_tx: Sender<Event>) -> Arc<WebClient> {
         let rect = crate::utils::client_rect();
 
@@ -409,12 +440,13 @@ impl WebClient {
             audio: None,
             event_tx,
             id,
-            rendered: (Mutex::new(false), Condvar::new()),
+            rendered: (Mutex::new(0), Condvar::new()),
         };
 
         Arc::new(client)
     }
 
+    #[allow(clippy::arc_with_non_send_sync)]
     pub fn new_extern(
         id: u32, cbs: CallbackList, event_tx: Sender<Event>, audio: Arc<Audio>,
     ) -> Arc<WebClient> {
@@ -434,7 +466,7 @@ impl WebClient {
             audio: Some(audio),
             event_tx,
             id,
-            rendered: (Mutex::new(false), Condvar::new()),
+            rendered: (Mutex::new(0), Condvar::new()),
         };
 
         Arc::new(client)
@@ -456,7 +488,7 @@ impl WebClient {
             texture.make_inactive();
         }
 
-        self.unlock();
+        self.signal_rendered_current();
     }
 
     #[inline]
@@ -484,7 +516,7 @@ impl WebClient {
         view.resize(self.is_extern(), width, height);
         self.notify_was_resized();
 
-        self.unlock();
+        self.signal_rendered_current();
     }
 
     fn notify_was_resized(&self) {
@@ -498,14 +530,15 @@ impl WebClient {
     #[inline]
     pub fn update_view(&self) {
         if self.hidden.load(Ordering::SeqCst) || self.closing.load(Ordering::SeqCst) {
-            self.unlock();
+            self.signal_rendered_current();
             return;
         }
 
-        {
+        let generation = {
             let mut texture = self.view.lock();
             let mut draw_data = self.draw_data.lock();
             let size = texture.rect();
+            let generation = draw_data.generation;
 
             if draw_data.changed
                 && (size.height as usize != draw_data.height
@@ -515,59 +548,60 @@ impl WebClient {
             }
 
             if draw_data.changed {
-                if draw_data.buffer.is_null() {
-                    self.unlock();
-                    return;
-                }
-
                 if draw_data.height == 0 || draw_data.width == 0 {
-                    self.unlock();
-                    return;
+                    draw_data.changed = false;
                 }
 
-                let bytes = unsafe {
-                    std::slice::from_raw_parts(
-                        draw_data.buffer,
-                        draw_data.width * draw_data.height * 4,
-                    )
-                };
+                let expected_len = draw_data.width * draw_data.height * 4;
+
+                if draw_data.view_buffer.len() < expected_len {
+                    draw_data.changed = false;
+                }
 
                 if draw_data.rects.count > 0 {
                     let rect = &draw_data.rects.rects[0];
                     if rect.width > size.width || rect.height > size.height {
-                        self.unlock();
-                        return;
+                        draw_data.changed = false;
                     }
                 }
 
-                texture.update_texture(bytes, draw_data.rects.as_slice());
+                if draw_data.changed {
+                    let bytes = &draw_data.view_buffer[..expected_len];
+                    texture.update_texture(bytes, draw_data.rects.as_slice());
+                }
             }
 
-            if draw_data.popup_show {
-                if draw_data.popup_rect.x + draw_data.popup_rect.width >= size.width
-                    || draw_data.popup_rect.y + draw_data.popup_rect.height >= size.height
-                {
-                    self.unlock();
-                    return;
-                }
-
+            if draw_data.popup_show
+                && draw_data.popup_rect.x + draw_data.popup_rect.width < size.width
+                && draw_data.popup_rect.y + draw_data.popup_rect.height < size.height
+            {
                 texture.update_popup(&draw_data.popup_buffer, &draw_data.popup_rect);
             }
-        }
 
-        self.unlock();
+            generation
+        };
+
+        self.signal_rendered(generation);
     }
 
     #[inline(always)]
-    fn unlock(&self) {
+    fn signal_rendered(&self, generation: u64) {
         let (mutex, cv) = &self.rendered;
 
         {
             let mut rendered = mutex.lock();
-            *rendered = true;
+            if generation > *rendered {
+                *rendered = generation;
+            }
         }
 
         cv.notify_all();
+    }
+
+    #[inline(always)]
+    fn signal_rendered_current(&self) {
+        let generation = self.draw_data.lock().generation;
+        self.signal_rendered(generation);
     }
 
     #[inline(always)]
@@ -588,7 +622,7 @@ impl WebClient {
         }
 
         self.hidden.store(hide, Ordering::SeqCst);
-        self.unlock();
+        self.signal_rendered_current();
 
         if let Some(host) = self.browser().map(|browser| browser.host()) {
             if hide {
@@ -680,7 +714,7 @@ impl WebClient {
 
     pub fn close(&self, force_close: bool) {
         self.closing.store(true, Ordering::SeqCst);
-        self.unlock();
+        self.signal_rendered_current();
 
         if let Some(host) = self.browser().map(|br| br.host()) {
             host.close_browser(force_close)

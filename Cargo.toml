@@ -1,4 +1,5 @@
 [workspace]
+resolver = "3"
 members = [
     "cef-sys",
     "cef",
@@ -11,6 +12,7 @@ members = [
     "cef-interface",
     "network",
 ]
+
 
 [profile.release]
 # lto = true

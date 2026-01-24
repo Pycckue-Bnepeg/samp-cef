@@ -1,4 +1,3 @@
 [toolchain]
-channel = "nightly-2022-11-06"
-profile = "minimal"
-targets = ["i686-pc-windows-msvc"]
+channel = "stable"
+components = ["rustfmt", "clippy"]

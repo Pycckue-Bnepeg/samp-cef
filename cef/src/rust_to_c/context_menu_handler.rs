@@ -7,9 +7,7 @@ use cef_sys::{
     cef_menu_model_t,
 };
 
-use std::sync::Arc;
-
-unsafe extern "stdcall" fn on_before_context_menu<I: ContextMenuHandler>(
+unsafe extern "system" fn on_before_context_menu<I: ContextMenuHandler>(
     this: *mut cef_context_menu_handler_t, browser: *mut cef_browser_t, frame: *mut cef_frame_t,
     params: *mut cef_context_menu_params_t, model: *mut cef_menu_model_t,
 ) {
@@ -24,7 +22,7 @@ unsafe extern "stdcall" fn on_before_context_menu<I: ContextMenuHandler>(
         .on_before_context_menu(browser, frame, params, model);
 }
 
-pub fn wrap<T: ContextMenuHandler>(context_menu: Arc<T>) -> *mut cef_context_menu_handler_t {
+pub fn wrap<T: ContextMenuHandler>(context_menu: T) -> *mut cef_context_menu_handler_t {
     let mut object: cef_context_menu_handler_t = unsafe { std::mem::zeroed() };
 
     object.on_before_context_menu = Some(on_before_context_menu::<T>);

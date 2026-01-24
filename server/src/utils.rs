@@ -1,6 +1,7 @@
 use log::error;
 use std::str::FromStr;
 
+#[allow(dead_code)]
 pub fn handle_result<T, E: std::fmt::Debug>(result: Result<T, E>) -> Option<T> {
     if let Err(err) = result.as_ref() {
         error!("{:?}", err);

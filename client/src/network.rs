@@ -9,11 +9,13 @@ use crate::app::{Event, ExternalBrowser};
 use std::net::SocketAddr;
 use std::time::{Duration, Instant};
 
+#[allow(dead_code)]
 struct Packet {
     peer: PeerId,
     bytes: Vec<u8>,
 }
 
+#[allow(dead_code)]
 impl Packet {
     fn new(peer: PeerId, bytes: Vec<u8>) -> Packet {
         Packet { peer, bytes }
@@ -208,14 +210,17 @@ impl Network {
         if let ConnectionState::Auth(addr, _, peer) = self.connection_state {
             if packet.success {
                 self.connection_state = ConnectionState::Connected(addr, peer);
+
+                log::trace!("CEF Network: JoinResponse OK. {:?}", self.connection_state);
+                handle_result(self.event_tx.send(Event::NetworkJoined));
             } else {
                 self.connection_state = ConnectionState::Disconnected;
+                log::trace!(
+                    "CEF Network: JoinResponse failed. server_version: {:?}",
+                    packet.current_version
+                );
                 handle_result(self.event_tx.send(Event::BadVersion));
             }
-
-            log::trace!("CEF Network: JoinResponse OK. {:?}", self.connection_state);
-
-            handle_result(self.event_tx.send(Event::NetworkJoined));
         } else {
             log::trace!(
                 "CEF Network: JoinResponse error. {:?}",
@@ -376,12 +381,11 @@ impl Network {
             while let Some(event) = self.socket.recv() {
                 match event {
                     SocketEvent::Message(peer, packet) => {
-                        if peer == server_peer {
-                            if let Err(e) = deserialize_from_slice(&packet)
+                        if peer == server_peer
+                            && let Err(e) = deserialize_from_slice(&packet)
                                 .map(|packet| self.handle_packet(packet))
-                            {
-                                log::trace!("malformed packet from the server: {}", e);
-                            }
+                        {
+                            log::trace!("malformed packet from the server: {}", e);
                         }
                     }
 
@@ -410,11 +414,11 @@ impl Network {
             }
         }
 
-        if let ConnectionState::Auth(addr, time, _) = &self.connection_state {
-            if time.elapsed() >= Duration::from_millis(2500) {
-                log::trace!("CEF Network: CEF didn't connect. Retrying ...");
-                self.net_open_connection(*addr);
-            }
+        if let ConnectionState::Auth(addr, time, _) = &self.connection_state
+            && time.elapsed() >= Duration::from_millis(2500)
+        {
+            log::trace!("CEF Network: CEF didn't connect. Retrying ...");
+            self.net_open_connection(*addr);
         }
     }
 

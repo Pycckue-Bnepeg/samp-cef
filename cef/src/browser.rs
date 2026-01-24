@@ -4,14 +4,13 @@ use cef_sys::{
     cef_window_info_t,
 };
 
+use crate::ProcessId;
 use crate::client::Client;
 use crate::handlers::render::PaintElement;
 use crate::process_message::ProcessMessage;
 use crate::ref_counted::RefGuard;
 use crate::types::string::CefString;
 use crate::v8::V8Context;
-use crate::ProcessId;
-use std::sync::Arc;
 
 pub struct Browser {
     inner: RefGuard<cef_browser_t>,
@@ -81,7 +80,7 @@ impl BrowserHost {
     }
 
     pub fn create_browser<T: Client>(
-        wnd_info: &cef_window_info_t, client: Option<Arc<T>>, url: &CefString,
+        wnd_info: &cef_window_info_t, client: Option<T>, url: &CefString,
         settings: &cef_browser_settings_t,
     ) -> i32 {
         let client_ptr = client
@@ -268,6 +267,7 @@ impl Frame {
     }
 }
 
+#[allow(dead_code)]
 #[derive(Clone)]
 pub struct ContextMenuParams {
     inner: RefGuard<cef_context_menu_params_t>,

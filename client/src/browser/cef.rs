@@ -1,27 +1,27 @@
 use winapi::um::libloaderapi::GetModuleHandleA;
 
 use cef::app::App;
-use cef::client::Client;
 use cef::command_line::CommandLine;
 use cef::handlers::browser_process::BrowserProcessHandler;
 use cef::handlers::render_process::RenderProcessHandler;
 use cef::types::string::CefString;
 
-use std::sync::Arc;
-
 use crossbeam_channel::Sender;
 
 use crate::app::Event;
+use crate::browser::client::{WebClient, WebClientRef};
+use std::sync::Arc;
 
+#[derive(Clone)]
 struct DefaultApp {
     event_tx: Sender<Event>,
 }
 
 impl RenderProcessHandler for DefaultApp {}
 impl BrowserProcessHandler for DefaultApp {
-    fn on_context_initialized(self: &Arc<Self>) {
+    fn on_context_initialized(&self) {
         log::trace!("BrowserProcessHandler::on_context_initialized");
-        self.event_tx.send(Event::CefInitialize);
+        let _ = self.event_tx.send(Event::CefInitialize);
     }
 }
 
@@ -29,12 +29,12 @@ impl App for DefaultApp {
     type RenderProcessHandler = Self;
     type BrowserProcessHandler = Self;
 
-    fn browser_process_handler(self: &Arc<Self>) -> Option<Arc<Self::BrowserProcessHandler>> {
+    fn browser_process_handler(&self) -> Option<Self::BrowserProcessHandler> {
         Some(self.clone())
     }
 
     fn on_before_command_line_processing(
-        self: &Arc<Self>, _process_type: CefString, command_line: CommandLine,
+        &self, _process_type: CefString, command_line: CommandLine,
     ) {
         command_line.append_switch("disable-gpu-compositing");
         command_line.append_switch("disable-gpu");
@@ -85,7 +85,7 @@ pub fn initialize(event_tx: Sender<Event>) {
     settings.log_file = log_file;
     settings.user_data_path = user_data;
 
-    let app = Arc::new(DefaultApp { event_tx });
+    let app = DefaultApp { event_tx };
 
     log::trace!("PRE cef::initialize");
 
@@ -94,7 +94,7 @@ pub fn initialize(event_tx: Sender<Event>) {
     log::trace!("POST cef::initialize");
 }
 
-pub fn create_browser<T: Client>(client: Arc<T>, url: &str) {
+pub fn create_browser(client: Arc<WebClient>, url: &str) {
     let mut window_info = unsafe { std::mem::zeroed::<cef_sys::cef_window_info_t>() };
 
     window_info.parent_window = client_api::gta::hwnd() as *mut _;
@@ -114,6 +114,7 @@ pub fn create_browser<T: Client>(client: Arc<T>, url: &str) {
 
     log::trace!("PRE BrowserHost::create_browser");
 
+    let client = WebClientRef::from(client);
     let result =
         cef::browser::BrowserHost::create_browser(&window_info, Some(client), &url, &settings);
 

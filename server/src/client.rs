@@ -26,6 +26,7 @@ impl Client {
         }
     }
 
+    #[allow(dead_code)]
     pub fn is_connected(&self) -> bool {
         self.state == State::Connected
     }

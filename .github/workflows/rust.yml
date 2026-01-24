@@ -20,10 +20,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install pinned nightly + i686 target
+      - name: Install stable + i686 target
         uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: nightly-2022-11-06
+          toolchain: stable
           targets: i686-unknown-linux-gnu
 
       - name: Install i386 deps
@@ -77,10 +77,10 @@ jobs:
           apt-get update
           apt-get install -y build-essential curl make g++-multilib
 
-      - name: Install pinned nightly + i686 target
+      - name: Install stable + i686 target
         uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: nightly-2022-11-06
+          toolchain: stable
           targets: i686-unknown-linux-gnu
 
       - uses: actions/checkout@v4
@@ -158,10 +158,10 @@ jobs:
           mv libcef.lib $CEF_PATH/libcef.lib
         shell: bash
 
-      - name: Install pinned nightly + i686 target (MSVC)
+      - name: Install stable + i686 target (MSVC)
         uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: nightly-2022-11-06
+          toolchain: stable
           targets: i686-pc-windows-msvc
 
       - name: Cache cargo registry

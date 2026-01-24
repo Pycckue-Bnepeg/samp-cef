@@ -2,11 +2,12 @@
 name = "cef"
 version = "0.1.0"
 authors = ["ZOTTCE <zottce@gmail.com>"]
-edition = "2018"
+edition = "2024"
+rust-version = "1.93"
 
 [dependencies]
 cef-sys = { path = "../cef-sys" }
-widestring = "0.4.3"
+widestring = "1.2.1"
 
 [dev-dependencies]
 testdrop = "0.1.2"

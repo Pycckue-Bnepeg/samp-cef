@@ -5,15 +5,16 @@ use std::time::Instant;
 use parking_lot::Mutex;
 
 use crate::browser::manager::{ExternalClient, Manager};
+use crate::static_cell::StaticCell;
 
 use client_api::gta::entity::CEntity;
 use client_api::gta::menu_manager::CMenuManager;
 use client_api::gta::rw::{self, rpworld::*, rwplcore::*};
 use client_api::samp::objects::Object;
 
-use detour::GenericDetour;
+use retour::GenericDetour;
 
-static mut RENDER: Option<Render> = None;
+static RENDER: StaticCell<Render> = StaticCell::new();
 
 const REFERENCE_FRAMES: u64 = 10;
 
@@ -39,7 +40,7 @@ struct Render {
 
 impl Render {
     fn get<'a>() -> Option<&'a mut Render> {
-        unsafe { RENDER.as_mut() }
+        unsafe { RENDER.get_mut() }
     }
 
     fn calc_frames(&mut self) -> Option<u64> {
@@ -107,7 +108,7 @@ pub fn initialize(manager: Arc<Mutex<Manager>>) {
     };
 
     unsafe {
-        RENDER = Some(render);
+        RENDER.set(render);
     }
 }
 
@@ -178,30 +179,34 @@ extern "thiscall" fn centity_render(obj: *mut CEntity) {
         for browser in browsers {
             let browser_ptr = browser as *mut _; // должно быть safe
             for &object_id in &browser.object_ids {
-                if let Some(object) = Object::get(object_id) {
-                    if let Some(obj_entity) = object.entity() {
-                        if obj == obj_entity as *mut _ as *mut CEntity {
-                            let rwobject = obj_entity._base._base.rw_entity as *mut RwObject;
+                if let Some(object) = Object::get(object_id)
+                    && let Some(obj_entity) = object.entity()
+                    && obj == obj_entity as *mut _ as *mut CEntity
+                {
+                    let rwobject = obj_entity._base._base.rw_entity as *mut RwObject;
 
-                            if !rwobject.is_null() {
-                                let mut render_state = RenderState {
-                                    client: browser_ptr,
-                                    before: true,
-                                };
+                    if !rwobject.is_null() {
+                        let mut before_state = RenderState {
+                            client: browser_ptr,
+                            before: true,
+                        };
 
-                                let render_ptr = &mut render_state as *mut _ as *mut c_void;
+                        let before_ptr = &mut before_state as *mut _ as *mut c_void;
 
-                                replace_texture(rwobject, render_ptr);
+                        replace_texture(rwobject, before_ptr);
 
-                                render.centity_render.call(obj);
+                        render.centity_render.call(obj);
 
-                                render_state.before = false;
+                        let mut after_state = RenderState {
+                            client: browser_ptr,
+                            before: false,
+                        };
 
-                                replace_texture(rwobject, render_ptr);
+                        let after_ptr = &mut after_state as *mut _ as *mut c_void;
 
-                                return;
-                            }
-                        }
+                        replace_texture(rwobject, after_ptr);
+
+                        return;
                     }
                 }
             }
@@ -245,8 +250,13 @@ extern "C" fn atomic_callback(atomic: *mut RpAtomic, data: *mut c_void) -> *mut 
 
 unsafe fn before_entity_render(materials: &mut [*mut RpMaterial], client: &mut ExternalClient) {
     for material in materials {
-        if !(*material).is_null() {
-            let texture = (**material).texture;
+        let material = *material;
+        unsafe {
+            if material.is_null() {
+                continue;
+            }
+
+            let texture = (*material).texture;
 
             if texture.is_null() {
                 continue;
@@ -274,15 +284,15 @@ unsafe fn before_entity_render(materials: &mut [*mut RpMaterial], client: &mut E
             }
 
             if let Some(replace) = view.rwtexture() {
-                client.origin_surface_props = (**material).surface_props.clone();
+                client.origin_surface_props = (*material).surface_props.clone();
 
-                (**material).surface_props.ambient = 16.0;
-                (**material).surface_props.diffuse = 0.0;
-                (**material).surface_props.specular = 0.0;
+                (*material).surface_props.ambient = 16.0;
+                (*material).surface_props.diffuse = 0.0;
+                (*material).surface_props.specular = 0.0;
 
-                client.origin_texture = (**material).texture;
+                client.origin_texture = (*material).texture;
                 client.prev_replacement = replace.as_ptr();
-                (**material).texture = replace.as_ptr();
+                (*material).texture = replace.as_ptr();
 
                 break; // replaced. do not replace another
             }
@@ -292,15 +302,20 @@ unsafe fn before_entity_render(materials: &mut [*mut RpMaterial], client: &mut E
 
 unsafe fn after_entity_render(materials: &mut [*mut RpMaterial], client: &mut ExternalClient) {
     for material in materials {
-        if !(*material).is_null() {
-            let texture = (**material).texture;
+        let material = *material;
+        unsafe {
+            if material.is_null() {
+                continue;
+            }
+
+            let texture = (*material).texture;
 
             if texture.is_null() || texture != client.prev_replacement {
                 continue;
             }
 
-            (**material).texture = client.origin_texture;
-            (**material).surface_props = client.origin_surface_props.clone();
+            (*material).texture = client.origin_texture;
+            (*material).surface_props = client.origin_surface_props.clone();
 
             break; //
         }

@@ -216,7 +216,7 @@ impl Manager {
     pub fn on_lost_device(&mut self) {
         log::trace!("manager::on_lost_device");
 
-        for (_, browser) in &self.clients {
+        for browser in self.clients.values() {
             browser.on_lost_device();
 
             if browser.is_extern() {
@@ -232,7 +232,7 @@ impl Manager {
     pub fn on_reset_device(&self) {
         log::trace!("manager::on_reset_device");
 
-        for (_, client) in &self.clients {
+        for client in self.clients.values() {
             client.on_reset_device();
 
             if let Some(host) = client.browser().map(|browser| browser.host()) {
@@ -258,7 +258,7 @@ impl Manager {
         self.view_width = width;
         self.view_height = height;
 
-        for (_, browser) in &self.clients {
+        for browser in self.clients.values() {
             if !browser.is_extern() {
                 browser.resize(width, height);
             }
@@ -271,29 +271,29 @@ impl Manager {
             return;
         }
 
-        if let Some(client) = self.focused.as_ref().and_then(|id| self.clients.get(id)) {
-            if let Some(host) = client.browser().map(|browser| browser.host()) {
-                self.mouse.x = x;
-                self.mouse.y = y;
+        if let Some(client) = self.focused.as_ref().and_then(|id| self.clients.get(id))
+            && let Some(host) = client.browser().map(|browser| browser.host())
+        {
+            self.mouse.x = x;
+            self.mouse.y = y;
 
-                let keys = &self.mouse.keys;
+            let keys = &self.mouse.keys;
 
-                let mut event = cef_mouse_event_t { x, y, modifiers: 0 };
+            let mut event = cef_mouse_event_t { x, y, modifiers: 0 };
 
-                if keys.get(&MouseKey::Left).cloned().unwrap_or(false) {
-                    event.modifiers |= cef_event_flags_t::EVENTFLAG_LEFT_MOUSE_BUTTON as u32;
-                }
-
-                if keys.get(&MouseKey::Middle).cloned().unwrap_or(false) {
-                    event.modifiers |= cef_event_flags_t::EVENTFLAG_MIDDLE_MOUSE_BUTTON as u32;
-                }
-
-                if keys.get(&MouseKey::Right).cloned().unwrap_or(false) {
-                    event.modifiers |= cef_event_flags_t::EVENTFLAG_RIGHT_MOUSE_BUTTON as u32;
-                }
-
-                host.send_mouse_move(event);
+            if keys.get(&MouseKey::Left).cloned().unwrap_or(false) {
+                event.modifiers |= cef_event_flags_t::EVENTFLAG_LEFT_MOUSE_BUTTON as u32;
             }
+
+            if keys.get(&MouseKey::Middle).cloned().unwrap_or(false) {
+                event.modifiers |= cef_event_flags_t::EVENTFLAG_MIDDLE_MOUSE_BUTTON as u32;
+            }
+
+            if keys.get(&MouseKey::Right).cloned().unwrap_or(false) {
+                event.modifiers |= cef_event_flags_t::EVENTFLAG_RIGHT_MOUSE_BUTTON as u32;
+            }
+
+            host.send_mouse_move(event);
         }
     }
 
@@ -303,24 +303,24 @@ impl Manager {
             return;
         }
 
-        if let Some(client) = self.focused.as_ref().and_then(|id| self.clients.get(id)) {
-            if let Some(host) = client.browser().map(|browser| browser.host()) {
-                self.mouse.keys.insert(button, is_down);
+        if let Some(client) = self.focused.as_ref().and_then(|id| self.clients.get(id))
+            && let Some(host) = client.browser().map(|browser| browser.host())
+        {
+            self.mouse.keys.insert(button, is_down);
 
-                let event = cef_mouse_event_t {
-                    x: self.mouse.x,
-                    y: self.mouse.y,
-                    modifiers: 0,
-                };
+            let event = cef_mouse_event_t {
+                x: self.mouse.x,
+                y: self.mouse.y,
+                modifiers: 0,
+            };
 
-                let key = match button {
-                    MouseKey::Left => cef_mouse_button_type_t::MBT_LEFT,
-                    MouseKey::Middle => cef_mouse_button_type_t::MBT_MIDDLE,
-                    MouseKey::Right => cef_mouse_button_type_t::MBT_RIGHT,
-                };
+            let key = match button {
+                MouseKey::Left => cef_mouse_button_type_t::MBT_LEFT,
+                MouseKey::Middle => cef_mouse_button_type_t::MBT_MIDDLE,
+                MouseKey::Right => cef_mouse_button_type_t::MBT_RIGHT,
+            };
 
-                host.send_mouse_click(key, event, is_down);
-            }
+            host.send_mouse_click(key, event, is_down);
         }
     }
 
@@ -330,10 +330,10 @@ impl Manager {
             return;
         }
 
-        if let Some(client) = self.focused.as_ref().and_then(|id| self.clients.get(id)) {
-            if let Some(host) = client.browser().map(|browser| browser.host()) {
-                host.send_mouse_wheel(self.mouse.x, self.mouse.y, delta);
-            }
+        if let Some(client) = self.focused.as_ref().and_then(|id| self.clients.get(id))
+            && let Some(host) = client.browser().map(|browser| browser.host())
+        {
+            host.send_mouse_wheel(self.mouse.x, self.mouse.y, delta);
         }
     }
 
@@ -344,17 +344,16 @@ impl Manager {
         }
 
         // отправлять события клавиш ТОЛЬКО сфокусированному браузеру. иначе можно и другим запросившим
-        if let Some(client) = self.focused.as_ref().and_then(|id| self.clients.get(id)) {
-            if let Some(host) = client.browser().map(|browser| browser.host()) {
-                host.send_keyboard_event(event);
-            }
+        if let Some(client) = self.focused.as_ref().and_then(|id| self.clients.get(id))
+            && let Some(host) = client.browser().map(|browser| browser.host())
+        {
+            host.send_keyboard_event(event);
         } else {
             for host in self
                 .clients
                 .values()
                 .filter(|client| client.always_listen_keys())
-                .map(|client| client.browser().map(|browser| browser.host()))
-                .flatten()
+                .filter_map(|client| client.browser().map(|browser| browser.host()))
             {
                 host.send_keyboard_event(event);
             }
@@ -380,6 +379,8 @@ impl Manager {
         if let Some(client) = self.clients.remove(&id) {
             self.internal_close(client, force_close);
         }
+
+        self.cleanup_focus_after_close(id);
     }
 
     #[inline]
@@ -506,7 +507,7 @@ impl Manager {
 
         self.ready_callbacks
             .entry(browser_id)
-            .or_insert_with(Vec::new)
+            .or_default()
             .push(callback);
     }
 
@@ -537,6 +538,9 @@ impl Manager {
         self.clients
             .drain()
             .for_each(|(_, client)| Self::internal_close_client(client, &audio, true));
+
+        self.focused = None;
+        self.focused_queue.clear();
     }
 
     pub fn initialize_cef(&mut self) {
@@ -587,14 +591,13 @@ impl Manager {
     }
 
     fn internal_close(&mut self, client: Arc<WebClient>, force_close: bool) {
-        if client.is_extern() {
-            if let Some(idx) = self
+        if client.is_extern()
+            && let Some(idx) = self
                 .clients_on_txd
                 .iter()
                 .position(|cl| cl.browser.id() == client.id())
-            {
-                self.clients_on_txd.remove(idx);
-            }
+        {
+            self.clients_on_txd.remove(idx);
         }
 
         Self::internal_close_client(client, &self.audio, force_close);
@@ -614,5 +617,32 @@ impl Manager {
         audio.remove_all_streams(client.id());
 
         log::trace!("internal_close_client end");
+    }
+
+    fn cleanup_focus_after_close(&mut self, closed_id: u32) {
+        self.focused_queue
+            .retain(|&id| id != closed_id && self.clients.contains_key(&id));
+
+        let focused_stale = self
+            .focused
+            .as_ref()
+            .filter(|id| !self.clients.contains_key(id))
+            .is_some();
+
+        if self.focused == Some(closed_id) || focused_stale {
+            self.focused = None;
+
+            while let Some(next_id) = self.focused_queue.pop_front() {
+                if self.clients.contains_key(&next_id) {
+                    self.focused = Some(next_id);
+                    break;
+                }
+            }
+        }
+
+        if self.clients.is_empty() {
+            self.focused = None;
+            self.focused_queue.clear();
+        }
     }
 }

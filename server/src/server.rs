@@ -10,8 +10,8 @@ use std::net::{IpAddr, SocketAddr};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use crate::client::Client;
 use crate::Event;
+use crate::client::Client;
 
 enum Packet {
     Normal { peer: PeerId, bytes: Vec<u8> },
@@ -54,44 +54,46 @@ impl Server {
         let server = Arc::new(Mutex::new(server));
         let server_clone = server.clone();
 
-        std::thread::spawn(move || loop {
-            while let Some(event) = socket.recv() {
-                match event {
-                    // если послали новый пакет
-                    SocketEvent::Message(peer, bytes) => {
-                        if let Ok(proto) = deserialize_from_slice::<packets::Packet>(&bytes) {
+        std::thread::spawn(move || {
+            loop {
+                while let Some(event) = socket.recv() {
+                    match event {
+                        // если послали новый пакет
+                        SocketEvent::Message(peer, bytes) => {
+                            if let Ok(proto) = deserialize_from_slice::<packets::Packet>(&bytes) {
+                                let mut server = server.lock().unwrap();
+                                server.handle_client_packet(peer, proto);
+                            }
+                        }
+
+                        // обработка пакетов соединения
+                        SocketEvent::Connected(peer, addr) => {
                             let mut server = server.lock().unwrap();
-                            server.handle_client_packet(peer, proto);
+                            server.handle_new_connection(peer, addr);
+                        }
+
+                        // таймауты
+                        SocketEvent::Disconnect(peer, _) => {
+                            let mut server = server.lock().unwrap();
+                            server.handle_timeout(peer);
+                        }
+
+                        _ => (),
+                    }
+                }
+
+                for packet in receiver.try_iter() {
+                    match packet {
+                        Packet::Normal { peer, bytes } => socket.send_message(peer, bytes),
+                        Packet::Disconnect(peer) => {
+                            trace!("socket::disconnect {:?}", peer);
+                            socket.disconnect(peer);
                         }
                     }
-
-                    // обработка пакетов соединения
-                    SocketEvent::Connected(peer, addr) => {
-                        let mut server = server.lock().unwrap();
-                        server.handle_new_connection(peer, addr);
-                    }
-
-                    // таймауты
-                    SocketEvent::Disconnect(peer, _) => {
-                        let mut server = server.lock().unwrap();
-                        server.handle_timeout(peer);
-                    }
-
-                    _ => (),
                 }
-            }
 
-            for packet in receiver.try_iter() {
-                match packet {
-                    Packet::Normal { peer, bytes } => socket.send_message(peer, bytes),
-                    Packet::Disconnect(peer) => {
-                        trace!("socket::disconnect {:?}", peer);
-                        socket.disconnect(peer);
-                    }
-                }
+                std::thread::sleep(Duration::from_millis(5));
             }
-
-            std::thread::sleep(Duration::from_millis(5));
         });
 
         server_clone
@@ -228,11 +230,11 @@ impl Server {
     pub fn remove_connection(&mut self, player_id: i32, addr: Option<IpAddr>) {
         let peer = self.peer_by_id(player_id);
 
-        if let Some(peer) = peer {
-            if let Some(client) = self.clients.remove(&peer) {
-                self.allowed.remove(&client.addr().ip());
-                let _ = self.sender.send(Packet::Disconnect(client.peer()));
-            }
+        if let Some(peer) = peer
+            && let Some(client) = self.clients.remove(&peer)
+        {
+            self.allowed.remove(&client.addr().ip());
+            let _ = self.sender.send(Packet::Disconnect(client.peer()));
         }
 
         if let Some(addr) = addr {
@@ -388,17 +390,15 @@ impl Server {
     ) {
         if let Some(addr) = self.peer_by_id(player_id) {
             let Server {
-                ref clients,
-                ref sender,
-                ..
+                clients, sender, ..
             } = self;
 
-            clients.get(&addr).map(|client| {
-                if let Ok(bytes) = try_into_packet(packet) {
-                    let packet = Packet::new(client.peer(), bytes);
-                    let _ = sender.send(packet);
-                }
-            });
+            if let Some(client) = clients.get(&addr)
+                && let Ok(bytes) = try_into_packet(packet)
+            {
+                let packet = Packet::new(client.peer(), bytes);
+                let _ = sender.send(packet);
+            }
         }
     }
 

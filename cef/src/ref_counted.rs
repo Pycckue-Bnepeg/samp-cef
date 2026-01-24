@@ -27,6 +27,7 @@ impl<T: RefCounted> RefGuard<T> {
         }
     }
 
+    #[allow(dead_code)]
     pub(crate) fn from_raw_add_ref(ptr: *mut T) -> RefGuard<T> {
         let guard = RefGuard {
             object: ptr,
@@ -45,6 +46,8 @@ impl<T: RefCounted> RefGuard<T> {
         ptr
     }
 
+    /// # Safety
+    /// Caller must ensure the pointer is valid and uniquely borrowed for mutation.
     pub unsafe fn get_mut(&self) -> *mut T {
         self.object
     }
@@ -159,3 +162,125 @@ impl_rc!(cef_task_runner_t);
 impl_rc!(cef_context_menu_params_t);
 impl_rc!(cef_menu_model_t);
 impl_rc!(cef_command_line_t);
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::cell::Cell;
+
+    struct TestState {
+        add_ref: Cell<usize>,
+        release: Cell<usize>,
+        freed: Cell<usize>,
+    }
+
+    impl TestState {
+        fn new() -> Self {
+            TestState {
+                add_ref: Cell::new(0),
+                release: Cell::new(0),
+                freed: Cell::new(0),
+            }
+        }
+    }
+
+    struct Dummy {
+        base: cef_base_ref_counted_t,
+        refct: Cell<usize>,
+        state: *const TestState,
+    }
+
+    impl Dummy {
+        fn new(state: &TestState) -> *mut Dummy {
+            Box::into_raw(Box::new(Dummy {
+                base: unsafe { std::mem::zeroed() },
+                refct: Cell::new(1),
+                state,
+            }))
+        }
+    }
+
+    impl RefCounted for Dummy {
+        fn add_ref(&self) {
+            let state = unsafe { &*self.state };
+            state.add_ref.set(state.add_ref.get() + 1);
+            self.refct.set(self.refct.get() + 1);
+        }
+
+        fn has_one_ref(&self) -> bool {
+            self.refct.get() == 1
+        }
+
+        fn has_at_least_one_ref(&self) -> bool {
+            self.refct.get() > 0
+        }
+
+        fn release(&self) -> bool {
+            let state = unsafe { &*self.state };
+            state.release.set(state.release.get() + 1);
+            let next = self.refct.get().saturating_sub(1);
+            self.refct.set(next);
+            if next == 0 {
+                state.freed.set(state.freed.get() + 1);
+                return true;
+            }
+            false
+        }
+
+        fn as_base(&self) -> &cef_base_ref_counted_t {
+            &self.base
+        }
+    }
+
+    #[test]
+    fn ref_guard_drop_releases_once() {
+        let state = TestState::new();
+        let raw = Dummy::new(&state);
+        let guard = RefGuard::from_raw(raw);
+        drop(guard);
+
+        assert_eq!(state.add_ref.get(), 0);
+        assert_eq!(state.release.get(), 1);
+        assert_eq!(state.freed.get(), 1);
+        unsafe {
+            drop(Box::from_raw(raw));
+        }
+    }
+
+    #[test]
+    fn ref_guard_clone_adds_ref_and_drops_once() {
+        let state = TestState::new();
+        let raw = Dummy::new(&state);
+        let guard = RefGuard::from_raw(raw);
+        let clone = guard.clone();
+        drop(guard);
+        drop(clone);
+
+        assert_eq!(state.add_ref.get(), 1);
+        assert_eq!(state.release.get(), 2);
+        assert_eq!(state.freed.get(), 1);
+        unsafe {
+            drop(Box::from_raw(raw));
+        }
+    }
+
+    #[test]
+    fn into_cef_forgets_guard() {
+        let state = TestState::new();
+        let raw = Dummy::new(&state);
+        let guard = RefGuard::from_raw(raw);
+        let ptr = guard.into_cef();
+
+        assert_eq!(state.add_ref.get(), 0);
+        assert_eq!(state.release.get(), 0);
+        assert_eq!(state.freed.get(), 0);
+
+        let released = unsafe { (&*ptr).release() };
+        assert!(released);
+        assert_eq!(state.release.get(), 1);
+        assert_eq!(state.freed.get(), 1);
+        unsafe {
+            drop(Box::from_raw(ptr));
+        }
+    }
+}

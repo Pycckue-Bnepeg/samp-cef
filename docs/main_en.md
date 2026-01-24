@@ -11,6 +11,9 @@
     - `renderer.exe`
     - etc …
 
+## Build notes
+See `docs/build.md` for cross-compiling the Windows client from macOS/Linux and other build prerequisites.
+
 
 ## Tips and some limitations
 - You should have one browser for all your interfaces to achieve best performance. They can communicate using built-in event system.
