@@ -29,8 +29,8 @@ impl ProcessMessage {
         self.inner
             .get_name
             .map(|name| unsafe { name(self.inner.get_mut()) })
-            .map(|raw| CefString::from(raw))
-            .unwrap_or_else(|| CefString::new_null())
+            .map(CefString::from)
+            .unwrap_or_else(CefString::new_null)
     }
 
     pub fn is_valid(&self) -> bool {

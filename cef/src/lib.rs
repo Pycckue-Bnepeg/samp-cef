@@ -1,8 +1,4 @@
-#![feature(arbitrary_self_types)]
-#![feature(core_intrinsics)]
-
 use cef_sys::{cef_main_args_t, cef_settings_t};
-use std::sync::Arc;
 
 pub mod app;
 pub mod browser;
@@ -20,7 +16,7 @@ mod rust_to_c;
 
 use crate::app::App;
 
-pub fn execute_process<T: App>(args: &cef_main_args_t, app: Option<Arc<T>>) -> i32 {
+pub fn execute_process<T: App>(args: &cef_main_args_t, app: Option<T>) -> i32 {
     let app_ptr = app
         .map(|app| self::rust_to_c::app::wrap(app))
         .unwrap_or(std::ptr::null_mut());
@@ -29,7 +25,7 @@ pub fn execute_process<T: App>(args: &cef_main_args_t, app: Option<Arc<T>>) -> i
 }
 
 pub fn initialize<T: App>(
-    args: Option<&cef_main_args_t>, settings: &cef_settings_t, app: Option<Arc<T>>,
+    args: Option<&cef_main_args_t>, settings: &cef_settings_t, app: Option<T>,
 ) -> i32 {
     let args = args
         .map(|args| args as *const _)
@@ -73,9 +69,9 @@ pub enum ProcessId {
     Renderer,
 }
 
-impl Into<cef_sys::cef_process_id_t::Type> for ProcessId {
-    fn into(self) -> cef_sys::cef_process_id_t::Type {
-        match self {
+impl From<ProcessId> for cef_sys::cef_process_id_t::Type {
+    fn from(value: ProcessId) -> cef_sys::cef_process_id_t::Type {
+        match value {
             ProcessId::None => 0,
             ProcessId::Browser => 0,
             ProcessId::Renderer => 1,

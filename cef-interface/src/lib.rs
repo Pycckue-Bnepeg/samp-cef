@@ -1,7 +1,8 @@
-use cef_api::{cef_list_value_t, CefApi, InternalApi, List, CEF_EVENT_BREAK};
+use cef_api::{CEF_EVENT_BREAK, CefApi, InternalApi, List, cef_list_value_t};
 use std::collections::HashMap;
 use std::os::raw::c_char;
 use std::sync::mpsc::{Receiver, Sender};
+use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
 mod components;
@@ -21,11 +22,15 @@ struct App {
     event_rx: Receiver<Event>,
 }
 
-static mut APP: Option<App> = None;
+static APP: OnceLock<Mutex<Option<App>>> = OnceLock::new();
 
-#[no_mangle]
+#[unsafe(no_mangle)]
+/// # Safety
+/// `api` must be a valid pointer to an initialized `InternalApi`.
 pub unsafe extern "C" fn cef_initialize(api: *mut InternalApi) {
-    CefApi::initialize(api);
+    unsafe {
+        CefApi::initialize(api);
+    }
 
     let (event_tx, event_rx) = std::sync::mpsc::channel();
 
@@ -42,12 +47,19 @@ pub unsafe extern "C" fn cef_initialize(api: *mut InternalApi) {
         event_rx,
     };
 
-    APP = Some(app);
+    let app_cell = APP.get_or_init(|| Mutex::new(None));
+    let mut app_slot = app_cell.lock().expect("cef-interface APP lock poisoned");
+    *app_slot = Some(app);
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn cef_samp_mainloop() {
-    if let Some(app) = unsafe { APP.as_mut() } {
+    let Some(app_cell) = APP.get() else {
+        return;
+    };
+
+    let mut app_slot = app_cell.lock().expect("cef-interface APP lock poisoned");
+    if let Some(app) = app_slot.as_mut() {
         while let Ok(event) = app.event_rx.try_recv() {
             match event {
                 Event::SetComponentVisible(name, visible) => {
@@ -108,25 +120,28 @@ fn update_visible_state(app: &mut App, is_hud_visible: bool) {
     CefApi::emit_event("game:hud:newVisibleState", &list);
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn cef_quit() {
     CefApi::uninitialize();
 
-    unsafe {
-        APP.take();
+    if let Some(app_cell) = APP.get() {
+        let mut app_slot = app_cell.lock().expect("cef-interface APP lock poisoned");
+        *app_slot = None;
     }
 }
 
 extern "C" fn set_component_visible(_: *const c_char, args: *mut cef_list_value_t) -> i32 {
-    if let Some(args) = List::try_from_raw(args) {
-        if args.len() == 3 {
-            let name = args.string(1).to_string();
-            let visible = args.bool(2);
+    if let Some(args) = List::try_from_raw(args)
+        && args.len() == 3
+    {
+        let name = args.string(1).to_string();
+        let visible = args.bool(2);
 
-            unsafe {
-                APP.as_mut()
-                    .map(|app| app.event_tx.send(Event::SetComponentVisible(name, visible)));
-            }
+        if let Some(app_cell) = APP.get()
+            && let Ok(mut app_slot) = app_cell.lock()
+            && let Some(app) = app_slot.as_mut()
+        {
+            let _ = app.event_tx.send(Event::SetComponentVisible(name, visible));
         }
     }
 
@@ -134,15 +149,17 @@ extern "C" fn set_component_visible(_: *const c_char, args: *mut cef_list_value_
 }
 
 extern "C" fn poll_player_stats(_: *const c_char, args: *mut cef_list_value_t) -> i32 {
-    if let Some(args) = List::try_from_raw(args) {
-        if args.len() == 3 {
-            let poll = args.bool(1);
-            let interval = args.integer(2);
+    if let Some(args) = List::try_from_raw(args)
+        && args.len() == 3
+    {
+        let poll = args.bool(1);
+        let interval = args.integer(2);
 
-            unsafe {
-                APP.as_mut()
-                    .map(|app| app.event_tx.send(Event::PollPlayerStats(poll, interval)));
-            }
+        if let Some(app_cell) = APP.get()
+            && let Ok(mut app_slot) = app_cell.lock()
+            && let Some(app) = app_slot.as_mut()
+        {
+            let _ = app.event_tx.send(Event::PollPlayerStats(poll, interval));
         }
     }
 
@@ -214,7 +231,6 @@ fn gather_player_data() -> PlayerData {
 }
 
 const STAT_AIR: u32 = 8;
-const STAT_HP: u32 = 10;
 
 // 8 air
 // 10 max hp

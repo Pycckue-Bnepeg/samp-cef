@@ -2,8 +2,8 @@ use std::collections::HashMap;
 use std::ffi::CStr;
 use std::os::raw::{c_char, c_int};
 use std::sync::{
-    atomic::{AtomicBool, Ordering},
     Arc,
+    atomic::{AtomicBool, Ordering},
 };
 
 use parking_lot::Mutex;
@@ -15,10 +15,11 @@ use crossbeam_channel::Sender;
 
 use crate::app::Event;
 use crate::browser::manager::Manager;
+use crate::static_cell::StaticCell;
 
 use libloading::{Library, Symbol};
 
-static mut PLUGINS: Option<ExternalManager> = None;
+static PLUGINS: StaticCell<ExternalManager> = StaticCell::new();
 
 pub type BrowserReadyCallback = extern "C" fn(u32);
 pub type EventCallback = extern "C" fn(*const c_char, *mut cef_list_value_t) -> c_int;
@@ -36,6 +37,8 @@ pub struct ExternalManager {
 }
 
 struct ExtPlugin {
+    #[allow(dead_code)]
+    // Keep the library loaded for plugin callbacks.
     library: Library,
     initialize: Option<Symbol<'static, extern "C" fn(*mut InternalApi)>>,
     mainloop: Option<Symbol<'static, extern "C" fn()>>,
@@ -87,7 +90,7 @@ fn make_api_struct() -> InternalApi {
 
 impl ExternalManager {
     pub fn get<'a>() -> Option<&'a mut ExternalManager> {
-        unsafe { PLUGINS.as_mut() }
+        unsafe { PLUGINS.get_mut() }
     }
 }
 
@@ -102,57 +105,52 @@ pub fn initialize(event_tx: Sender<Event>, manager: Arc<Mutex<Manager>>) -> Call
         window_active: AtomicBool::new(true),
     };
 
-    let external = unsafe {
-        PLUGINS = Some(external);
-        PLUGINS.as_mut().unwrap()
-    };
+    let external = unsafe { PLUGINS.set(external) };
 
     let plugins_path = crate::utils::cef_dir().join("plugins");
 
     if let Ok(rd) = std::fs::read_dir(plugins_path) {
         for dir in rd.filter_map(|dir| dir.ok()) {
-            if let Some(ext) = dir.path().extension() {
-                if ext.to_string_lossy() == "dll" {
-                    unsafe {
-                        match Library::new(dir.path().as_os_str()) {
-                            Ok(mut lib) => {
-                                let library: &'static mut Library =
-                                    &mut *(&mut lib as *mut Library);
+            if let Some(ext) = dir.path().extension()
+                && ext.to_string_lossy() == "dll"
+            {
+                unsafe {
+                    match Library::new(dir.path().as_os_str()) {
+                        Ok(mut lib) => {
+                            let library: &'static mut Library = &mut *(&mut lib as *mut Library);
 
-                                let mainloop =
-                                    library.get::<extern "C" fn()>(b"cef_samp_mainloop").ok();
+                            let mainloop =
+                                library.get::<extern "C" fn()>(b"cef_samp_mainloop").ok();
 
-                                let dxreset = library.get::<extern "C" fn()>(b"cef_dxreset").ok();
-                                let initialize = library
-                                    .get::<extern "C" fn(*mut InternalApi)>(b"cef_initialize")
-                                    .ok();
+                            let dxreset = library.get::<extern "C" fn()>(b"cef_dxreset").ok();
+                            let initialize = library
+                                .get::<extern "C" fn(*mut InternalApi)>(b"cef_initialize")
+                                .ok();
 
-                                let connect = library.get::<extern "C" fn()>(b"cef_connect").ok();
-                                let disconnect =
-                                    library.get::<extern "C" fn()>(b"cef_disconnect").ok();
-                                let quit = library.get::<extern "C" fn()>(b"cef_quit").ok();
-                                let browser_created = library
-                                    .get::<extern "C" fn(u32, i32)>(b"cef_browser_created")
-                                    .ok();
+                            let connect = library.get::<extern "C" fn()>(b"cef_connect").ok();
+                            let disconnect = library.get::<extern "C" fn()>(b"cef_disconnect").ok();
+                            let quit = library.get::<extern "C" fn()>(b"cef_quit").ok();
+                            let browser_created = library
+                                .get::<extern "C" fn(u32, i32)>(b"cef_browser_created")
+                                .ok();
 
-                                let plugin = ExtPlugin {
-                                    library: lib,
-                                    initialize,
-                                    mainloop,
-                                    dxreset,
-                                    connect,
-                                    disconnect,
-                                    quit,
-                                    browser_created,
-                                };
+                            let plugin = ExtPlugin {
+                                library: lib,
+                                initialize,
+                                mainloop,
+                                dxreset,
+                                connect,
+                                disconnect,
+                                quit,
+                                browser_created,
+                            };
 
-                                external.plugins.push(plugin);
+                            external.plugins.push(plugin);
 
-                                log::trace!("loaded plugin: {:?}", dir.path());
-                            }
-
-                            Err(e) => log::trace!("error loading library {:?}", e),
+                            log::trace!("loaded plugin: {:?}", dir.path());
                         }
+
+                        Err(e) => log::trace!("error loading library {:?}", e),
                     }
                 }
             }
@@ -246,7 +244,7 @@ unsafe extern "C" fn cef_create_browser(id: u32, url: *const c_char, hidden: boo
     }
 
     if let Some(external) = ExternalManager::get() {
-        let url = CStr::from_ptr(url);
+        let url = unsafe { CStr::from_ptr(url) };
         let url_rust = url.to_string_lossy();
 
         let event = Event::CreateBrowser {
@@ -256,7 +254,7 @@ unsafe extern "C" fn cef_create_browser(id: u32, url: *const c_char, hidden: boo
             url: url_rust.to_string(),
         };
 
-        external.event_tx.send(event);
+        let _ = external.event_tx.send(event);
     }
 }
 
@@ -270,14 +268,14 @@ unsafe extern "C" fn cef_destroy_browser(id: u32) {
 unsafe extern "C" fn cef_hide_browser(id: u32, hide: bool) {
     if let Some(external) = ExternalManager::get() {
         let event = Event::HideBrowser(id, hide);
-        external.event_tx.send(event);
+        let _ = external.event_tx.send(event);
     }
 }
 
 unsafe extern "C" fn cef_focus_browser(id: u32, focus: bool) {
     if let Some(external) = ExternalManager::get() {
         let event = Event::FocusBrowser(id, focus);
-        external.event_tx.send(event);
+        let _ = external.event_tx.send(event);
     }
 }
 
@@ -291,12 +289,12 @@ unsafe extern "C" fn cef_emit_event(event: *const c_char, list: *mut cef_list_va
         return;
     }
 
-    if let Some(list) = List::try_from_raw(list) {
-        if let Some(external) = ExternalManager::get() {
-            let manager = external.manager.lock();
-            let name = CStr::from_ptr(event);
-            manager.trigger_event(&name.to_string_lossy(), list);
-        }
+    if let Some(list) = List::try_from_raw(list)
+        && let Some(external) = ExternalManager::get()
+    {
+        let manager = external.manager.lock();
+        let name = unsafe { CStr::from_ptr(event) };
+        manager.trigger_event(&name.to_string_lossy(), list);
     }
 }
 
@@ -305,7 +303,7 @@ unsafe extern "C" fn cef_subscribe(event: *const c_char, callback: Option<EventC
         return;
     }
 
-    let event = CStr::from_ptr(event);
+    let event = unsafe { CStr::from_ptr(event) };
     let event_rust = event.to_string_lossy();
 
     if let Some(external) = ExternalManager::get() {
@@ -338,7 +336,7 @@ unsafe extern "C" fn cef_try_focus_browser(browser: u32) -> bool {
                 drop(manager);
 
                 let event = Event::FocusBrowser(browser, true);
-                ext.event_tx.send(event);
+                let _ = ext.event_tx.send(event);
 
                 true
             } else {

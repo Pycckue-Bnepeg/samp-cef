@@ -1,10 +1,10 @@
-#![feature(arbitrary_self_types)]
 #![windows_subsystem = "windows"]
 
 use winapi::um::libloaderapi::GetModuleHandleA;
 use winapi::um::wincon::GetConsoleWindow;
 use winapi::um::winuser::{MessageBoxA, ShowWindow};
 
+use cef::ProcessId;
 use cef::app::App;
 use cef::browser::{Browser, Frame};
 use cef::handlers::browser_process::BrowserProcessHandler;
@@ -15,20 +15,20 @@ use cef::types::list::List;
 use cef::types::list::ValueType;
 use cef::types::string::CefString;
 use cef::v8::{V8Context, V8Value};
-use cef::ProcessId;
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 type Callbacks = HashMap<String, Vec<(V8Value, V8Context)>>;
 
+#[derive(Clone)]
 pub struct Handler {
     frame: Frame,
     subs: Arc<Mutex<Callbacks>>,
 }
 
 impl V8Handler for Handler {
-    fn execute(self: &Arc<Self>, name: CefString, args: Vec<V8Value>) -> bool {
+    fn execute(&self, name: CefString, args: Vec<V8Value>) -> bool {
         let name = name.to_string();
 
         match name.as_str() {
@@ -77,7 +77,7 @@ impl V8Handler for Handler {
                 let func = args[1].clone();
 
                 let mut events = self.subs.lock().unwrap();
-                let subs = events.entry(name).or_insert_with(Vec::new);
+                let subs = events.entry(name).or_default();
 
                 let ctx = V8Context::current_context();
                 subs.push((func, ctx));
@@ -137,6 +137,7 @@ impl V8Handler for Handler {
 pub struct Placeholder;
 impl BrowserProcessHandler for Placeholder {}
 
+#[derive(Clone)]
 pub struct Application {
     subs: Arc<Mutex<Callbacks>>,
 }
@@ -145,17 +146,17 @@ impl App for Application {
     type RenderProcessHandler = Self;
     type BrowserProcessHandler = Placeholder;
 
-    fn render_process_handler(self: &Arc<Self>) -> Option<Arc<Self>> {
+    fn render_process_handler(&self) -> Option<Self> {
         Some(self.clone())
     }
 }
 
 impl RenderProcessHandler for Application {
-    fn on_context_created(self: &Arc<Self>, _browser: Browser, frame: Frame, context: V8Context) {
-        let handler = Arc::new(Handler {
+    fn on_context_created(&self, _browser: Browser, frame: Frame, context: V8Context) {
+        let handler = Handler {
             subs: self.subs.clone(),
             frame,
-        });
+        };
 
         let global = context.global();
 
@@ -187,7 +188,7 @@ impl RenderProcessHandler for Application {
         global.set_value_by_key(&key_cef, &cef_obj);
     }
 
-    fn on_context_released(self: &Arc<Self>, _browser: Browser, _frame: Frame, context: V8Context) {
+    fn on_context_released(&self, _browser: Browser, _frame: Frame, context: V8Context) {
         let mut subs = self.subs.lock().unwrap();
 
         for value in subs.values_mut() {
@@ -197,10 +198,10 @@ impl RenderProcessHandler for Application {
         }
     }
 
-    fn on_webkit_initialized(self: &Arc<Self>) {}
+    fn on_webkit_initialized(&self) {}
 
     fn on_process_message(
-        self: &Arc<Self>, _browser: Browser, _frame: Frame, _source: ProcessId, msg: ProcessMessage,
+        &self, _browser: Browser, _frame: Frame, _source: ProcessId, msg: ProcessMessage,
     ) -> bool {
         let name = msg.name().to_string();
 
@@ -247,9 +248,9 @@ fn main() {
         instance: instance as *mut _,
     };
 
-    let app = Arc::new(Application {
+    let app = Application {
         subs: Arc::new(Mutex::new(HashMap::new())),
-    });
+    };
 
     let code = cef::execute_process(&main_args, Some(app));
 
@@ -320,7 +321,7 @@ fn convert_to_v8(pm: &List, offset: usize, v8: &mut Vec<V8Value>) {
             ValueType::Double => v8.push(V8Value::new_double(pm.double(idx))),
             ValueType::String => v8.push(V8Value::new_cefstring(&pm.string(idx))),
             ValueType::List => {
-                pm.list(idx).map(|list| {
+                if let Some(list) = pm.list(idx) {
                     let array = V8Value::new_array(list.len());
                     let mut v8_args = Vec::with_capacity(list.len());
 
@@ -332,7 +333,7 @@ fn convert_to_v8(pm: &List, offset: usize, v8: &mut Vec<V8Value>) {
                         .for_each(|(idx, value)| array.set_value_by_index(idx, &value));
 
                     v8.push(array);
-                });
+                }
             }
 
             _ => v8.push(V8Value::new_undefined()),

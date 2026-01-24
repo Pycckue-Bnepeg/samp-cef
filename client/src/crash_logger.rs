@@ -1,5 +1,5 @@
 use winapi::shared::minwindef::{DWORD, HMODULE};
-use winapi::um::errhandlingapi::{SetUnhandledExceptionFilter, PTOP_LEVEL_EXCEPTION_FILTER};
+use winapi::um::errhandlingapi::{PTOP_LEVEL_EXCEPTION_FILTER, SetUnhandledExceptionFilter};
 use winapi::um::processthreadsapi::GetCurrentProcess;
 use winapi::um::psapi::{
     EnumProcessModules, GetModuleFileNameExA, GetModuleInformation, MODULEINFO,

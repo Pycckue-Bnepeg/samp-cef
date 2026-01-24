@@ -25,7 +25,9 @@ struct Listener {
 struct Stream {
     stream_id: i32,
     sample_rate: i32,
+    #[allow(dead_code)]
     channels: i32,
+    #[allow(dead_code)]
     max_frames: i32,
     last_pts: u64,
     last_frame_len: usize,
@@ -50,9 +52,12 @@ impl Stream {
 
 struct Source {
     sink: Sink,
+    #[allow(dead_code)]
     composer: Arc<BmixerComposer>,
     sound_controller: SoundController,
+    #[allow(dead_code)]
     queue: Vec<Vec<f32>>,
+    #[allow(dead_code)]
     sample_rate: i32,
     muted: bool,
     pcm_tx: Sender<StreamingCommand>,
@@ -95,6 +100,7 @@ impl Source {
         let _ = self.pcm_tx.send(StreamingCommand::Pcm(Vec::from(pcm)));
     }
 
+    #[allow(dead_code)]
     fn reset(&mut self) {
         let _ = self.pcm_tx.send(StreamingCommand::Reset);
     }
@@ -204,7 +210,9 @@ impl Audio {
         });
     }
 
-    pub fn append_pcm(
+    /// # Safety
+    /// `data` must point to valid PCM buffers for the lifetime of this call.
+    pub unsafe fn append_pcm(
         &self, browser: u32, stream_id: i32, data: *mut *const f32, frames: i32, pts: u64,
     ) {
         if frames == 0 || data.is_null() {
@@ -358,6 +366,7 @@ impl Audio {
 
 struct AudioInner {
     command_rx: Receiver<Command>,
+    #[allow(dead_code)]
     output_stream: OutputStream,
     stream_handle: OutputStreamHandle,
     paused: bool,
@@ -406,13 +415,12 @@ impl AudioInner {
             return;
         }
 
-        if let Some(entries) = self.streams.get_mut(&browser) {
-            if let Some(stream) = entries
+        if let Some(entries) = self.streams.get_mut(&browser)
+            && let Some(stream) = entries
                 .iter_mut()
                 .find(|stream| stream.stream_id == stream_id)
-            {
-                stream.pending_pcm.insert(pts, data);
-            }
+        {
+            stream.pending_pcm.insert(pts, data);
         }
     }
 
@@ -440,11 +448,8 @@ impl AudioInner {
     }
 
     fn add_source(&mut self, browser: u32, object_id: i32) {
-        let Self {
-            ref mut streams,
-            ref stream_handle,
-            ..
-        } = self;
+        let streams = &mut self.streams;
+        let stream_handle = &self.stream_handle;
 
         if let Some(entries) = streams.get_mut(&browser) {
             entries.iter_mut().for_each(|entry| {
@@ -525,6 +530,7 @@ impl AudioInner {
         });
     }
 
+    #[allow(dead_code)]
     fn reset_sinks(&mut self) {
         self.streams.values_mut().for_each(|stream| {
             stream.iter_mut().for_each(|stream| {
@@ -651,6 +657,7 @@ fn audio_thread(mut audio: AudioInner) {
 #[derive(Debug, Clone)]
 enum StreamingCommand {
     Pcm(Vec<f32>),
+    #[allow(dead_code)]
     Reset,
 }
 

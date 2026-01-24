@@ -6,7 +6,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use winapi::shared::minwindef::MAX_PATH;
 use winapi::shared::minwindef::{LPARAM, WPARAM};
 use winapi::shared::windef::RECT;
-use winapi::um::shlobj::{SHGetFolderPathW, CSIDL_MYDOCUMENTS};
+use winapi::um::shlobj::{CSIDL_MYDOCUMENTS, SHGetFolderPathW};
 use winapi::um::winuser::*;
 
 use cef_sys::cef_event_flags_t::*;

@@ -40,6 +40,7 @@ And also all client-side parts (`cef.asi`, `client.dll`, `renderer.exe`).
 - Environment variable `CEF_PATH` that points to `libcef.lib` (client only).
     - In powershell it's like `$env:CEF_PATH="C:/some/path"`
     - Then build
+- DirectX SDK (June 2010) for client builds; set `DX_SDK` to `DXSDK/Lib/x86`.
 
 ### Notes ...
 If you get a linker error, you should change hard-coded links in the source code
@@ -53,6 +54,9 @@ and now
 rustup toolchain install nightly-2022-11-06-i686-pc-windows-msvc
 cargo build --release
 ```
+
+### Cross-compiling the Windows client (macOS/Linux)
+Use `scripts/build-client-win32.sh` to build `client`, `renderer`, and `loader` for `i686-pc-windows-msvc` on non-Windows hosts. It relies on `cargo-xwin` (`cargo install cargo-xwin --locked`), `7z` for extracting the DirectX SDK, and downloads `libcef.lib` if `CEF_PATH` is not set. The script can also download/extract the DirectX SDK if `DX_SDK` is not set.
 
 also the client plugin can be built using OpenAL for sound ([rodio](https://crates.io/crates/rodio) by default). to do that compile the client without default features. for example:
 ```

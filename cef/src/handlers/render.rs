@@ -1,8 +1,6 @@
 use crate::browser::Browser;
 use cef_sys::{cef_paint_element_type_t, cef_rect_t};
 
-use std::sync::Arc;
-
 #[derive(Debug)]
 pub struct DirtyRects {
     pub count: usize,
@@ -30,9 +28,9 @@ impl From<cef_paint_element_type_t::Type> for PaintElement {
     }
 }
 
-impl Into<cef_paint_element_type_t::Type> for PaintElement {
-    fn into(self) -> cef_paint_element_type_t::Type {
-        match self {
+impl From<PaintElement> for cef_paint_element_type_t::Type {
+    fn from(value: PaintElement) -> cef_paint_element_type_t::Type {
+        match value {
             PaintElement::View => cef_paint_element_type_t::PET_VIEW,
             PaintElement::Popup => cef_paint_element_type_t::PET_POPUP,
         }
@@ -40,12 +38,12 @@ impl Into<cef_paint_element_type_t::Type> for PaintElement {
 }
 
 pub trait RenderHandler {
-    fn view_rect(self: &Arc<Self>, browser: Browser, rect: &mut cef_rect_t);
-    fn on_popup_show(self: &Arc<Self>, browser: Browser, show: bool);
-    fn on_popup_size(self: &Arc<Self>, browser: Browser, rect: &cef_rect_t);
+    fn view_rect(&self, browser: Browser, rect: &mut cef_rect_t);
+    fn on_popup_show(&self, browser: Browser, show: bool);
+    fn on_popup_size(&self, browser: Browser, rect: &cef_rect_t);
     fn on_paint(
-        self: &Arc<Self>, browser: Browser, paint_type: PaintElement, dirty_rects: DirtyRects,
-        buffer: &[u8], width: usize, height: usize,
+        &self, browser: Browser, paint_type: PaintElement, dirty_rects: DirtyRects, buffer: &[u8],
+        width: usize, height: usize,
     );
 }
 

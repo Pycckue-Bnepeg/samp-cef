@@ -32,6 +32,10 @@ impl List {
         unsafe { len(self.inner.get_mut()) }
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
     pub fn get_type(&self, index: usize) -> ValueType {
         let ty = self.inner.get_type.unwrap();
         let ty = unsafe { ty(self.inner.get_mut(), index) };
@@ -44,8 +48,8 @@ impl List {
             .get_string
             .map(|get| unsafe { get(self.inner.get_mut(), index) })
             .filter(|ptr| !ptr.is_null())
-            .map(|raw| CefString::from(raw))
-            .unwrap_or_else(|| CefString::new_empty())
+            .map(CefString::from)
+            .unwrap_or_else(CefString::new_empty)
     }
 
     pub fn set_string(&self, index: usize, string: &CefString) {
@@ -106,7 +110,7 @@ impl List {
         self.inner
             .get_list
             .map(|get| unsafe { get(self.inner.get_mut(), index) })
-            .and_then(|list_raw| List::try_from_raw(list_raw))
+            .and_then(List::try_from_raw)
     }
 
     pub fn set_list(&self, index: usize, list: List) {
@@ -123,6 +127,12 @@ impl List {
 
     pub fn into_cef(self) -> *mut cef_list_value_t {
         self.inner.into_cef()
+    }
+}
+
+impl Default for List {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -151,8 +161,8 @@ use cef_sys::cef_value_type_t as cvtype;
 
 impl From<cvtype::Type> for ValueType {
     fn from(value: cvtype::Type) -> ValueType {
-        use cvtype::*;
         use ValueType::*;
+        use cvtype::*;
 
         match value {
             VTYPE_NULL => Null,

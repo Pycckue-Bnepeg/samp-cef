@@ -14,6 +14,7 @@ use crate::audio::Audio;
 use crate::browser::manager::{Manager, MouseKey};
 use crate::external::CallbackList;
 use crate::network::NetworkClient;
+use crate::static_cell::StaticCell;
 
 use client_api::gta::camera::CCamera;
 use client_api::gta::menu_manager::CMenuManager;
@@ -26,12 +27,14 @@ use client_api::wndproc;
 
 use crossbeam_channel::{Receiver, Sender};
 
-use detour::GenericDetour;
+use retour::GenericDetour;
 
 const CEF_SERVER_PORT_OFFSET: u16 = 2;
 pub const CEF_PLUGIN_VERSION: i32 = 0x00_01_00;
+const CONNECT_BACKOFF_BASE: Duration = Duration::from_secs(1);
+const CONNECT_BACKOFF_MAX: Duration = Duration::from_secs(10);
 
-static mut APP: Option<App> = None;
+static APP: StaticCell<App> = StaticCell::new();
 
 pub enum Event {
     Connect(SocketAddr),
@@ -80,6 +83,9 @@ pub struct App {
     window_focused: bool,
     cef_ready: bool,
     samp_ready: bool,
+    bad_version_notified: bool,
+    connect_backoff: Duration,
+    next_connect_attempt: Instant,
 
     manager: Arc<Mutex<Manager>>,
     audio: Arc<Audio>,
@@ -113,7 +119,14 @@ impl Drop for App {
     }
 }
 
+impl Default for App {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl App {
+    #[allow(clippy::arc_with_non_send_sync)]
     pub fn new() -> App {
         log::trace!("App::new()");
 
@@ -147,6 +160,9 @@ impl App {
             cef_ready: false,
             samp_ready: false,
             window_focused: true,
+            bad_version_notified: false,
+            connect_backoff: CONNECT_BACKOFF_BASE,
+            next_connect_attempt: Instant::now(),
             network: None,
             initialization: Instant::now(),
             manager,
@@ -203,6 +219,15 @@ impl App {
     }
 
     pub fn connect(&mut self) {
+        if self.network.is_some() {
+            return;
+        }
+
+        let now = Instant::now();
+        if now < self.next_connect_attempt {
+            return;
+        }
+
         if let Some(mut addr) = NetGame::get().addr() {
             if !self.samp_ready {
                 App::initialize_hooks();
@@ -226,7 +251,7 @@ impl App {
             network.send(Event::Connect(addr));
 
             self.network = Some(network);
-            self.connected = true;
+            self.next_connect_attempt = now + self.connect_backoff;
         }
     }
 
@@ -234,7 +259,13 @@ impl App {
         // disconnected
         log::trace!("App::disconnect");
 
-        crate::external::call_disconnect();
+        self.reset_connection(true);
+    }
+
+    fn reset_connection(&mut self, notify_disconnect: bool) {
+        if notify_disconnect {
+            crate::external::call_disconnect();
+        }
 
         let mut manager = self.manager.lock();
         manager.close_all_browsers();
@@ -242,12 +273,23 @@ impl App {
         self.connected = false;
     }
 
+    fn reset_connect_backoff(&mut self) {
+        self.connect_backoff = CONNECT_BACKOFF_BASE;
+        self.next_connect_attempt = Instant::now();
+    }
+
+    fn bump_connect_backoff(&mut self) {
+        self.next_connect_attempt = Instant::now() + self.connect_backoff;
+        let doubled = self.connect_backoff + self.connect_backoff;
+        self.connect_backoff = std::cmp::min(doubled, CONNECT_BACKOFF_MAX);
+    }
+
     pub fn manager(&self) -> Arc<Mutex<Manager>> {
         self.manager.clone()
     }
 
     fn get<'a>() -> Option<&'a mut App> {
-        unsafe { APP.as_mut() }
+        unsafe { APP.get_mut() }
     }
 }
 
@@ -263,16 +305,16 @@ pub fn initialize() {
     crate::render::initialize(manager);
 
     unsafe {
-        APP = Some(app);
+        APP.set(app);
     }
 
     if client_api::samp::version::is_unknown_version() {
         log::error!("unknown samp version");
 
         client_api::utils::error_message_box(
-                "Unsupported SA:MP",
-                "You have installed an unsupported SA:MP version.\nCurrently supported versions are 0.3.7 R1 and R3.",
-            );
+            "Unsupported SA:MP",
+            "You have installed an unsupported SA:MP version.\nCurrently supported versions are 0.3.7 R1 and R3.",
+        );
 
         // don't waste time
     }
@@ -374,7 +416,11 @@ pub fn mainloop() {
                 }
 
                 Event::CreateExternBrowser(ext) => {
-                    log::trace!("Request from server to create external browser with id {}. Texture name: {}", ext.id, ext.texture);
+                    log::trace!(
+                        "Request from server to create external browser with id {}. Texture name: {}",
+                        ext.id,
+                        ext.texture
+                    );
                     let mut manager = app.manager.lock();
 
                     manager.create_browser_on_texture(&ext, app.callbacks.clone());
@@ -451,7 +497,38 @@ pub fn mainloop() {
                 }
 
                 Event::NetworkJoined => {
+                    app.connected = true;
+                    app.bad_version_notified = false;
+                    app.reset_connect_backoff();
                     crate::external::call_connect();
+                }
+
+                Event::BadVersion => {
+                    log::trace!("CEF Network: BadVersion");
+                    if !app.bad_version_notified {
+                        app.bad_version_notified = true;
+                        client_api::utils::error_message_box(
+                            "CEF version mismatch",
+                            "Client version is incompatible with the server.\nPlease update your client or server plugin.",
+                        );
+                    }
+
+                    app.reset_connection(false);
+                    app.bump_connect_backoff();
+                }
+
+                Event::NetworkError => {
+                    log::trace!("CEF Network: NetworkError");
+                    let notify_disconnect = app.connected;
+                    app.reset_connection(notify_disconnect);
+                    app.bump_connect_backoff();
+                }
+
+                Event::Timeout => {
+                    log::trace!("CEF Network: Timeout");
+                    let notify_disconnect = app.connected;
+                    app.reset_connection(notify_disconnect);
+                    app.bump_connect_backoff();
                 }
 
                 Event::SetAudioSettings(browser, audio_settings) => {
@@ -520,10 +597,7 @@ fn win_event(msg: UINT, wparam: WPARAM, lparam: LPARAM) -> bool {
 
         match msg {
             WM_MOUSEMOVE => {
-                let [x, y] = [
-                    ((lparam as u16) & 0xFFFF) as i32,
-                    (lparam >> 16) as u16 as i32,
-                ];
+                let [x, y] = [(lparam as u16) as i32, (lparam >> 16) as u16 as i32];
 
                 manager.send_mouse_move_event(x, y);
             }
@@ -564,7 +638,7 @@ fn win_event(msg: UINT, wparam: WPARAM, lparam: LPARAM) -> bool {
                 }
 
                 // notify GTA. should be notified only once
-                let key_index = wparam as usize;
+                let key_index = wparam;
                 if key_index < 512 {
                     if manager.is_input_blocked() {
                         // allowed keys (screenshot and chat cycle)

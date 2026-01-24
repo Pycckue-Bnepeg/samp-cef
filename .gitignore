@@ -3,3 +3,5 @@
 .idea
 /linux-build
 deploy.cmd
+/third_party
+.xwin

@@ -1,7 +1,8 @@
 use cef_sys::{_cef_string_utf16_t, cef_string_userfree_t};
 pub use cef_sys::{
-    cef_string_t, cef_string_utf16_clear, cef_string_utf16_to_utf8, cef_string_utf8_to_utf16,
+    cef_string_t, cef_string_utf8_to_utf16, cef_string_utf16_clear, cef_string_utf16_to_utf8,
 };
+use std::fmt;
 
 #[repr(C)]
 pub struct CefString {
@@ -11,7 +12,7 @@ pub struct CefString {
 
 impl CefString {
     pub fn new(text: &str) -> CefString {
-        let mut string = Self::new_null();
+        let string = Self::new_null();
 
         unsafe {
             cef_string_utf8_to_utf16(text.as_ptr() as *const _, text.len(), string.inner);
@@ -45,12 +46,19 @@ impl CefString {
     pub fn as_cef_string(&self) -> &cef_string_t {
         unsafe { &*self.inner }
     }
+}
 
-    pub fn to_string(&self) -> String {
+impl fmt::Display for CefString {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         unsafe {
             let utf16 = &*self.inner;
+            if utf16.str_.is_null() || utf16.length == 0 {
+                return Ok(());
+            }
+
             let bytes = std::slice::from_raw_parts(utf16.str_, utf16.length);
-            String::from_utf16_lossy(bytes)
+            let string = String::from_utf16_lossy(bytes);
+            f.write_str(&string)
         }
     }
 }
@@ -78,9 +86,10 @@ impl From<*const cef_string_t> for CefString {
     }
 }
 
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
 impl From<cef_string_userfree_t> for CefString {
     fn from(string: cef_string_userfree_t) -> CefString {
-        let mut cefstr = Self::new_null();
+        let cefstr = Self::new_null();
 
         unsafe {
             let src = &mut *string;
@@ -106,7 +115,7 @@ pub fn into_cef_string(string: &str) -> cef_string_t {
         }
 
         unsafe {
-            widestring::U16CString::from_raw(ptr);
+            let _ = widestring::U16CString::from_raw(ptr);
         }
     }
 

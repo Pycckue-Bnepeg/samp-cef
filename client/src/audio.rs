@@ -4,8 +4,8 @@ use client_api::gta::matrix::{CVector, RwMatrix};
 use std::collections::{BTreeMap, HashMap};
 use std::path::PathBuf;
 use std::sync::{
-    atomic::{AtomicBool, Ordering},
     Arc, Mutex,
+    atomic::{AtomicBool, Ordering},
 };
 use std::time::{Duration, Instant};
 
@@ -126,7 +126,10 @@ impl Audio {
             Err(err) => {
                 log::trace!("Alto::load error: {:?}", err);
 
-                client_api::utils::error_message_box("CEF error", "There is no OpenAL library (sound.dll) in the CEF folder.\nPlease reinstall the plugin and try again.");
+                client_api::utils::error_message_box(
+                    "CEF error",
+                    "There is no OpenAL library (sound.dll) in the CEF folder.\nPlease reinstall the plugin and try again.",
+                );
 
                 std::thread::sleep(std::time::Duration::from_secs(10));
                 std::process::exit(0);
@@ -193,7 +196,9 @@ impl Audio {
         entries.push(audio_stream);
     }
 
-    pub fn append_pcm(
+    /// # Safety
+    /// `data` must point to valid PCM buffers for the lifetime of this call.
+    pub unsafe fn append_pcm(
         &self, browser: u32, stream_id: i32, data: *mut *const f32, frames: i32, pts: u64,
     ) {
         if self.paused.load(Ordering::SeqCst) {

@@ -2,16 +2,17 @@
 name = "server"
 version = "0.1.0"
 authors = ["ZOTTCE <zottce@gmail.com>"]
-edition = "2018"
+edition = "2024"
+rust-version = "1.93"
 
 [lib]
 crate-type = ["cdylib"]
 
 [dependencies]
-samp = { git = "https://github.com/zottce/samp-rs.git", branch = "potential-fix", features = ["encoding"] }
-log = "0.4.6"
-crossbeam-channel = "0.5.1"
+samp = { git = "https://github.com/zottce/samp-rs.git", rev = "2e9192713bf9a77ee04e0ebbcda37d078c9c47dd", features = ["encoding"] }
+log = "0.4.29"
+crossbeam-channel = "0.5.15"
 messages = { path = "../messages" }
-quick-protobuf = "0.8.0"
+quick-protobuf = "0.8.1"
 network = { path = "../network" }
-simplelog = "0.10.2"
+simplelog = "0.12.2"

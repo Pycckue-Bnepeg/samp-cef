@@ -61,7 +61,7 @@ impl RwContainer {
     }
 
     #[inline]
-    pub fn bytes(&mut self) -> Option<RwLockGuard> {
+    pub fn bytes(&mut self) -> Option<RwLockGuard<'_>> {
         unsafe {
             self.raster.as_mut().map(|raster| {
                 let bytes = raster.as_mut().lock(0);
@@ -134,7 +134,7 @@ impl SpriteContainer {
     }
 
     #[inline]
-    pub fn bytes(&mut self) -> Option<RwLockGuard> {
+    pub fn bytes(&mut self) -> Option<RwLockGuard<'_>> {
         self.rw.bytes()
     }
 }
@@ -146,13 +146,12 @@ enum ViewContainer {
 
 impl ViewContainer {
     fn draw(&mut self) {
-        match self {
-            ViewContainer::Display(sprite) => sprite.draw(),
-            _ => (),
+        if let ViewContainer::Display(sprite) = self {
+            sprite.draw();
         }
     }
 
-    fn bytes(&mut self) -> Option<RwLockGuard> {
+    fn bytes(&mut self) -> Option<RwLockGuard<'_>> {
         match self {
             ViewContainer::Display(sprite) => sprite.bytes(),
             ViewContainer::Material(sprite) => sprite.bytes(),
@@ -161,8 +160,8 @@ impl ViewContainer {
 
     fn texture(&self) -> Option<NonNull<RwTexture>> {
         match self {
-            ViewContainer::Display(sprite) => sprite.rw.texture.clone(),
-            ViewContainer::Material(rw) => rw.texture.clone(),
+            ViewContainer::Display(sprite) => sprite.rw.texture,
+            ViewContainer::Material(rw) => rw.texture,
         }
     }
 }
@@ -343,7 +342,13 @@ impl View {
     {
         if let Some(mut bytes) = self.container.as_mut().and_then(|rw| rw.bytes()) {
             let pitch = bytes.pitch;
-            func(&mut *bytes, pitch);
+            func(&mut bytes, pitch);
         }
+    }
+}
+
+impl Default for View {
+    fn default() -> Self {
+        Self::new()
     }
 }

@@ -2,7 +2,6 @@ use crate::handlers::v8handler::V8Handler;
 use crate::ref_counted::RefGuard;
 use crate::types::string::CefString;
 use cef_sys::{cef_v8context_t, cef_v8value_t};
-use std::sync::Arc;
 
 #[derive(Clone)]
 pub struct V8Context {
@@ -20,6 +19,7 @@ impl V8Context {
         }
     }
 
+    #[allow(dead_code)]
     pub(crate) fn from_raw_add_ref(raw: *mut cef_v8context_t) -> V8Context {
         if raw.is_null() {
             panic!("V8Context::from_raw_add_ref null pointer");
@@ -99,7 +99,7 @@ impl V8Value {
         V8Value::from_raw(raw)
     }
 
-    pub fn new_function<T: V8Handler>(name: &str, handler: Option<Arc<T>>) -> V8Value {
+    pub fn new_function<T: V8Handler>(name: &str, handler: Option<T>) -> V8Value {
         let name = CefString::new(name);
         let handler = handler
             .map(|handler| crate::rust_to_c::v8handler::wrap(handler))
@@ -204,6 +204,10 @@ impl V8Value {
             .unwrap_or(0)
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
     pub fn bool(&self) -> bool {
         self.inner
             .get_bool_value
@@ -225,8 +229,8 @@ impl V8Value {
             .get_string_value
             .map(|get_str| unsafe { get_str(self.inner.get_mut()) })
             .filter(|ptr| !ptr.is_null())
-            .map(|string| CefString::from(string))
-            .unwrap_or_else(|| CefString::new_empty())
+            .map(CefString::from)
+            .unwrap_or_else(CefString::new_empty)
     }
 
     pub fn integer(&self) -> i32 {
@@ -304,32 +308,36 @@ impl V8Value {
     }
 
     pub fn set_value_by_key(&self, key: &CefString, value: &V8Value) {
-        self.inner.set_value_bykey.map(|set_val| unsafe {
-            set_val(
-                self.inner.get_mut(),
-                key.as_cef_string(),
-                value.clone().inner.into_cef(),
-                cef_sys::cef_v8_propertyattribute_t::V8_PROPERTY_ATTRIBUTE_NONE,
-            );
-        });
+        if let Some(set_val) = self.inner.set_value_bykey {
+            unsafe {
+                set_val(
+                    self.inner.get_mut(),
+                    key.as_cef_string(),
+                    value.clone().inner.into_cef(),
+                    cef_sys::cef_v8_propertyattribute_t::V8_PROPERTY_ATTRIBUTE_NONE,
+                );
+            }
+        }
     }
 
     pub fn set_value_by_index(&self, index: usize, value: &V8Value) {
-        self.inner.set_value_byindex.map(|set_val| unsafe {
-            set_val(
-                self.inner.get_mut(),
-                index as _,
-                value.clone().inner.into_cef(),
-            );
-        });
+        if let Some(set_val) = self.inner.set_value_byindex {
+            unsafe {
+                set_val(
+                    self.inner.get_mut(),
+                    index as _,
+                    value.clone().inner.into_cef(),
+                );
+            }
+        }
     }
 
     pub fn value_by_index(&self, index: usize) -> V8Value {
         self.inner
             .get_value_byindex
             .map(|get_val| unsafe { get_val(self.inner.get_mut(), index as _) })
-            .map(|raw| V8Value::from_raw(raw))
-            .unwrap_or_else(|| V8Value::new_undefined())
+            .map(V8Value::from_raw)
+            .unwrap_or_else(V8Value::new_undefined)
     }
 
     pub fn is_same(&self, other: &V8Value) -> bool {
@@ -340,7 +348,7 @@ impl V8Value {
 }
 
 pub fn register_extension<T: V8Handler>(
-    extension_name: CefString, javascript_code: CefString, handler: Option<Arc<T>>,
+    extension_name: CefString, javascript_code: CefString, handler: Option<T>,
 ) {
     let ptr = handler
         .map(|handler| crate::rust_to_c::v8handler::wrap(handler))

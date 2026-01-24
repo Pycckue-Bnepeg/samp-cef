@@ -150,7 +150,7 @@ impl CefPlugin {
 
     #[native(name = "cef_emit_event", raw)]
     fn emit_event(&mut self, _: &Amx, args: Args) -> AmxResult<bool> {
-        if args.count() < 2 || (args.count() - 2) % 2 != 0 {
+        if args.count() < 2 || !(args.count() - 2).is_multiple_of(2) {
             info!("cef_emit_event invalid count of arguments");
             return Ok(false);
         }
@@ -315,8 +315,7 @@ impl CefPlugin {
 
             trace!(
                 "notify_timeout::remove_from_await_list({}) {}",
-                player_id,
-                result
+                player_id, result
             );
         });
     }
@@ -396,8 +395,6 @@ impl SampPlugin for CefPlugin {
 
                     self.notify_browser_created(player_id, browser_id, code);
                 }
-
-                _ => (),
             }
         }
 

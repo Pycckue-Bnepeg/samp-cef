@@ -11,7 +11,7 @@ macro_rules! impl_into_packet {
             type Error = quick_protobuf::Error;
 
             fn try_from(packet: $type) -> Result<Self, Self::Error> {
-                Ok(crate::packets::Packet {
+                Ok($crate::packets::Packet {
                     packet_id: $id,
                     bytes: std::borrow::Cow::Owned(quick_protobuf::serialize_into_vec(&packet)?),
                 })
