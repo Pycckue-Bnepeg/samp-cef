@@ -1,4 +1,4 @@
-name: Rust
+name: make-package
 
 on:
   push:
@@ -18,53 +18,97 @@ jobs:
         os: [ubuntu-20.04, ubuntu-18.04]
 
     steps:
-    - name: Install nightly rust
-      uses: actions-rs/toolchain@v1
-      with:
-        toolchain: nightly-i686-unknown-linux-gnu
-        override: true
-    
-    - name: Install i386 deps
-      run: |
-        sudo dpkg --add-architecture i386 
-        sudo apt-get update 
-        sudo apt-get install build-essential g++-multilib -y
+      - uses: actions/checkout@v4
 
-    - uses: actions/checkout@v2
-    - name: Build server plugin
-      run: |
-        cargo build --package server --release
-        strip -s target/release/libserver.so -o stripped.so
+      - name: Install pinned nightly + i686 target
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: nightly-2022-11-06
+          targets: i686-unknown-linux-gnu
 
-    - uses: actions/upload-artifact@v2
-      with:
-        name: cef-${{ matrix.os }}.so
-        path: stripped.so
+      - name: Install i386 deps
+        run: |
+          sudo dpkg --add-architecture i386
+          sudo apt-get update
+          sudo apt-get install -y build-essential g++-multilib
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: cargo-registry-${{ runner.os }}-${{ matrix.os }}-i686-unknown-linux-gnu-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            cargo-registry-${{ runner.os }}-${{ matrix.os }}-i686-unknown-linux-gnu-
+            cargo-registry-${{ runner.os }}-${{ matrix.os }}-
+
+      - name: Cache target dir
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ github.workspace }}/target
+          key: cargo-target-${{ runner.os }}-${{ matrix.os }}-i686-unknown-linux-gnu-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            cargo-target-${{ runner.os }}-${{ matrix.os }}-i686-unknown-linux-gnu-
+            cargo-target-${{ runner.os }}-${{ matrix.os }}-
+
+      - name: Build server plugin
+        run: |
+          cargo build --package server --release --target i686-unknown-linux-gnu
+          strip -s target/i686-unknown-linux-gnu/release/libserver.so -o stripped.so
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cef-${{ matrix.os }}.so
+          path: stripped.so
 
   build_server_centos:
     runs-on: ubuntu-latest
     container: centos:7.5.1804
 
     steps:
-    - name: Install i386 deps
-      run: yum install git curl gcc g++ dpkg-dev make libgcc libgcc.i686 glibc-devel.i686 zlib.i686 zlib -y
+      - name: Install deps
+        run: yum install -y git curl gcc gcc-c++ make
 
-    - name: Install nightly rust
-      uses: actions-rs/toolchain@v1
-      with:
-        toolchain: nightly-i686-unknown-linux-gnu
-        override: true
+      - name: Install pinned nightly + i686 target
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: nightly-2022-11-06
+          targets: i686-unknown-linux-gnu
 
-    - uses: actions/checkout@v2
-    - name: Build server plugin
-      run: |
-        cargo build --package server --release
-        strip -s target/release/libserver.so -o stripped.so
+      - uses: actions/checkout@v4
 
-    - uses: actions/upload-artifact@v2
-      with:
-        name: cef-centos-7.so
-        path: stripped.so
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: cargo-registry-${{ runner.os }}-centos7-i686-unknown-linux-gnu-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            cargo-registry-${{ runner.os }}-centos7-i686-unknown-linux-gnu-
+            cargo-registry-${{ runner.os }}-centos7-
+
+      - name: Cache target dir
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ github.workspace }}/target
+          key: cargo-target-${{ runner.os }}-centos7-i686-unknown-linux-gnu-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            cargo-target-${{ runner.os }}-centos7-i686-unknown-linux-gnu-
+            cargo-target-${{ runner.os }}-centos7-
+
+      - name: Build server plugin
+        run: |
+          cargo build --package server --release --target i686-unknown-linux-gnu
+          strip -s target/i686-unknown-linux-gnu/release/libserver.so -o stripped.so
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cef-centos-7.so
+          path: stripped.so
 
   build_server_debian:
     runs-on: ubuntu-latest
@@ -74,112 +118,156 @@ jobs:
         os: [9, 10, 11]
 
     steps:
-    - name: Install i386 deps
-      run: |
-        dpkg --add-architecture i386 
-        apt-get update
-        apt-get install build-essential curl make g++-multilib -y
+      - name: Install i386 deps
+        run: |
+          dpkg --add-architecture i386
+          apt-get update
+          apt-get install -y build-essential curl make g++-multilib
 
-    - name: Install nightly rust
-      uses: actions-rs/toolchain@v1
-      with:
-        toolchain: nightly-i686-unknown-linux-gnu
-        override: true
+      - name: Install pinned nightly + i686 target
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: nightly-2022-11-06
+          targets: i686-unknown-linux-gnu
 
-    - uses: actions/checkout@v2
-    - name: Build server plugin
-      run: |
-        cargo build --package server --release
-        strip -s target/release/libserver.so -o stripped.so
+      - uses: actions/checkout@v4
 
-    - uses: actions/upload-artifact@v2
-      with:
-        name: cef-debian-${{ matrix.os }}.so
-        path: stripped.so
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: cargo-registry-${{ runner.os }}-debian${{ matrix.os }}-i686-unknown-linux-gnu-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            cargo-registry-${{ runner.os }}-debian${{ matrix.os }}-i686-unknown-linux-gnu-
+            cargo-registry-${{ runner.os }}-debian${{ matrix.os }}-
+
+      - name: Cache target dir
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ github.workspace }}/target
+          key: cargo-target-${{ runner.os }}-debian${{ matrix.os }}-i686-unknown-linux-gnu-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            cargo-target-${{ runner.os }}-debian${{ matrix.os }}-i686-unknown-linux-gnu-
+            cargo-target-${{ runner.os }}-debian${{ matrix.os }}-
+
+      - name: Build server plugin
+        run: |
+          cargo build --package server --release --target i686-unknown-linux-gnu
+          strip -s target/i686-unknown-linux-gnu/release/libserver.so -o stripped.so
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cef-debian-${{ matrix.os }}.so
+          path: stripped.so
 
   build_client:
     runs-on: windows-latest
     steps:
-    - name: Configuration
-      run: |
-        Write-Output "DX_SDK_DIR=${env:TEMP}/dxsdk" >> ${env:GITHUB_ENV}
-        Write-Output "DX_SDK=${env:TEMP}/dxsdk/Lib/x86" >> ${env:GITHUB_ENV}
-        Write-Output "CEF_PATH=${env:TEMP}/cef" >> ${env:GITHUB_ENV}
+      - uses: actions/checkout@v4
 
-    - name: DirectX SDK cache
-      id: dx-cache
-      uses: actions/cache@v2
-      with:
-        path: ${{ env.DX_SDK_DIR }}
-        key: directx
+      - name: Configuration
+        run: |
+          Write-Output "DX_SDK_DIR=${env:TEMP}/dxsdk" >> ${env:GITHUB_ENV}
+          Write-Output "DX_SDK=${env:TEMP}/dxsdk/Lib/x86" >> ${env:GITHUB_ENV}
+          Write-Output "CEF_PATH=${env:TEMP}/cef" >> ${env:GITHUB_ENV}
 
-    - name: CEF static library cache
-      id: cef-cache
-      uses: actions/cache@v2
-      with:
-        path: ${{ env.CEF_PATH }}
-        key: libcef
+      - name: DirectX SDK cache
+        id: dx-cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.DX_SDK_DIR }}
+          key: directx
 
-    - name: Install DirectX SDK
-      if: steps.dx-cache.outputs.cache-hit != 'true'
-      run: |
-        curl -L https://download.microsoft.com/download/a/e/7/ae743f1f-632b-4809-87a9-aa1bb3458e31/DXSDK_Jun10.exe -o _DX2010_.exe
-        7z x _DX2010_.exe DXSDK/Lib/x86 -o_DX2010_
-        mv _DX2010_/DXSDK $DX_SDK_DIR
-        rm -fR _DX*_ _DX*_.exe
-      shell: bash
+      - name: CEF static library cache
+        id: cef-cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.CEF_PATH }}
+          key: libcef
 
-    - name: Download CEF static library
-      if: steps.cef-cache.outputs.cache-hit != 'true'
-      run: |
-        curl -L https://github.com/ZOTTCE/samp-cef/releases/download/v1.1-beta/libcef.lib -o libcef.lib
-        mkdir $CEF_PATH
-        mv libcef.lib $CEF_PATH/libcef.lib
-      shell: bash
+      - name: Install DirectX SDK
+        if: steps.dx-cache.outputs.cache-hit != 'true'
+        run: |
+          curl -L https://download.microsoft.com/download/a/e/7/ae743f1f-632b-4809-87a9-aa1bb3458e31/DXSDK_Jun10.exe -o _DX2010_.exe
+          7z x _DX2010_.exe DXSDK/Lib/x86 -o_DX2010_
+          mv _DX2010_/DXSDK $DX_SDK_DIR
+          rm -fR _DX*_ _DX*_.exe
+        shell: bash
 
-    - name: Install nightly rust
-      uses: actions-rs/toolchain@v1
-      with:
-        toolchain: nightly-i686-pc-windows-msvc
-        override: true
+      - name: Download CEF static library
+        if: steps.cef-cache.outputs.cache-hit != 'true'
+        run: |
+          curl -L https://github.com/ZOTTCE/samp-cef/releases/download/v1.1-beta/libcef.lib -o libcef.lib
+          mkdir -p $CEF_PATH
+          mv libcef.lib $CEF_PATH/libcef.lib
+        shell: bash
 
-    - uses: actions/checkout@v2
-    - name: Build client
-      run: cargo build --release
-      shell: bash
+      - name: Install pinned nightly + i686 target (MSVC)
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: nightly-2022-11-06
+          targets: i686-pc-windows-msvc
 
-    - name: Make a package
-      run: |
-        mkdir redist && cd redist
-        curl -L https://github.com/ZOTTCE/samp-cef/releases/download/v1.1-beta/cef.zip -o cef_redist.zip
-        7z x cef_redist.zip -ocef
-        cp ../target/release/client.dll cef/client.dll
-        cp ../target/release/renderer.exe cef/renderer.exe
-        cp ../target/release/loader.dll cef.asi
-        7z a -tzip cef.zip cef.asi cef
-      shell: bash
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: cargo-registry-${{ runner.os }}-i686-pc-windows-msvc-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            cargo-registry-${{ runner.os }}-i686-pc-windows-msvc-
+            cargo-registry-${{ runner.os }}-
 
-    - uses: actions/upload-artifact@v2
-      with:
-        name: client.dll
-        path: target/release/client.dll
+      - name: Cache target dir
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ github.workspace }}/target
+          key: cargo-target-${{ runner.os }}-i686-pc-windows-msvc-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            cargo-target-${{ runner.os }}-i686-pc-windows-msvc-
+            cargo-target-${{ runner.os }}-
 
-    - uses: actions/upload-artifact@v2
-      with:
-        name: renderer.exe
-        path: target/release/renderer.exe
+      - name: Build client
+        run: cargo build --release
+        shell: bash
 
-    - uses: actions/upload-artifact@v2
-      with:
-        name: cef.asi
-        path: target/release/loader.dll
+      - name: Make a package
+        run: |
+          mkdir redist && cd redist
+          curl -L https://github.com/ZOTTCE/samp-cef/releases/download/v1.1-beta/cef.zip -o cef_redist.zip
+          7z x cef_redist.zip -ocef
+          cp ../target/release/client.dll cef/client.dll
+          cp ../target/release/renderer.exe cef/renderer.exe
+          cp ../target/release/loader.dll cef.asi
+          7z a -tzip cef.zip cef.asi cef
+        shell: bash
 
-    - uses: actions/upload-artifact@v2
-      with:
-        name: cef-windows.dll
-        path: target/release/server.dll
+      - uses: actions/upload-artifact@v4
+        with:
+          name: client.dll
+          path: target/release/client.dll
 
-    - uses: actions/upload-artifact@v2
-      with:
-        name: cef.zip
-        path: redist/cef.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: renderer.exe
+          path: target/release/renderer.exe
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cef.asi
+          path: target/release/loader.dll
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cef-windows.dll
+          path: target/release/server.dll
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cef.zip
+          path: redist/cef.zip
