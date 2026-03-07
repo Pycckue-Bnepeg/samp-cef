@@ -35,6 +35,10 @@ impl CefString {
     }
 
     pub fn to_cef_string(&self) -> cef_string_t {
+        if self.inner.is_null() {
+            return unsafe { std::mem::zeroed() };
+        }
+
         let inner = unsafe { &*self.inner };
         cef_string_t {
             str_: inner.str_,
@@ -50,6 +54,10 @@ impl CefString {
 
 impl fmt::Display for CefString {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if self.inner.is_null() {
+            return Ok(());
+        }
+
         unsafe {
             let utf16 = &*self.inner;
             if utf16.str_.is_null() || utf16.length == 0 {
@@ -65,13 +73,15 @@ impl fmt::Display for CefString {
 
 impl Drop for CefString {
     fn drop(&mut self) {
-        unsafe {
-            if (*self.inner).str_.is_null() || !self.owned {
-                return;
-            }
+        if self.inner.is_null() || !self.owned {
+            return;
         }
 
         unsafe {
+            if (*self.inner).str_.is_null() {
+                return;
+            }
+
             cef_string_utf16_clear(self.inner);
         }
     }
