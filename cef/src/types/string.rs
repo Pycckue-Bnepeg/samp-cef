@@ -4,11 +4,15 @@ pub use cef_sys::{
 };
 use std::fmt;
 
-static EMPTY_CEF_STRING: cef_string_t = cef_string_t {
+struct EmptyCefString(cef_string_t);
+
+unsafe impl Sync for EmptyCefString {}
+
+static EMPTY_CEF_STRING: EmptyCefString = EmptyCefString(cef_string_t {
     str_: std::ptr::null_mut(),
     length: 0,
     dtor: None,
-};
+});
 
 #[repr(C)]
 pub struct CefString {
@@ -55,7 +59,7 @@ impl CefString {
 
     pub fn as_cef_string(&self) -> &cef_string_t {
         if self.inner.is_null() {
-            &EMPTY_CEF_STRING
+            &EMPTY_CEF_STRING.0
         } else {
             unsafe { &*self.inner }
         }
