@@ -19,7 +19,15 @@ impl V8Context {
         }
     }
 
-    #[allow(dead_code)]
+    pub(crate) fn from_raw_borrowed(raw: *mut cef_v8context_t) -> V8Context {
+        if raw.is_null() {
+            panic!("V8Context::from_raw_borrowed null pointer");
+        }
+
+        V8Context {
+            inner: RefGuard::from_raw_borrowed(raw),
+        }
+    }
     pub(crate) fn from_raw_add_ref(raw: *mut cef_v8context_t) -> V8Context {
         if raw.is_null() {
             panic!("V8Context::from_raw_add_ref null pointer");
@@ -91,6 +99,26 @@ impl V8Value {
 
         V8Value {
             inner: RefGuard::from_raw(raw),
+        }
+    }
+
+    pub(crate) fn from_raw_borrowed(raw: *mut cef_v8value_t) -> V8Value {
+        if raw.is_null() {
+            panic!("V8Value::from_raw_borrowed null pointer");
+        }
+
+        V8Value {
+            inner: RefGuard::from_raw_borrowed(raw),
+        }
+    }
+
+    pub(crate) fn from_raw_add_ref(raw: *mut cef_v8value_t) -> V8Value {
+        if raw.is_null() {
+            panic!("V8Value::from_raw_add_ref null pointer");
+        }
+
+        V8Value {
+            inner: RefGuard::from_raw_add_ref(raw),
         }
     }
 

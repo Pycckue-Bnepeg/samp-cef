@@ -14,6 +14,18 @@ impl ProcessMessage {
         }
     }
 
+    pub(crate) fn from_raw_borrowed(raw: *mut cef_process_message_t) -> ProcessMessage {
+        ProcessMessage {
+            inner: RefGuard::from_raw_borrowed(raw),
+        }
+    }
+
+    pub(crate) fn from_raw_add_ref(raw: *mut cef_process_message_t) -> ProcessMessage {
+        ProcessMessage {
+            inner: RefGuard::from_raw_add_ref(raw),
+        }
+    }
+
     pub(crate) fn into_cef(self) -> *mut cef_process_message_t {
         self.inner.into_cef()
     }

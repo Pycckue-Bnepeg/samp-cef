@@ -15,6 +15,7 @@ pub trait RefCounted {
 // smart pointer
 pub struct RefGuard<T: RefCounted> {
     object: *mut T,
+    release_on_drop: bool,
     marker: PhantomData<T>,
 }
 
@@ -23,6 +24,16 @@ impl<T: RefCounted> RefGuard<T> {
     pub(crate) fn from_raw(ptr: *mut T) -> RefGuard<T> {
         RefGuard {
             object: ptr,
+            release_on_drop: true,
+            marker: PhantomData,
+        }
+    }
+
+    #[inline]
+    pub(crate) fn from_raw_borrowed(ptr: *mut T) -> RefGuard<T> {
+        RefGuard {
+            object: ptr,
+            release_on_drop: false,
             marker: PhantomData,
         }
     }
@@ -31,6 +42,7 @@ impl<T: RefCounted> RefGuard<T> {
     pub(crate) fn from_raw_add_ref(ptr: *mut T) -> RefGuard<T> {
         let guard = RefGuard {
             object: ptr,
+            release_on_drop: true,
             marker: PhantomData,
         };
 
@@ -59,6 +71,7 @@ impl<T: RefCounted> Clone for RefGuard<T> {
 
         RefGuard {
             object: self.object,
+            release_on_drop: true,
             marker: PhantomData,
         }
     }
@@ -74,7 +87,9 @@ impl<T: RefCounted> Deref for RefGuard<T> {
 
 impl<T: RefCounted> Drop for RefGuard<T> {
     fn drop(&mut self) {
-        self.release();
+        if self.release_on_drop {
+            self.release();
+        }
     }
 }
 

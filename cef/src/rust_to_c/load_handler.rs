@@ -12,7 +12,7 @@ unsafe extern "system" fn on_loading_state_change<I: LoadHandler>(
 ) {
     let obj: &mut Wrapper<_, I> = Wrapper::unwrap(this);
 
-    let browser = Browser::from_raw(browser);
+    let browser = Browser::from_raw_add_ref(browser);
     let is_loading = is_loading == 1;
     let can_go_back = can_go_back == 1;
     let can_go_forward = can_go_forward == 1;
@@ -27,8 +27,8 @@ unsafe extern "system" fn on_load_end<I: LoadHandler>(
 ) {
     let obj: &mut Wrapper<_, I> = Wrapper::unwrap(this);
 
-    let browser = Browser::from_raw(browser);
-    let frame = Frame::from_raw(frame);
+    let browser = Browser::from_raw_add_ref(browser);
+    let frame = Frame::from_raw_add_ref(frame);
 
     obj.interface.on_load_end(browser, frame, status_code);
 }

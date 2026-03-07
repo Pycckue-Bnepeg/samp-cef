@@ -13,11 +13,11 @@ unsafe extern "system" fn execute<I: V8Handler>(
     let obj: &mut Wrapper<_, I> = Wrapper::unwrap(this);
 
     let name = CefString::from(name);
-    let _object = V8Value::from_raw(object);
+    let _object = V8Value::from_raw_add_ref(object);
 
     let args: Vec<V8Value> = unsafe { std::slice::from_raw_parts(arguments, arguments_count) }
         .iter()
-        .map(|val| V8Value::from_raw(*val))
+        .map(|val| V8Value::from_raw_add_ref(*val))
         .collect();
 
     let ret = obj.interface.execute(name, args);

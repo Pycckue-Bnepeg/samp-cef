@@ -15,9 +15,9 @@ extern "system" fn on_context_created<I: RenderProcessHandler>(
     context: *mut cef_v8context_t,
 ) {
     let obj: &mut Wrapper<_, I> = Wrapper::unwrap(this);
-    let browser = Browser::from_raw(browser);
-    let frame = Frame::from_raw(frame);
-    let context = V8Context::from_raw(context);
+    let browser = Browser::from_raw_add_ref(browser);
+    let frame = Frame::from_raw_add_ref(frame);
+    let context = V8Context::from_raw_add_ref(context);
 
     obj.interface.on_context_created(browser, frame, context);
 }
@@ -27,9 +27,9 @@ extern "system" fn on_context_released<I: RenderProcessHandler>(
     context: *mut cef_v8context_t,
 ) {
     let obj: &mut Wrapper<_, I> = Wrapper::unwrap(this);
-    let browser = Browser::from_raw(browser);
-    let frame = Frame::from_raw(frame);
-    let context = V8Context::from_raw(context);
+    let browser = Browser::from_raw_add_ref(browser);
+    let frame = Frame::from_raw_add_ref(frame);
+    let context = V8Context::from_raw_borrowed(context);
 
     obj.interface.on_context_released(browser, frame, context);
 }
@@ -47,10 +47,10 @@ extern "system" fn on_process_message<I: RenderProcessHandler>(
 ) -> i32 {
     let obj: &mut Wrapper<_, I> = Wrapper::unwrap(this);
 
-    let browser = Browser::from_raw(browser);
-    let frame = Frame::from_raw(frame);
+    let browser = Browser::from_raw_add_ref(browser);
+    let frame = Frame::from_raw_add_ref(frame);
     let process_id: ProcessId = ProcessId::from(source_process);
-    let message = ProcessMessage::from_raw(message);
+    let message = ProcessMessage::from_raw_add_ref(message);
 
     let result = obj
         .interface

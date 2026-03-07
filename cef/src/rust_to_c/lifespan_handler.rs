@@ -9,7 +9,7 @@ extern "system" fn on_after_created<I: LifespanHandler>(
 ) {
     let obj: &mut Wrapper<_, I> = Wrapper::unwrap(this);
 
-    let browser = Browser::from_raw(browser);
+    let browser = Browser::from_raw_add_ref(browser);
 
     obj.interface.on_after_created(browser);
 }
@@ -19,7 +19,7 @@ extern "system" fn on_before_close<I: LifespanHandler>(
 ) {
     let obj: &mut Wrapper<_, I> = Wrapper::unwrap(this);
 
-    let browser = Browser::from_raw(browser);
+    let browser = Browser::from_raw_borrowed(browser);
 
     obj.interface.on_before_close(browser);
 }

@@ -136,10 +136,10 @@ extern "system" fn on_process_message<I: Client>(
 ) -> i32 {
     let obj: &mut Wrapper<_, I> = Wrapper::unwrap(this);
 
-    let browser = Browser::from_raw(browser);
-    let frame = Frame::from_raw(frame);
+    let browser = Browser::from_raw_add_ref(browser);
+    let frame = Frame::from_raw_add_ref(frame);
     let process_id: ProcessId = ProcessId::from(source_process);
-    let message = ProcessMessage::from_raw(message);
+    let message = ProcessMessage::from_raw_add_ref(message);
 
     let result = obj
         .interface

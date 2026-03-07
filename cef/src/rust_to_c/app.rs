@@ -37,7 +37,7 @@ extern "system" fn on_before_command_line_processing<I: App>(
 ) {
     let obj: &mut Wrapper<_, I> = Wrapper::unwrap(this);
     let process_type = CefString::from(process_type);
-    let cmd = CommandLine::from_raw(command_line);
+    let cmd = CommandLine::from_raw_borrowed(command_line);
 
     obj.interface
         .on_before_command_line_processing(process_type, cmd);

@@ -9,7 +9,7 @@ unsafe extern "system" fn get_audio_parameters<I: AudioHandler>(
     params: *mut cef_audio_parameters_t,
 ) -> i32 {
     let obj: &mut Wrapper<_, I> = Wrapper::unwrap(this);
-    let browser = Browser::from_raw(browser);
+    let browser = Browser::from_raw_add_ref(browser);
 
     let params = unsafe { &mut *params };
     if obj.interface.get_audio_parameters(browser, params) {
@@ -24,7 +24,7 @@ unsafe extern "system" fn on_audio_stream_packet<I: AudioHandler>(
     frames: i32, pts: i64,
 ) {
     let obj: &mut Wrapper<_, I> = Wrapper::unwrap(this);
-    let browser = Browser::from_raw(browser);
+    let browser = Browser::from_raw_add_ref(browser);
     let audio_stream_id = 0; // temp comp
 
     obj.interface
@@ -40,7 +40,7 @@ unsafe extern "system" fn on_audio_stream_started<I: AudioHandler>(
     params: *const cef_audio_parameters_t, channels: i32,
 ) {
     let obj: &mut Wrapper<_, I> = Wrapper::unwrap(this);
-    let browser = Browser::from_raw(browser);
+    let browser = Browser::from_raw_add_ref(browser);
 
     let params = unsafe { &*params };
     let audio_stream_id = 0; // COMP
@@ -59,7 +59,7 @@ unsafe extern "system" fn on_audio_stream_stopped<I: AudioHandler>(
     this: *mut cef_audio_handler_t, browser: *mut cef_browser_t,
 ) {
     let obj: &mut Wrapper<_, I> = Wrapper::unwrap(this);
-    let browser = Browser::from_raw(browser);
+    let browser = Browser::from_raw_add_ref(browser);
     let audio_stream_id = 0; // COMP
 
     obj.interface
@@ -70,7 +70,7 @@ unsafe extern "system" fn on_audio_stream_error<I: AudioHandler>(
     this: *mut cef_audio_handler_t, browser: *mut cef_browser_t, error: *const cef_string_t,
 ) {
     let obj: &mut Wrapper<_, I> = Wrapper::unwrap(this);
-    let browser = Browser::from_raw(browser);
+    let browser = Browser::from_raw_add_ref(browser);
 
     let error = unsafe {
         widestring::U16CString::from_ptr((*error).str_, (*error).length)

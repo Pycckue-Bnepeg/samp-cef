@@ -13,10 +13,10 @@ unsafe extern "system" fn on_before_context_menu<I: ContextMenuHandler>(
 ) {
     let obj: &mut Wrapper<_, I> = Wrapper::unwrap(this);
 
-    let browser = Browser::from_raw(browser);
-    let frame = Frame::from_raw(frame);
-    let params = ContextMenuParams::from_raw(params);
-    let model = MenuModel::from_raw(model);
+    let browser = Browser::from_raw_add_ref(browser);
+    let frame = Frame::from_raw_add_ref(frame);
+    let params = ContextMenuParams::from_raw_borrowed(params);
+    let model = MenuModel::from_raw_borrowed(model);
 
     obj.interface
         .on_before_context_menu(browser, frame, params, model);

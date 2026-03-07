@@ -14,6 +14,12 @@ impl CommandLine {
         }
     }
 
+    pub(crate) fn from_raw_borrowed(raw: *mut cef_command_line_t) -> CommandLine {
+        CommandLine {
+            inner: RefGuard::from_raw_borrowed(raw),
+        }
+    }
+
     pub fn append_switch_with_value(&self, name: &str, value: &str) {
         let name = CefString::new(name);
         let value = CefString::new(value);

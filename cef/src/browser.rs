@@ -28,6 +28,28 @@ impl Browser {
         }
     }
 
+    #[inline]
+    pub(crate) fn from_raw_borrowed(raw: *mut cef_browser_t) -> Browser {
+        if raw.is_null() {
+            panic!("Browser::from_raw_borrowed null pointer.");
+        }
+
+        Browser {
+            inner: RefGuard::from_raw_borrowed(raw),
+        }
+    }
+
+    #[inline]
+    pub(crate) fn from_raw_add_ref(raw: *mut cef_browser_t) -> Browser {
+        if raw.is_null() {
+            panic!("Browser::from_raw_add_ref null pointer.");
+        }
+
+        Browser {
+            inner: RefGuard::from_raw_add_ref(raw),
+        }
+    }
+
     pub fn host(&self) -> BrowserHost {
         if let Some(get_host) = self.inner.get_host {
             let host = unsafe { get_host(self.inner.get_mut()) };
@@ -224,6 +246,18 @@ impl Frame {
         }
     }
 
+    pub(crate) fn from_raw_borrowed(raw: *mut cef_frame_t) -> Frame {
+        Frame {
+            inner: RefGuard::from_raw_borrowed(raw),
+        }
+    }
+
+    pub(crate) fn from_raw_add_ref(raw: *mut cef_frame_t) -> Frame {
+        Frame {
+            inner: RefGuard::from_raw_add_ref(raw),
+        }
+    }
+
     pub fn browser(&self) -> Browser {
         let get_br = self.inner.get_browser.unwrap();
         let browser = unsafe { get_br(self.inner.get_mut()) };
@@ -279,6 +313,12 @@ impl ContextMenuParams {
             inner: RefGuard::from_raw(raw),
         }
     }
+
+    pub(crate) fn from_raw_borrowed(raw: *mut cef_context_menu_params_t) -> ContextMenuParams {
+        ContextMenuParams {
+            inner: RefGuard::from_raw_borrowed(raw),
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -290,6 +330,12 @@ impl MenuModel {
     pub(crate) fn from_raw(raw: *mut cef_menu_model_t) -> MenuModel {
         MenuModel {
             inner: RefGuard::from_raw(raw),
+        }
+    }
+
+    pub(crate) fn from_raw_borrowed(raw: *mut cef_menu_model_t) -> MenuModel {
+        MenuModel {
+            inner: RefGuard::from_raw_borrowed(raw),
         }
     }
 
