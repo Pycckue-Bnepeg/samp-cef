@@ -700,7 +700,8 @@ impl WebClient {
 
     pub fn load_url(&self, url: &str) {
         if let Some(browser) = self.browser() {
-            browser.main_frame().load_url(url);
+            let url = crate::browser::assets_scheme::resolve_browser_url(url);
+            browser.main_frame().load_url(&url);
         }
     }
 

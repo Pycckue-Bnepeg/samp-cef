@@ -24,7 +24,7 @@ unsafe extern "system" fn get_root_screen_rect<I: RenderHandler>(
 
 unsafe extern "system" fn get_view_rect<I: RenderHandler>(
     this: *mut cef_render_handler_t, browser: *mut cef_browser_t, rect: *mut cef_rect_t,
-) {
+) { unsafe {
     if browser.is_null() || rect.is_null() {
         return;
     }
@@ -34,7 +34,7 @@ unsafe extern "system" fn get_view_rect<I: RenderHandler>(
     let rect = &mut *rect;
 
     obj.interface.view_rect(browser, rect);
-}
+}}
 
 unsafe extern "system" fn get_screen_point(
     _this: *mut cef_render_handler_t, _browser: *mut cef_browser_t, _view_x: ::std::os::raw::c_int,
@@ -66,7 +66,7 @@ unsafe extern "system" fn on_popup_show<I: RenderHandler>(
 
 unsafe extern "system" fn on_popup_size<I: RenderHandler>(
     this: *mut cef_render_handler_t, browser: *mut cef_browser_t, rect: *const cef_rect_t,
-) {
+) { unsafe {
     if browser.is_null() || rect.is_null() {
         return;
     }
@@ -74,14 +74,14 @@ unsafe extern "system" fn on_popup_size<I: RenderHandler>(
     let obj: &mut Wrapper<_, I> = Wrapper::unwrap(this);
     let browser = Browser::from_raw_borrowed(browser);
     obj.interface.on_popup_size(browser, &*rect);
-}
+}}
 
 unsafe extern "system" fn on_paint<I: RenderHandler>(
     this: *mut cef_render_handler_t, browser: *mut cef_browser_t,
     type_: cef_paint_element_type_t::Type, dirty_rects_count: usize,
     dirty_rects: *const cef_rect_t, buffer: *const ::std::os::raw::c_void,
     width: ::std::os::raw::c_int, height: ::std::os::raw::c_int,
-) {
+) { unsafe {
     if browser.is_null()
         || (dirty_rects_count > 0 && dirty_rects.is_null())
         || (width > 0 && height > 0 && buffer.is_null())
@@ -108,7 +108,7 @@ unsafe extern "system" fn on_paint<I: RenderHandler>(
         width as usize,
         height as usize,
     );
-}
+}}
 
 unsafe extern "system" fn on_accelerated_paint(
     _this: *mut cef_render_handler_t, _browser: *mut cef_browser_t,

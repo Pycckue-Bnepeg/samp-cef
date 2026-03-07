@@ -43,12 +43,20 @@ extern "system" fn on_before_command_line_processing<I: App>(
         .on_before_command_line_processing(process_type, cmd);
 }
 
+extern "system" fn on_register_custom_schemes<I: App>(
+    this: *mut cef_app_t, registrar: *mut cef_sys::cef_scheme_registrar_t,
+) {
+    let obj: &mut Wrapper<_, I> = Wrapper::unwrap(this);
+    obj.interface.on_register_custom_schemes(registrar);
+}
+
 pub fn wrap<T: App>(app: T) -> *mut cef_app_t {
     let mut object: cef_app_t = unsafe { std::mem::zeroed() };
 
     object.get_render_process_handler = Some(get_render_process_handler::<T>);
     object.get_browser_process_handler = Some(get_browser_process_handler::<T>);
     object.on_before_command_line_processing = Some(on_before_command_line_processing::<T>);
+    object.on_register_custom_schemes = Some(on_register_custom_schemes::<T>);
 
     let wrapper = Wrapper::new(object, app);
 

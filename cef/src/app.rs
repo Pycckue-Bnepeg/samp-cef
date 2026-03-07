@@ -18,4 +18,6 @@ pub trait App {
         &self, _process_type: CefString, _command_line: CommandLine,
     ) {
     }
+
+    fn on_register_custom_schemes(&self, _registrar: *mut cef_sys::cef_scheme_registrar_t) {}
 }

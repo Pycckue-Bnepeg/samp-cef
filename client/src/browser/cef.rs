@@ -21,6 +21,7 @@ impl RenderProcessHandler for DefaultApp {}
 impl BrowserProcessHandler for DefaultApp {
     fn on_context_initialized(&self) {
         log::trace!("BrowserProcessHandler::on_context_initialized");
+        crate::browser::assets_scheme::register_scheme_handler_factory();
         let _ = self.event_tx.send(Event::CefInitialize);
     }
 }
@@ -43,6 +44,10 @@ impl App for DefaultApp {
 
         // TODO: permissions
         command_line.append_switch("enable-media-stream");
+    }
+
+    fn on_register_custom_schemes(&self, registrar: *mut cef_sys::cef_scheme_registrar_t) {
+        crate::browser::assets_scheme::register_custom_scheme(registrar);
     }
 }
 
@@ -100,7 +105,8 @@ pub fn create_browser(client: Arc<WebClient>, url: &str) {
     window_info.parent_window = client_api::gta::hwnd() as *mut _;
     window_info.windowless_rendering_enabled = 1;
 
-    let url = CefString::new(url);
+    let url = crate::browser::assets_scheme::resolve_browser_url(url);
+    let url = CefString::new(&url);
 
     let mut settings = unsafe { std::mem::zeroed::<cef_sys::cef_browser_settings_t>() };
 

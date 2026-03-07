@@ -76,6 +76,12 @@ The browser starts listen to player input even if it is not focused. This allows
 `cef_load_url(player_id, browser_id, const url[])`
 
 Loads a new page with a given url (faster than destroy and recreate browser).
+
+`cef_create_browser`, `cef_create_ext_browser`, and `cef_load_url` also accept local files now:
+- a relative path like `index.html` or `ui/main.html` is resolved from `<gta_path>/cef/assets/`
+- a path like `cef/assets/index.html` is resolved from the game root
+- an absolute path like `C:\\Games\\GTA San Andreas\\cef\\assets\\index.html` is accepted only if it is actually inside `<gta_path>/cef/assets`
+- attempts to escape `<gta_path>/cef/assets`, including `..` traversal or direct `file://` URLs, are blocked on the client
 ### Handlers:
 
 `forward OnCefBrowserCreated(player_id, browser_id, status_code)`

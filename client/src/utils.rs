@@ -1,6 +1,6 @@
 use std::ffi::OsString;
 use std::os::windows::ffi::OsStringExt;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use winapi::shared::minwindef::MAX_PATH;
@@ -155,21 +155,29 @@ pub fn documents_path() -> PathBuf {
     path
 }
 
-pub fn cef_dir() -> PathBuf {
+pub fn game_dir() -> PathBuf {
     if let Some(path) = std::env::args()
         .skip_while(|arg| !arg.contains("--lp"))
         .nth(1)
     {
-        PathBuf::from(path).join("cef")
+        PathBuf::from(path)
     } else {
-        // в случае если игра запущена из другого места, а не с поомщью лаунчера
+        // в случае если игра запущена из другого места, а не с помощью лаунчера
         let exe = std::env::current_exe().ok();
 
         exe.as_ref()
             .and_then(|exe| exe.parent())
-            .map(|parent| parent.join("cef"))
-            .unwrap_or_else(|| PathBuf::from("./cef"))
+            .map(Path::to_path_buf)
+            .unwrap_or_else(|| PathBuf::from("."))
     }
+}
+
+pub fn cef_dir() -> PathBuf {
+    game_dir().join("cef")
+}
+
+pub fn assets_dir() -> PathBuf {
+    cef_dir().join("assets")
 }
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
