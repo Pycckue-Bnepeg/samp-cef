@@ -10,6 +10,10 @@ unsafe extern "system" fn execute<I: V8Handler>(
     arguments_count: usize, arguments: *const *mut cef_v8value_t, _retval: *mut *mut cef_v8value_t,
     _exception: *mut cef_string_t,
 ) -> std::os::raw::c_int {
+    if name.is_null() || object.is_null() || (arguments_count > 0 && arguments.is_null()) {
+        return 0;
+    }
+
     let obj: &mut Wrapper<_, I> = Wrapper::unwrap(this);
 
     let name = CefString::from(name);

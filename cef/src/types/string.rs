@@ -4,6 +4,12 @@ pub use cef_sys::{
 };
 use std::fmt;
 
+static EMPTY_CEF_STRING: cef_string_t = cef_string_t {
+    str_: std::ptr::null_mut(),
+    length: 0,
+    dtor: None,
+};
+
 #[repr(C)]
 pub struct CefString {
     inner: *mut cef_string_t,
@@ -48,7 +54,11 @@ impl CefString {
     }
 
     pub fn as_cef_string(&self) -> &cef_string_t {
-        unsafe { &*self.inner }
+        if self.inner.is_null() {
+            &EMPTY_CEF_STRING
+        } else {
+            unsafe { &*self.inner }
+        }
     }
 }
 
@@ -99,6 +109,10 @@ impl From<*const cef_string_t> for CefString {
 #[allow(clippy::not_unsafe_ptr_arg_deref)]
 impl From<cef_string_userfree_t> for CefString {
     fn from(string: cef_string_userfree_t) -> CefString {
+        if string.is_null() {
+            return Self::new_null();
+        }
+
         let cefstr = Self::new_null();
 
         unsafe {

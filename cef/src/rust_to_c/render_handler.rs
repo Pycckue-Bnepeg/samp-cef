@@ -25,6 +25,10 @@ unsafe extern "system" fn get_root_screen_rect<I: RenderHandler>(
 unsafe extern "system" fn get_view_rect<I: RenderHandler>(
     this: *mut cef_render_handler_t, browser: *mut cef_browser_t, rect: *mut cef_rect_t,
 ) {
+    if browser.is_null() || rect.is_null() {
+        return;
+    }
+
     let obj: &mut Wrapper<_, I> = Wrapper::unwrap(this);
     let browser = Browser::from_raw_borrowed(browser);
     let rect = &mut *rect;
@@ -50,6 +54,10 @@ unsafe extern "system" fn get_screen_info(
 unsafe extern "system" fn on_popup_show<I: RenderHandler>(
     this: *mut cef_render_handler_t, browser: *mut cef_browser_t, show: ::std::os::raw::c_int,
 ) {
+    if browser.is_null() {
+        return;
+    }
+
     let obj: &mut Wrapper<_, I> = Wrapper::unwrap(this);
     let browser = Browser::from_raw_borrowed(browser);
     let show = show == 1;
@@ -59,6 +67,10 @@ unsafe extern "system" fn on_popup_show<I: RenderHandler>(
 unsafe extern "system" fn on_popup_size<I: RenderHandler>(
     this: *mut cef_render_handler_t, browser: *mut cef_browser_t, rect: *const cef_rect_t,
 ) {
+    if browser.is_null() || rect.is_null() {
+        return;
+    }
+
     let obj: &mut Wrapper<_, I> = Wrapper::unwrap(this);
     let browser = Browser::from_raw_borrowed(browser);
     obj.interface.on_popup_size(browser, &*rect);
@@ -70,6 +82,13 @@ unsafe extern "system" fn on_paint<I: RenderHandler>(
     dirty_rects: *const cef_rect_t, buffer: *const ::std::os::raw::c_void,
     width: ::std::os::raw::c_int, height: ::std::os::raw::c_int,
 ) {
+    if browser.is_null()
+        || (dirty_rects_count > 0 && dirty_rects.is_null())
+        || (width > 0 && height > 0 && buffer.is_null())
+    {
+        return;
+    }
+
     let obj: &mut Wrapper<_, I> = Wrapper::unwrap(this);
     let browser = Browser::from_raw_borrowed(browser);
 
@@ -145,6 +164,10 @@ unsafe extern "system" fn ovkr<I: RenderHandler>(
     _this: *mut cef_render_handler_t, _browser: *mut cef_browser_t,
     _input_mode: cef_text_input_mode_t::Type,
 ) {
+    if _browser.is_null() {
+        return;
+    }
+
     let _obj: &mut Wrapper<_, I> = Wrapper::unwrap(_this);
     let _ = Browser::from_raw_borrowed(_browser);
 }

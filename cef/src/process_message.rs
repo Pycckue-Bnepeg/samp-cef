@@ -57,6 +57,6 @@ impl ProcessMessage {
         let get_list = self.inner.get_argument_list.unwrap();
         let list = unsafe { get_list(self.inner.get_mut()) };
 
-        List::from_raw(list)
+        List::try_from_raw(list).unwrap_or_default()
     }
 }

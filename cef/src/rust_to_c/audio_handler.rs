@@ -8,6 +8,10 @@ unsafe extern "system" fn get_audio_parameters<I: AudioHandler>(
     this: *mut cef_audio_handler_t, browser: *mut cef_browser_t,
     params: *mut cef_audio_parameters_t,
 ) -> i32 {
+    if browser.is_null() || params.is_null() {
+        return 0;
+    }
+
     let obj: &mut Wrapper<_, I> = Wrapper::unwrap(this);
     let browser = Browser::from_raw_add_ref(browser);
 
@@ -23,6 +27,10 @@ unsafe extern "system" fn on_audio_stream_packet<I: AudioHandler>(
     this: *mut cef_audio_handler_t, browser: *mut cef_browser_t, data: *mut *const f32,
     frames: i32, pts: i64,
 ) {
+    if browser.is_null() || (frames > 0 && data.is_null()) {
+        return;
+    }
+
     let obj: &mut Wrapper<_, I> = Wrapper::unwrap(this);
     let browser = Browser::from_raw_add_ref(browser);
     let audio_stream_id = 0; // temp comp
@@ -39,6 +47,10 @@ unsafe extern "system" fn on_audio_stream_started<I: AudioHandler>(
     this: *mut cef_audio_handler_t, browser: *mut cef_browser_t,
     params: *const cef_audio_parameters_t, channels: i32,
 ) {
+    if browser.is_null() || params.is_null() {
+        return;
+    }
+
     let obj: &mut Wrapper<_, I> = Wrapper::unwrap(this);
     let browser = Browser::from_raw_add_ref(browser);
 
@@ -58,6 +70,10 @@ unsafe extern "system" fn on_audio_stream_started<I: AudioHandler>(
 unsafe extern "system" fn on_audio_stream_stopped<I: AudioHandler>(
     this: *mut cef_audio_handler_t, browser: *mut cef_browser_t,
 ) {
+    if browser.is_null() {
+        return;
+    }
+
     let obj: &mut Wrapper<_, I> = Wrapper::unwrap(this);
     let browser = Browser::from_raw_add_ref(browser);
     let audio_stream_id = 0; // COMP
@@ -69,13 +85,21 @@ unsafe extern "system" fn on_audio_stream_stopped<I: AudioHandler>(
 unsafe extern "system" fn on_audio_stream_error<I: AudioHandler>(
     this: *mut cef_audio_handler_t, browser: *mut cef_browser_t, error: *const cef_string_t,
 ) {
+    if browser.is_null() {
+        return;
+    }
+
     let obj: &mut Wrapper<_, I> = Wrapper::unwrap(this);
     let browser = Browser::from_raw_add_ref(browser);
 
-    let error = unsafe {
-        widestring::U16CString::from_ptr((*error).str_, (*error).length)
-            .map(|wide| wide.to_string_lossy())
-            .unwrap_or_else(|_| String::from("some really baaad error"))
+    let error = if error.is_null() || unsafe { (*error).str_.is_null() } {
+        String::from("some really baaad error")
+    } else {
+        unsafe {
+            widestring::U16CString::from_ptr((*error).str_, (*error).length)
+                .map(|wide| wide.to_string_lossy())
+                .unwrap_or_else(|_| String::from("some really baaad error"))
+        }
     };
 
     obj.interface.on_audio_stream_error(browser, error);
