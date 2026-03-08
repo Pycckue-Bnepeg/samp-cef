@@ -7,6 +7,7 @@ pub mod command_line;
 pub mod handlers;
 pub mod process_message;
 pub mod ref_counted;
+pub mod scheme;
 pub mod settings;
 pub mod task;
 pub mod types;

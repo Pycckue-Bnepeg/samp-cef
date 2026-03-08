@@ -20,6 +20,11 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 type Callbacks = HashMap<String, Vec<(V8Value, V8Context)>>;
+const ASSET_SCHEME: &str = "sampcef";
+const ASSET_SCHEME_OPTIONS: i32 = cef_sys::cef_scheme_options_t::CEF_SCHEME_OPTION_STANDARD
+    | cef_sys::cef_scheme_options_t::CEF_SCHEME_OPTION_SECURE
+    | cef_sys::cef_scheme_options_t::CEF_SCHEME_OPTION_CORS_ENABLED
+    | cef_sys::cef_scheme_options_t::CEF_SCHEME_OPTION_FETCH_ENABLED;
 
 #[derive(Clone)]
 pub struct Handler {
@@ -148,6 +153,17 @@ impl App for Application {
 
     fn render_process_handler(&self) -> Option<Self> {
         Some(self.clone())
+    }
+
+    fn on_register_custom_schemes(&self, registrar: *mut cef_sys::cef_scheme_registrar_t) {
+        let result =
+            cef::scheme::register_custom_scheme(registrar, ASSET_SCHEME, ASSET_SCHEME_OPTIONS);
+        if !result {
+            error_message_box(
+                "CEF renderer error",
+                "Failed to register custom asset scheme in renderer process.",
+            );
+        }
     }
 }
 

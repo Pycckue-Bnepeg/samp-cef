@@ -13,9 +13,13 @@ use cef_sys::{
 use percent_encoding::percent_decode_str;
 use url::Url;
 
-const ASSET_SCHEME: &str = "samp";
+pub const ASSET_SCHEME: &str = "sampcef";
 const ASSET_HOST: &str = "assets";
 const BLANK_URL: &str = "about:blank";
+const ASSET_SCHEME_OPTIONS: i32 = cef_scheme_options_t::CEF_SCHEME_OPTION_STANDARD
+    | cef_scheme_options_t::CEF_SCHEME_OPTION_SECURE
+    | cef_scheme_options_t::CEF_SCHEME_OPTION_CORS_ENABLED
+    | cef_scheme_options_t::CEF_SCHEME_OPTION_FETCH_ENABLED;
 
 #[repr(C)]
 struct Wrapper<T, I> {
@@ -168,23 +172,7 @@ impl AssetResourceHandler {
 }
 
 pub fn register_custom_scheme(registrar: *mut cef_scheme_registrar_t) {
-    if registrar.is_null() {
-        log::error!("CEF registrar pointer is null");
-        return;
-    }
-
-    let Some(add_custom_scheme) = (unsafe { (*registrar).add_custom_scheme }) else {
-        log::warn!("CEF registrar has no add_custom_scheme callback");
-        return;
-    };
-
-    let scheme = CefString::new(ASSET_SCHEME);
-    let options = cef_scheme_options_t::CEF_SCHEME_OPTION_STANDARD
-        | cef_scheme_options_t::CEF_SCHEME_OPTION_SECURE
-        | cef_scheme_options_t::CEF_SCHEME_OPTION_CORS_ENABLED
-        | cef_scheme_options_t::CEF_SCHEME_OPTION_FETCH_ENABLED;
-
-    let result = unsafe { add_custom_scheme(registrar, scheme.as_cef_string(), options) };
+    let result = cef::scheme::register_custom_scheme(registrar, ASSET_SCHEME, ASSET_SCHEME_OPTIONS);
     log::trace!("register_custom_scheme => {}", result);
 }
 
