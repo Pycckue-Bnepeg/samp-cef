@@ -65,26 +65,26 @@ pub struct Socket {
 
 impl Socket {
     pub fn new_client(addr: SocketAddr) -> anyhow::Result<Self> {
+        let runtime = Runtime::new()?;
+        let _guard = runtime.enter();
+
         let endpoint = client::make_insecure_client(addr)?;
 
-        Ok(Self::new(endpoint, false))
+        Ok(Self::setup(runtime, endpoint, false))
     }
 
     pub fn new_server(addr: SocketAddr, _cert: CertStrategy) -> anyhow::Result<Self> {
-        Self::new_self_signed(addr)
-    }
+        let runtime = Runtime::new()?;
+        let _guard = runtime.enter();
 
-    fn new_self_signed(addr: SocketAddr) -> anyhow::Result<Self> {
         let endpoint = server::make_self_signed(addr)?;
 
-        Ok(Self::new(endpoint, true))
+        Ok(Self::setup(runtime, endpoint, true))
     }
 
-    fn new(endpoint: Endpoint, is_listening: bool) -> Self {
+    fn setup(runtime: Runtime, endpoint: Endpoint, is_listening: bool) -> Self {
         let (event_tx, event_rx) = crossbeam_channel::unbounded();
         let (cmd_tx, cmd_rx) = mpsc::unbounded_channel();
-
-        let runtime = Runtime::new().unwrap();
 
         runtime.block_on(async move {
             tokio::spawn(worker_task(endpoint, cmd_rx, event_tx, is_listening));

@@ -5,3 +5,4 @@
 deploy.cmd
 /third_party
 .xwin
+.DS_Store

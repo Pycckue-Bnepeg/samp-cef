@@ -92,11 +92,11 @@ impl Drop for CefString {
         }
 
         unsafe {
-            if (*self.inner).str_.is_null() {
-                return;
+            if !(*self.inner).str_.is_null() {
+                cef_string_utf16_clear(self.inner);
             }
 
-            cef_string_utf16_clear(self.inner);
+            let _ = Box::from_raw(self.inner);
         }
     }
 }

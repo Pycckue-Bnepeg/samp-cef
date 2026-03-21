@@ -6,9 +6,9 @@ use std::sync::atomic::{self, AtomicUsize, Ordering};
 
 use cef::types::string::CefString;
 use cef_sys::{
-    cef_base_ref_counted_t, cef_callback_t, cef_request_t, cef_resource_handler_t,
-    cef_resource_read_callback_t, cef_resource_skip_callback_t, cef_response_t,
-    cef_scheme_handler_factory_t, cef_scheme_options_t, cef_scheme_registrar_t, cef_string_t,
+    cef_callback_t, cef_request_t, cef_resource_handler_t, cef_resource_read_callback_t,
+    cef_resource_skip_callback_t, cef_response_t, cef_scheme_handler_factory_t,
+    cef_scheme_options_t, cef_scheme_registrar_t, cef_string_t,
 };
 use percent_encoding::percent_decode_str;
 use url::Url;
@@ -192,8 +192,6 @@ pub fn register_scheme_handler_factory() {
     if result == 0 {
         log::error!("failed to register asset scheme handler factory");
     }
-
-    release_cef_ref(factory as *mut cef_base_ref_counted_t);
 }
 
 pub fn resolve_browser_url(value: &str) -> String {
@@ -257,6 +255,10 @@ extern "system" fn resource_open(
     this: *mut cef_resource_handler_t, request: *mut cef_request_t, handle_request: *mut c_int,
     _callback: *mut cef_callback_t,
 ) -> c_int {
+    if request.is_null() {
+        return 0;
+    }
+
     let obj: &mut Wrapper<cef_resource_handler_t, AssetResourceHandler> = Wrapper::unwrap(this);
     obj.interface.prepare_response(request);
 
@@ -272,6 +274,10 @@ extern "system" fn resource_open(
 extern "system" fn resource_process_request(
     this: *mut cef_resource_handler_t, request: *mut cef_request_t, callback: *mut cef_callback_t,
 ) -> c_int {
+    if request.is_null() {
+        return 0;
+    }
+
     let obj: &mut Wrapper<cef_resource_handler_t, AssetResourceHandler> = Wrapper::unwrap(this);
     obj.interface.prepare_response(request);
 
@@ -636,14 +642,3 @@ fn mime_type_for_path(path: &Path) -> &'static str {
     }
 }
 
-fn release_cef_ref(base: *mut cef_base_ref_counted_t) {
-    if base.is_null() {
-        return;
-    }
-
-    unsafe {
-        if let Some(release) = (*base).release {
-            release(base);
-        }
-    }
-}
