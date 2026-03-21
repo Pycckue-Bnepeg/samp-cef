@@ -57,7 +57,9 @@ impl CefApi {
     }
 
     pub fn create_browser(id: u32, url: &str, hidden: bool, focused: bool) {
-        let url_cstr = CString::new(url).unwrap();
+        let Ok(url_cstr) = CString::new(url) else {
+            return;
+        };
         unsafe {
             ((*API).cef_create_browser)(id, url_cstr.as_ptr(), hidden, focused);
         }
@@ -81,22 +83,26 @@ impl CefApi {
         }
     }
 
-    pub fn create_list() -> List {
+    pub fn create_list() -> Option<List> {
         let list = unsafe { ((*API).cef_create_list)() };
 
-        List::try_from_raw(list).unwrap()
+        List::try_from_raw(list)
     }
 
     pub fn emit_event(event: &str, args: &List) {
         let list = args.clone().into_cef();
-        let event = CString::new(event).unwrap();
+        let Ok(event) = CString::new(event) else {
+            return;
+        };
         unsafe {
             ((*API).cef_emit_event)(event.as_ptr(), list);
         }
     }
 
     pub fn subscribe(event: &str, callback: EventCallback) {
-        let event = CString::new(event).unwrap();
+        let Ok(event) = CString::new(event) else {
+            return;
+        };
         unsafe {
             ((*API).cef_subscribe)(event.as_ptr(), Some(callback));
         }

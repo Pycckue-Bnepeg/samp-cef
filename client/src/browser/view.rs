@@ -103,7 +103,10 @@ impl SpriteContainer {
     pub fn new(width: usize, height: usize) -> SpriteContainer {
         let rw = RwContainer::new(width, height);
         let mut sprite = Sprite::new();
-        sprite.set_texture(rw.texture.unwrap().as_ptr());
+
+        if let Some(texture) = rw.texture {
+            sprite.set_texture(texture.as_ptr());
+        }
 
         SpriteContainer { sprite, rw }
     }

@@ -85,20 +85,21 @@ pub extern "C" fn cef_samp_mainloop() {
 
         if app.polling && app.last_poll.elapsed() >= app.polling_interval {
             let data = gather_player_data();
-            let list = CefApi::create_list();
 
-            list.set_double(0, data.health as _);
-            list.set_double(1, data.max_health as _);
-            list.set_double(2, data.armour as _);
-            list.set_double(3, data.breath as _);
-            list.set_integer(4, data.wanted as _);
-            list.set_integer(5, data.weapon as _);
-            list.set_integer(6, data.ammo as _);
-            list.set_integer(7, data.max_ammo as _);
-            list.set_integer(8, data.money as _);
-            list.set_double(9, data.velocity as _);
+            if let Some(list) = CefApi::create_list() {
+                list.set_double(0, data.health as _);
+                list.set_double(1, data.max_health as _);
+                list.set_double(2, data.armour as _);
+                list.set_double(3, data.breath as _);
+                list.set_integer(4, data.wanted as _);
+                list.set_integer(5, data.weapon as _);
+                list.set_integer(6, data.ammo as _);
+                list.set_integer(7, data.max_ammo as _);
+                list.set_integer(8, data.money as _);
+                list.set_double(9, data.velocity as _);
 
-            CefApi::emit_event("game:data:playerStats", &list);
+                CefApi::emit_event("game:data:playerStats", &list);
+            }
 
             app.last_poll = Instant::now();
         }
@@ -114,10 +115,10 @@ pub extern "C" fn cef_samp_mainloop() {
 fn update_visible_state(app: &mut App, is_hud_visible: bool) {
     app.is_hud_visible = is_hud_visible;
 
-    let list = CefApi::create_list();
-    list.set_bool(0, is_hud_visible);
-
-    CefApi::emit_event("game:hud:newVisibleState", &list);
+    if let Some(list) = CefApi::create_list() {
+        list.set_bool(0, is_hud_visible);
+        CefApi::emit_event("game:hud:newVisibleState", &list);
+    }
 }
 
 #[unsafe(no_mangle)]

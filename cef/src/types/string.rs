@@ -147,7 +147,7 @@ pub fn into_cef_string(string: &str) -> cef_string_t {
         }
     }
 
-    let wide = widestring::U16CString::from_str(string).unwrap();
+    let wide = widestring::U16CString::from_str_truncate(string);
 
     _cef_string_utf16_t {
         length: wide.len(),

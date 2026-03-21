@@ -33,18 +33,21 @@ pub mod audio {
 static INIT: Once = Once::new();
 
 fn initialize_logging() {
+    let Ok(log_file) = File::create("cef_client.log") else {
+        return;
+    };
+
     let config = simplelog::ConfigBuilder::new()
         .add_filter_allow_str("client")
         .add_filter_allow_str("client_api")
         .set_max_level(LevelFilter::Trace)
         .build();
 
-    CombinedLogger::init(vec![WriteLogger::new(
+    let _ = CombinedLogger::init(vec![WriteLogger::new(
         LevelFilter::Trace,
         config,
-        File::create("cef_client.log").unwrap(),
-    )])
-    .unwrap();
+        log_file,
+    )]);
 }
 
 #[unsafe(no_mangle)]

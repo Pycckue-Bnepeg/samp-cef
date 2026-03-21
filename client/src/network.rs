@@ -343,7 +343,10 @@ impl Network {
             plugin_version: crate::app::CEF_PLUGIN_VERSION,
         };
 
-        let packet = messages::try_into_packet(auth).unwrap();
+        let Ok(packet) = messages::try_into_packet(auth) else {
+            log::error!("CEF Network: failed to serialize RequestJoin");
+            return;
+        };
 
         log::trace!("CEF Network: RequestJoin ({:?})", peer);
 
@@ -358,7 +361,10 @@ impl Network {
                 arguments: Vec::new(),
             };
 
-            let packet = messages::try_into_packet(emit).unwrap();
+            let Ok(packet) = messages::try_into_packet(emit) else {
+                log::error!("CEF Network: failed to serialize EmitEvent");
+                return;
+            };
 
             self.socket.send_message(peer, packet);
         }
@@ -371,7 +377,11 @@ impl Network {
                 status_code,
             };
 
-            let packet = messages::try_into_packet(created).unwrap();
+            let Ok(packet) = messages::try_into_packet(created) else {
+                log::error!("CEF Network: failed to serialize BrowserCreated");
+                return;
+            };
+
             self.socket.send_message(peer, packet);
         }
     }
