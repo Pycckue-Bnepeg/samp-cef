@@ -6,9 +6,9 @@ use std::sync::atomic::{self, AtomicUsize, Ordering};
 
 use cef::types::string::CefString;
 use cef_sys::{
-    cef_callback_t, cef_request_t, cef_resource_handler_t, cef_resource_read_callback_t,
-    cef_resource_skip_callback_t, cef_response_t, cef_scheme_handler_factory_t,
-    cef_scheme_options_t, cef_scheme_registrar_t, cef_string_t,
+    cef_base_ref_counted_t, cef_callback_t, cef_request_t, cef_resource_handler_t,
+    cef_resource_read_callback_t, cef_resource_skip_callback_t, cef_response_t,
+    cef_scheme_handler_factory_t, cef_scheme_options_t, cef_scheme_registrar_t, cef_string_t,
 };
 use percent_encoding::percent_decode_str;
 use url::Url;
